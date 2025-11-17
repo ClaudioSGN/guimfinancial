@@ -1,16 +1,15 @@
 @import "tailwindcss";
 
-:root {
-  color-scheme: dark;
+/* Reseta suave */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
+html,
 body {
-  background-color: #000000;
-  color: #e4e4e7;
-  -webkit-font-smoothing: antialiased;
+  margin: 0;
+  padding: 0;
 }
 
-* {
-  scrollbar-width: thin;
-  scrollbar-color: #52525b transparent;
-}

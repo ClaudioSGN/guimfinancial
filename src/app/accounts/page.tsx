@@ -9,6 +9,7 @@ export type AccountStat = {
   balance: number;
   income: number;
   expense: number;
+  initialBalance: number;
   cardLimit: number | null;
   closingDay: number | null;
   dueDay: number | null;
@@ -68,7 +69,7 @@ function getCurrentCardCycle(closingDay: number): {
 async function getAccountsData(): Promise<AccountStat[]> {
   const { data: accountsData, error: accountsError } = await supabase
     .from("accounts")
-    .select("id, name, card_limit, closing_day, due_day")
+    .select("id, name, card_limit, closing_day, due_day, initial_balance")
     .order("name", { ascending: true });
 
   if (accountsError) {
@@ -83,17 +84,22 @@ async function getAccountsData(): Promise<AccountStat[]> {
     console.error("Erro ao buscar transações:", txError.message);
   }
 
-  const accounts = (accountsData ?? []).map((acc) => ({
-    id: acc.id as string,
-    name: acc.name as string,
-    balance: 0,
-    income: 0,
-    expense: 0,
-    cardLimit: (acc.card_limit as number | null) ?? null,
-    closingDay: (acc.closing_day as number | null) ?? null,
-    dueDay: (acc.due_day as number | null) ?? null,
-    invoiceCurrent: null,
-  })) as AccountStat[];
+  const accounts = (accountsData ?? []).map((acc) => {
+    const init = Number((acc as any).initial_balance ?? 0);
+
+    return {
+      id: acc.id as string,
+      name: acc.name as string,
+      balance: init, // começa do saldo inicial
+      income: 0,
+      expense: 0,
+      initialBalance: init,
+      cardLimit: (acc.card_limit as number | null) ?? null,
+      closingDay: (acc.closing_day as number | null) ?? null,
+      dueDay: (acc.due_day as number | null) ?? null,
+      invoiceCurrent: null,
+    } as AccountStat;
+  });
 
   const map = new Map<string, AccountStat>();
   for (const a of accounts) map.set(a.id, a);
@@ -119,7 +125,7 @@ async function getAccountsData(): Promise<AccountStat[]> {
     const type = t.type as "income" | "expense";
     const desc = ((t.description as string) || "").toLowerCase();
 
-    // saldo / entradas / saídas
+    // saldo / entradas / saídas (em cima do saldo inicial)
     if (type === "income") {
       acc.income += v;
       acc.balance += v;
@@ -133,9 +139,6 @@ async function getAccountsData(): Promise<AccountStat[]> {
     if (cycle && type === "expense") {
       const txDate = new Date(t.date as string);
       if (!Number.isNaN(txDate.getTime())) {
-        // considera como transação de crédito/parcelada se:
-        // - is_installment = true OU
-        // - descrição contém palavras de crédito/cartão/parcelado
         const isInstallmentFlag = Boolean(t.is_installment);
         const isCreditLike =
           desc.includes("parcela") ||

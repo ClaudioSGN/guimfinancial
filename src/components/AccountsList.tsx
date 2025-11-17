@@ -82,6 +82,7 @@ export function AccountsList({ accounts }: { accounts: AccountStat[] }) {
   const [cardLimit, setCardLimit] = useState("");
   const [closingDay, setClosingDay] = useState("");
   const [dueDay, setDueDay] = useState("");
+  const [initialBalance, setInitialBalance] = useState("");
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -97,6 +98,11 @@ export function AccountsList({ accounts }: { accounts: AccountStat[] }) {
       acc.closingDay !== null ? String(acc.closingDay) : ""
     );
     setDueDay(acc.dueDay !== null ? String(acc.dueDay) : "");
+    setInitialBalance(
+      Number.isFinite(acc.initialBalance)
+        ? String(acc.initialBalance)
+        : ""
+    );
     setErrorMsg(null);
   }
 
@@ -114,6 +120,9 @@ export function AccountsList({ accounts }: { accounts: AccountStat[] }) {
       : null;
     const closing = closingDay ? Number(closingDay) : null;
     const due = dueDay ? Number(dueDay) : null;
+    const initialNumber = initialBalance
+      ? Number(initialBalance.replace(",", "."))
+      : 0;
 
     if (closing !== null && (closing < 1 || closing > 31)) {
       setErrorMsg("Dia de fechamento inválido (1 a 31).");
@@ -134,6 +143,7 @@ export function AccountsList({ accounts }: { accounts: AccountStat[] }) {
         card_limit: limitNumber,
         closing_day: closing,
         due_day: due,
+        initial_balance: initialNumber,
       })
       .eq("id", editing.id);
 
@@ -149,6 +159,34 @@ export function AccountsList({ accounts }: { accounts: AccountStat[] }) {
     router.refresh();
   }
 
+  async function handleDeleteAccount(accountId: string, accountName: string) {
+    const ok = window.confirm(
+      `Tens a certeza que queres apagar a conta "${accountName}"?\n\nSe existirem transações ligadas a ela, podes ter erros ou perder o vínculo dessas transações.`
+    );
+
+    if (!ok) return;
+
+    const { error } = await supabase
+      .from("accounts")
+      .delete()
+      .eq("id", accountId);
+
+    if (error) {
+      console.error(error);
+      alert(
+        "Não foi possível apagar esta conta. Provavelmente existem transações associadas. Primeiro remove ou edita essas transações."
+      );
+      return;
+    }
+
+    // Se a conta que estava em edição foi apagada, fecha o modal
+    if (editing && editing.id === accountId) {
+      setEditing(null);
+    }
+
+    router.refresh();
+  }
+
   return (
     <>
       <div className="grid gap-3 md:grid-cols-2">
@@ -156,7 +194,9 @@ export function AccountsList({ accounts }: { accounts: AccountStat[] }) {
           const visual = getBankVisual(acc.name);
 
           const usedPercent =
-            acc.cardLimit && acc.cardLimit > 0 && acc.invoiceCurrent !== null
+            acc.cardLimit &&
+            acc.cardLimit > 0 &&
+            acc.invoiceCurrent !== null
               ? Math.round((acc.invoiceCurrent / acc.cardLimit) * 100)
               : null;
 
@@ -181,21 +221,38 @@ export function AccountsList({ accounts }: { accounts: AccountStat[] }) {
                     </span>
                   </div>
                 </div>
-                <button
-                  onClick={() => openEdit(acc)}
-                  className="rounded-full border border-zinc-700 px-2 py-1 text-[11px] text-zinc-400 hover:border-zinc-500 hover:text-zinc-100"
-                >
-                  Editar
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => openEdit(acc)}
+                    className="rounded-full border border-zinc-700 px-2 py-1 text-[11px] text-zinc-400 hover:border-zinc-500 hover:text-zinc-100"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    onClick={() =>
+                      handleDeleteAccount(acc.id, acc.name)
+                    }
+                    className="rounded-full border border-zinc-800 px-2 py-1 text-[11px] text-zinc-500 hover:border-red-500/70 hover:text-red-400"
+                  >
+                    Apagar
+                  </button>
+                </div>
               </div>
 
               <div className="mt-2 flex items-end justify-between">
                 <div className="flex flex-col">
                   <span className="text-[11px] text-zinc-500">
-                    Saldo
+                    Saldo atual
                   </span>
                   <span className="text-sm font-medium">
                     {formatCurrency(acc.balance)}
+                  </span>
+
+                  <span className="mt-1 text-[11px] text-zinc-500">
+                    Saldo inicial:{" "}
+                    <span className="text-zinc-300">
+                      {formatCurrency(acc.initialBalance)}
+                    </span>
                   </span>
 
                   {acc.cardLimit && (
@@ -295,6 +352,25 @@ export function AccountsList({ accounts }: { accounts: AccountStat[] }) {
                   placeholder="Nubank, Itaú..."
                   required
                 />
+              </div>
+
+              {/* Saldo inicial */}
+              <div className="space-y-1 text-sm">
+                <label className="text-xs text-zinc-400">
+                  Saldo inicial / ajuste (R$)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={initialBalance}
+                  onChange={(e) => setInitialBalance(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                  placeholder="Ex: 1500,00"
+                />
+                <p className="text-[10px] text-zinc-500">
+                  Este valor é o ponto de partida da conta. O saldo
+                  atual = saldo inicial + receitas - despesas.
+                </p>
               </div>
 
               {/* Limite */}

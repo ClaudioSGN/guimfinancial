@@ -1,38 +1,70 @@
 import { supabase } from "@/lib/supabaseClient";
 import { TopNav } from "@/components/TopNav";
+import { MonthlyDashboard } from "@/components/MonthlyDashboard";
+import { InstallmentsPlannerCard } from "@/components/InstallmentsPlannerCard";
+import { ExportMonthlyPdfButton } from "@/components/ExportMonthlyPdfButton";
+import { DailyReminderSettings } from "@/components/DailyReminderSettings";
+import { AiInsightsCard, Insight } from "@/components/AiInsightsCard";
 
-type Summary = {
-  balance: number;
-  income: number;
-  expense: number;
+type AccountRow = {
+  id: string;
+  name: string;
+  initial_balance: number | null;
 };
 
-type UiTransaction = {
-  id: string;
-  description: string;
-  value: number;
+type TransactionRow = {
   type: "income" | "expense";
+  value: number;
   date: string;
+  account_id: string | null;
+  category: string | null;
+  is_installment: boolean | null;
+  installment_total: number | null;
+};
+
+type AccountSummary = {
+  id: string;
+  name: string;
+  balance: number;
 };
 
 type CategoryStat = {
-  name: string;
+  category: string;
   total: number;
 };
 
-type AccountStat = {
-  id: string;
-  name: string;
-  balance: number;
+type MonthSummary = {
+  key: string; // "2025-11"
+  labelShort: string;
+  labelLong: string;
+  income: number;
+  expense: number;
+  net: number;
+  categories: CategoryStat[];
 };
 
-type DashboardData = {
-  summary: Summary;
-  usedPercent: number;
-  topCategories: CategoryStat[];
-  latestTransactions: UiTransaction[];
-  installmentsTotal: number;
-  accounts: AccountStat[];
+type InstallmentMonthSummary = {
+  key: string;
+  labelShort: string;
+  labelLong: string;
+  total: number;
+};
+
+type ReminderSettings = {
+  enabled: boolean;
+  hour: number;
+  minute: number;
+};
+
+type Summary = {
+  totalBalance: number;
+  totalIncome: number;
+  totalExpense: number;
+  accounts: AccountSummary[];
+  months: MonthSummary[];
+  upcomingInstallments: InstallmentMonthSummary[];
+  reminderSettings: ReminderSettings;
+  insights: Insight[];
 };
 
 function formatCurrency(value: number) {
@@ -43,373 +75,458 @@ function formatCurrency(value: number) {
   });
 }
 
-function formatDate(dateStr: string) {
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return dateStr;
-  return d.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-  });
+function addMonths(date: Date, months: number) {
+  const d = new Date(date);
+  return new Date(d.getFullYear(), d.getMonth() + months, 1);
 }
 
-async function getDashboardData(): Promise<DashboardData> {
-  // Contas
-  const { data: accountsData, error: accountsError } = await supabase
-    .from("accounts")
-    .select("id, name")
-    .order("name", { ascending: true });
+function buildInsights(
+  months: MonthSummary[],
+  totalIncome: number,
+  totalExpense: number
+): Insight[] {
+  const insights: Insight[] = [];
 
-  if (accountsError) {
-    console.error("Erro ao buscar contas:", accountsError.message);
-  }
+  if (!months.length) return insights;
 
-  const accountMap = new Map<string, AccountStat>();
-  for (const acc of accountsData ?? []) {
-    accountMap.set(acc.id, {
-      id: acc.id,
-      name: acc.name,
-      balance: 0,
+  const latest = months[0];
+  const prev = months.length > 1 ? months[1] : null;
+
+  // 1) Mês fechou no negativo
+  if (latest.net < 0) {
+    insights.push({
+      id: "net-negative",
+      title: "Mês fechou no negativo",
+      detail: `O mês de ${latest.labelLong} fechou com saldo negativo de ${formatCurrency(
+        latest.net
+      )}. Talvez valha rever algumas despesas para o próximo mês.`,
+      severity: "high",
+    });
+  } else {
+    insights.push({
+      id: "net-positive",
+      title: "Mês fechou no positivo",
+      detail: `O mês de ${latest.labelLong} terminou com saldo positivo de ${formatCurrency(
+        latest.net
+      )}. Boa — tenta manter esse padrão ou até aumentar o gap entre renda e gastos.`,
+      severity: "positive",
     });
   }
 
-  // Transações
-  const { data: txData, error: txError } = await supabase
-    .from("transactions")
-    .select("id, type, value, description, date, created_at, account_id, is_installment, installment_total")
-    .order("date", { ascending: false })
-    .order("created_at", { ascending: false });
+  // 2) Comparação de gastos com o mês anterior
+  if (prev && prev.expense > 0) {
+    const diff = latest.expense - prev.expense;
+    const pct = diff / prev.expense;
 
-  if (txError) {
-    console.error("Erro ao buscar transações:", txError.message);
+    if (pct > 0.15) {
+      insights.push({
+        id: "expense-up",
+        title: "Gastos aumentaram em relação ao mês anterior",
+        detail: `As despesas de ${latest.labelLong} foram cerca de ${Math.round(
+          pct * 100
+        )}% maiores do que em ${prev.labelLong}. Dá uma olhada nas categorias que mais cresceram.`,
+        severity: "medium",
+      });
+    } else if (pct < -0.15) {
+      insights.push({
+        id: "expense-down",
+        title: "Gastos caíram em relação ao mês anterior",
+        detail: `As despesas de ${latest.labelLong} ficaram cerca de ${Math.round(
+          Math.abs(pct) * 100
+        )}% menores que em ${prev.labelLong}. Bom sinal de controle de gastos.`,
+        severity: "positive",
+      });
+    }
   }
 
-  const txs = txData ?? [];
+  // 3) Categoria que mais pesa no mês
+  if (latest.categories.length > 0 && latest.expense > 0) {
+    const top = latest.categories[0];
+    const pct = top.total / latest.expense;
 
-  let income = 0;
-  let expense = 0;
-  let installmentsTotal = 0;
+    insights.push({
+      id: "top-category",
+      title: "Categoria que mais pesa este mês",
+      detail: `A categoria "${top.category}" representa cerca de ${Math.round(
+        pct * 100
+      )}% de todas as tuas despesas em ${latest.labelLong}. Talvez seja um bom ponto de atenção.`,
+      severity: pct >= 0.35 ? "medium" : "low",
+    });
+  }
 
-  const categoryMap = new Map<string, number>();
+  // 4) Relação gastos / renda geral
+  if (totalIncome > 0) {
+    const ratio = totalExpense / totalIncome;
 
-  for (const raw of txs as any[]) {
-    const v = Number(raw.value) || 0;
-    const type = raw.type as "income" | "expense";
-    const desc = (raw.description || "").toString().toLowerCase();
+    if (ratio > 0.9) {
+      insights.push({
+        id: "ratio-very-high",
+        title: "Quase toda a renda está indo para despesas",
+        detail: `No geral, as despesas estão consumindo cerca de ${Math.round(
+          ratio * 100
+        )}% da sua renda total registada. Isso deixa pouca margem para poupança ou imprevistos.`,
+        severity: "high",
+      });
+    } else if (ratio > 0.75) {
+      insights.push({
+        id: "ratio-high",
+        title: "Despesas relativamente altas em relação à renda",
+        detail: `As despesas somam aproximadamente ${Math.round(
+          ratio * 100
+        )}% da sua renda. Vale a pena garantir que isso está alinhado com os seus objetivos.`,
+        severity: "medium",
+      });
+    } else if (ratio < 0.5 && totalExpense > 0) {
+      insights.push({
+        id: "ratio-good",
+        title: "Boa distância entre renda e despesas",
+        detail: `As despesas estão abaixo de 50% da tua renda registada. Isso abre espaço para poupança ou investimentos.`,
+        severity: "positive",
+      });
+    }
+  }
 
-    if (type === "income") income += v;
-    if (type === "expense") {
-      expense += v;
+  return insights;
+}
 
-      // categorias
-      const key = raw.description?.trim() || "Outros";
-      const current = categoryMap.get(key) ?? 0;
-      categoryMap.set(key, current + v);
+async function getSummary(): Promise<Summary> {
+  const [
+    { data: accountsData },
+    { data: txData },
+    { data: reminderData },
+  ] = await Promise.all([
+    supabase
+      .from("accounts")
+      .select("id, name, initial_balance")
+      .order("name", { ascending: true }),
+    supabase
+      .from("transactions")
+      .select(
+        "type, value, date, account_id, category, is_installment, installment_total"
+      ),
+    supabase
+      .from("reminder_settings")
+      .select("remind_enabled, remind_hour, remind_minute")
+      .eq("id", "default"),
+  ]);
 
-      // detectar parcelado a partir da descrição
-      if (
-        desc.includes("parcela") ||
-        desc.includes("parcelado") ||
-        desc.includes("cartão") ||
-        desc.includes("credito") ||
-        desc.includes("crédito")
-      ) {
-        installmentsTotal += v;
+  const accounts = (accountsData ?? []) as AccountRow[];
+  const txs = (txData ?? []) as TransactionRow[];
+
+  const reminderRow = (reminderData ?? [])[0] as
+    | {
+        remind_enabled: boolean;
+        remind_hour: number | null;
+        remind_minute: number | null;
       }
-    }
+    | undefined;
 
-    // por conta
-    if (raw.account_id && accountMap.has(raw.account_id)) {
-      const acc = accountMap.get(raw.account_id)!;
-      if (type === "income") acc.balance += v;
-      if (type === "expense") acc.balance -= v;
-      accountMap.set(raw.account_id, acc);
+  const reminderSettings: ReminderSettings = reminderRow
+    ? {
+        enabled: !!reminderRow.remind_enabled,
+        hour: reminderRow.remind_hour ?? 20,
+        minute: reminderRow.remind_minute ?? 0,
+      }
+    : { enabled: false, hour: 20, minute: 0 };
+
+  // --- contas / saldo total ---
+  const accountMap = new Map<string, AccountSummary>();
+
+  for (const acc of accounts) {
+    accountMap.set(acc.id, {
+      id: acc.id,
+      name: acc.name,
+      balance: Number(acc.initial_balance ?? 0),
+    });
+  }
+
+  let totalIncome = 0;
+  let totalExpense = 0;
+
+  for (const t of txs) {
+    const v = Number(t.value) || 0;
+
+    if (t.type === "income") totalIncome += v;
+    else if (t.type === "expense") totalExpense += v;
+
+    if (t.account_id && accountMap.has(t.account_id)) {
+      const acc = accountMap.get(t.account_id)!;
+      if (t.type === "income") acc.balance += v;
+      else if (t.type === "expense") acc.balance -= v;
+      accountMap.set(t.account_id, acc);
     }
   }
 
-  const balance = income - expense;
+  const accountsSummary = Array.from(accountMap.values());
+  const totalBalance = accountsSummary.reduce(
+    (sum, a) => sum + a.balance,
+    0
+  );
 
-  const rawPercent =
-    income > 0 ? Math.round((expense / income) * 100) : 0;
-  const usedPercent = Math.max(0, Math.min(100, rawPercent));
+  // --- visão mensal (últimos meses) ---
+  type MonthBucket = {
+    income: number;
+    expense: number;
+    categories: Map<string, number>;
+  };
 
-  const topCategories: CategoryStat[] = Array.from(
-    categoryMap.entries()
-  )
-    .map(([name, total]) => ({ name, total }))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 4);
+  const monthBuckets = new Map<string, MonthBucket>();
 
-  const latestTransactions: UiTransaction[] = txs.slice(0, 6).map((t: any) => ({
-    id: String(t.id),
-    description:
-      t.description ||
-      (t.type === "income" ? "Receita" : "Despesa"),
-    value: Number(t.value) || 0,
-    type: t.type as "income" | "expense",
-    date: t.date as string,
-  }));
+  for (const t of txs) {
+    const d = new Date(t.date);
+    if (Number.isNaN(d.getTime())) continue;
 
-  const accounts: AccountStat[] = Array.from(accountMap.values());
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+    const key = `${year}-${String(month).padStart(2, "0")}`;
+
+    if (!monthBuckets.has(key)) {
+      monthBuckets.set(key, {
+        income: 0,
+        expense: 0,
+        categories: new Map<string, number>(),
+      });
+    }
+
+    const bucket = monthBuckets.get(key)!;
+    const v = Number(t.value) || 0;
+
+    if (t.type === "income") {
+      bucket.income += v;
+    } else if (t.type === "expense") {
+      bucket.expense += v;
+
+      const cat =
+        t.category && t.category.trim() !== ""
+          ? t.category
+          : "Sem categoria";
+      const prev = bucket.categories.get(cat) ?? 0;
+      bucket.categories.set(cat, prev + v);
+    }
+
+    monthBuckets.set(key, bucket);
+  }
+
+  const monthKeys = Array.from(monthBuckets.keys()).sort((a, b) =>
+    a < b ? 1 : -1
+  );
+  const selectedKeys = monthKeys.slice(0, 6);
+
+  const months: MonthSummary[] = selectedKeys.map((key) => {
+    const bucket = monthBuckets.get(key)!;
+    const [yearStr, monthStr] = key.split("-");
+    const year = Number(yearStr);
+    const monthIndex = Number(monthStr) - 1;
+
+    const dateForLabel = new Date(year, monthIndex, 1);
+
+    const labelShort = dateForLabel.toLocaleDateString("pt-BR", {
+      month: "2-digit",
+      year: "2-digit",
+    });
+
+    const labelLong = dateForLabel.toLocaleDateString("pt-BR", {
+      month: "long",
+      year: "2-digit",
+    });
+
+    const categories: CategoryStat[] = Array.from(
+      bucket.categories.entries()
+    )
+      .map(([category, total]) => ({ category, total }))
+      .sort((a, b) => b.total - a.total);
+
+    return {
+      key,
+      labelShort,
+      labelLong,
+      income: bucket.income,
+      expense: bucket.expense,
+      net: bucket.income - bucket.expense,
+      categories,
+    };
+  });
+
+  // --- planejamento de parcelas futuras ---
+  const upcomingInstallmentsMap = new Map<string, number>();
+
+  const now = new Date();
+  const currentMonthStart = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    1
+  );
+
+  for (const t of txs) {
+    if (t.type !== "expense") continue;
+    if (!t.is_installment) continue;
+
+    const totalInstallments = t.installment_total ?? 0;
+    if (!totalInstallments || totalInstallments < 1) continue;
+
+    const txDate = new Date(t.date);
+    if (Number.isNaN(txDate.getTime())) continue;
+
+    const perInstallmentValue = (Number(t.value) || 0) / totalInstallments;
+
+    for (let i = 0; i < totalInstallments; i++) {
+      const installmentMonthDate = addMonths(txDate, i);
+
+      if (installmentMonthDate < currentMonthStart) {
+        continue;
+      }
+
+      const year = installmentMonthDate.getFullYear();
+      const month = installmentMonthDate.getMonth() + 1;
+      const key = `${year}-${String(month).padStart(2, "0")}`;
+
+      const prev = upcomingInstallmentsMap.get(key) ?? 0;
+      upcomingInstallmentsMap.set(key, prev + perInstallmentValue);
+    }
+  }
+
+  const installmentKeys = Array.from(
+    upcomingInstallmentsMap.keys()
+  ).sort((a, b) => (a < b ? -1 : 1));
+
+  const upcomingInstallments: InstallmentMonthSummary[] =
+    installmentKeys.slice(0, 6).map((key) => {
+      const [yearStr, monthStr] = key.split("-");
+      const year = Number(yearStr);
+      const monthIndex = Number(monthStr) - 1;
+      const dateForLabel = new Date(year, monthIndex, 1);
+
+      const labelShort = dateForLabel.toLocaleDateString("pt-BR", {
+        month: "2-digit",
+        year: "2-digit",
+      });
+
+      const labelLong = dateForLabel.toLocaleDateString("pt-BR", {
+        month: "long",
+        year: "2-digit",
+      });
+
+      return {
+        key,
+        labelShort,
+        labelLong,
+        total: upcomingInstallmentsMap.get(key) ?? 0,
+      };
+    });
+
+  // --- AI Insights locais ---
+  const insights = buildInsights(months, totalIncome, totalExpense);
 
   return {
-    summary: { balance, income, expense },
-    usedPercent,
-    topCategories,
-    latestTransactions,
-    installmentsTotal,
-    accounts,
+    totalBalance,
+    totalIncome,
+    totalExpense,
+    accounts: accountsSummary,
+    months,
+    upcomingInstallments,
+    reminderSettings,
+    insights,
   };
 }
 
-export default async function Home() {
-  const data = await getDashboardData();
+export default async function HomePage() {
+  const {
+    totalBalance,
+    totalIncome,
+    totalExpense,
+    accounts,
+    months,
+    upcomingInstallments,
+    reminderSettings,
+    insights,
+  } = await getSummary();
 
   return (
     <main className="min-h-screen bg-black text-zinc-100">
       <div className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8 md:gap-8 md:py-10">
         <TopNav />
 
-        {/* CONTAS RESUMIDAS */}
-        {data.accounts.length > 0 && (
-          <section className="space-y-3">
+        {/* Card principal de saldo + botão PDF */}
+        <section className="rounded-2xl border border-zinc-900 bg-zinc-950/80 p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
             <p className="text-[11px] uppercase tracking-[0.25em] text-zinc-500">
-              Contas (saldo por banco)
+              Resumo geral
             </p>
-            <div className="grid gap-3 md:grid-cols-3">
-              {data.accounts.map((acc) => (
-                <AccountPill key={acc.id} account={acc} />
-              ))}
-            </div>
-          </section>
-        )}
+            <ExportMonthlyPdfButton />
+          </div>
 
-        {/* BLOCO PRINCIPAL (saldo + círculo) */}
-        <section className="rounded-3xl border border-zinc-900 bg-zinc-950/70 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.65)] md:p-6">
-          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-            <div className="space-y-3">
-              <p className="text-[11px] uppercase tracking-[0.25em] text-zinc-500">
-                Saldo disponível (todos os bancos)
+          <div className="mt-1 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-[11px] text-zinc-400">
+                Saldo total (todas as contas)
               </p>
-              <p className="text-3xl font-semibold tracking-tight md:text-4xl">
-                {formatCurrency(data.summary.balance)}
+              <p className="mt-1 text-3xl font-semibold tracking-tight">
+                {formatCurrency(totalBalance)}
               </p>
-              <p className="text-xs text-zinc-500">
-                Entradas{" "}
-                <span className="text-zinc-300">
-                  {formatCurrency(data.summary.income)}
-                </span>{" "}
-                · Despesas{" "}
-                <span className="text-zinc-300">
-                  {formatCurrency(data.summary.expense)}
+            </div>
+            <div className="flex gap-6 text-xs">
+              <div className="flex flex-col">
+                <span className="text-zinc-500">Receitas</span>
+                <span className="text-emerald-400">
+                  {formatCurrency(totalIncome)}
                 </span>
-              </p>
-            </div>
-
-            <BudgetRing usedPercent={data.usedPercent} />
-          </div>
-        </section>
-
-        {/* CATEGORIAS + RESUMO RÁPIDO */}
-        <section className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-3xl border border-zinc-900 bg-zinc-950/60 p-4 md:p-5">
-            <p className="mb-3 text-[11px] uppercase tracking-[0.25em] text-zinc-500">
-              Despesas por categoria (tudo somado)
-            </p>
-
-            {data.topCategories.length === 0 ? (
-              <p className="text-xs text-zinc-500">
-                Ainda não registaste despesas.
-              </p>
-            ) : (
-              <div className="space-y-3 text-xs">
-                {data.topCategories.map((c) => {
-                  const totalAll = data.topCategories.reduce(
-                    (acc, cur) => acc + cur.total,
-                    0
-                  );
-                  const percent =
-                    totalAll > 0
-                      ? Math.round((c.total / totalAll) * 100)
-                      : 0;
-
-                  return (
-                    <div key={c.name}>
-                      <div className="mb-1 flex items-center justify-between">
-                        <span className="text-zinc-300">{c.name}</span>
-                        <span className="text-zinc-400">
-                          {formatCurrency(c.total)} · {percent}%
-                        </span>
-                      </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-900">
-                        <div
-                          className="h-full rounded-full bg-zinc-100"
-                          style={{ width: `${percent}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
-            )}
-          </div>
-
-          <div className="rounded-3xl border border-zinc-900 bg-zinc-950/60 p-4 md:p-5">
-            <p className="mb-3 text-[11px] uppercase tracking-[0.25em] text-zinc-500">
-              Resumo rápido (geral)
-            </p>
-            <div className="space-y-3 text-sm">
-              <MiniStat
-                label="Receitas totais"
-                value={formatCurrency(data.summary.income)}
-                tone="positive"
-              />
-              <MiniStat
-                label="Despesas totais"
-                value={formatCurrency(data.summary.expense)}
-                tone="negative"
-              />
-              <MiniStat
-                label="Despesas em parcelas/débitos"
-                value={formatCurrency(data.installmentsTotal)}
-                tone={data.installmentsTotal > 0 ? "warning" : "neutral"}
-              />
+              <div className="flex flex-col">
+                <span className="text-zinc-500">Despesas</span>
+                <span className="text-red-400">
+                  {formatCurrency(totalExpense)}
+                </span>
+              </div>
             </div>
           </div>
         </section>
 
-        {/* ÚLTIMAS TRANSAÇÕES (tudo junto) */}
-        <section className="rounded-3xl border border-zinc-900 bg-zinc-950/60 p-4 md:p-5">
-          <p className="mb-3 text-[11px] uppercase tracking-[0.25em] text-zinc-500">
-            Últimas transações (todos os bancos)
-          </p>
+        {/* Dashboard mensal com animação + pizza categorias */}
+        <MonthlyDashboard months={months} />
 
-          {data.latestTransactions.length === 0 ? (
+        {/* AI Insights abaixo do dashboard */}
+        <AiInsightsCard insights={insights} />
+
+        {/* Planejamento de parcelas futuras */}
+        <InstallmentsPlannerCard months={upcomingInstallments} />
+
+        {/* Lembrete diário */}
+        <DailyReminderSettings initialSettings={reminderSettings} />
+
+        {/* Lista de contas */}
+        <section className="space-y-3">
+          <p className="text-[11px] uppercase tracking-[0.25em] text-zinc-500">
+            Contas e bancos
+          </p>
+          {accounts.length === 0 ? (
             <p className="text-xs text-zinc-500">
-              Ainda não registaste nenhuma transação.
+              Ainda não há contas registadas. Adicione uma conta na aba
+              Bancos.
             </p>
           ) : (
-            <div className="divide-y divide-zinc-900 text-sm">
-              {data.latestTransactions.map((t) => (
-                <TransactionRow
-                  key={t.id}
-                  title={t.description}
-                  subtitle={formatDate(t.date)}
-                  value={`${t.type === "income" ? "+ " : "- "}${formatCurrency(
-                    t.value
-                  )}`}
-                  positive={t.type === "income"}
-                />
+            <div className="grid gap-3 md:grid-cols-2">
+              {accounts.map((acc) => (
+                <div
+                  key={acc.id}
+                  className="flex flex-col justify-between rounded-2xl border border-zinc-900 bg-zinc-950/80 px-4 py-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-zinc-100">
+                      {acc.name}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-[11px] text-zinc-500">
+                    Saldo:{" "}
+                    <span className="text-zinc-100">
+                      {formatCurrency(acc.balance)}
+                    </span>
+                  </div>
+                </div>
               ))}
             </div>
           )}
         </section>
       </div>
     </main>
-  );
-}
-
-/* ---------- CONTAS NO RESUMO ---------- */
-
-function AccountPill({ account }: { account: AccountStat }) {
-  return (
-    <div className="flex flex-col justify-between rounded-2xl border border-zinc-900 bg-zinc-950/80 px-3 py-3">
-      <span className="text-[11px] text-zinc-500">{account.name}</span>
-      <span className="text-sm font-medium">
-        {formatCurrency(account.balance)}
-      </span>
-    </div>
-  );
-}
-
-/* ---------- OUTROS COMPONENTES ---------- */
-
-function BudgetRing({ usedPercent }: { usedPercent: number }) {
-  const clamped = Math.max(0, Math.min(100, usedPercent));
-  const angle = (clamped / 100) * 360;
-
-  const gradient = `conic-gradient(#22c55e ${angle}deg, #27272a ${angle}deg 360deg)`;
-
-  return (
-    <div className="flex flex-col items-center gap-3">
-      <div className="relative h-32 w-32 md:h-40 md:w-40">
-        <div className="absolute inset-0 rounded-full bg-zinc-900" />
-        <div
-          className="relative h-full w-full rounded-full p-[6px] md:p-[8px] transition-all duration-500 ease-out"
-          style={{ backgroundImage: gradient }}
-        >
-          <div className="flex h-full w-full items-center justify-center rounded-full bg-zinc-950">
-            <div className="text-center">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-                Gasto
-              </p>
-              <p className="text-xl font-semibold tracking-tight">
-                {clamped}%
-              </p>
-              <p className="text-[11px] text-zinc-500">
-                {clamped < 100 ? "Dentro do limite" : "Acima do limite"}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <p className="text-[11px] text-zinc-500">
-        Percentagem de despesas sobre as tuas receitas.
-      </p>
-    </div>
-  );
-}
-
-type MiniStatProps = {
-  label: string;
-  value: string;
-  tone?: "positive" | "negative" | "warning" | "neutral";
-};
-
-function MiniStat({ label, value, tone = "neutral" }: MiniStatProps) {
-  const color =
-    tone === "positive"
-      ? "text-emerald-400"
-      : tone === "negative"
-      ? "text-red-400"
-      : tone === "warning"
-      ? "text-amber-400"
-      : "text-zinc-200";
-
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs text-zinc-500">{label}</span>
-      <span className={`text-sm ${color}`}>{value}</span>
-    </div>
-  );
-}
-
-type TransactionRowProps = {
-  title: string;
-  subtitle: string;
-  value: string;
-  positive?: boolean;
-};
-
-function TransactionRow({
-  title,
-  subtitle,
-  value,
-  positive,
-}: TransactionRowProps) {
-  return (
-    <div className="flex items-center justify-between py-2.5">
-      <div className="flex flex-col">
-        <span className="text-sm text-zinc-100">{title}</span>
-        <span className="text-[11px] text-zinc-500">{subtitle}</span>
-      </div>
-      <span
-        className={`text-sm ${
-          positive ? "text-emerald-400" : "text-zinc-200"
-        }`}
-      >
-        {value}
-      </span>
-    </div>
   );
 }

@@ -5,34 +5,43 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 export function NewAccountButton() {
-  const router = useRouter();
-
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [cardLimit, setCardLimit] = useState("");
   const [closingDay, setClosingDay] = useState("");
   const [dueDay, setDueDay] = useState("");
-
-  const [loading, setLoading] = useState(false);
+  const [initialBalance, setInitialBalance] = useState("");
+  const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const router = useRouter();
+
+  function resetForm() {
+    setName("");
+    setCardLimit("");
+    setClosingDay("");
+    setDueDay("");
+    setInitialBalance("");
+    setErrorMsg(null);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrorMsg(null);
-    setSuccessMsg(null);
 
     if (!name.trim()) {
-      setErrorMsg("Dá um nome para a conta/banco.");
+      setErrorMsg("O nome da conta não pode estar vazio.");
       return;
     }
 
     const limitNumber = cardLimit
       ? Number(cardLimit.replace(",", "."))
       : null;
-
     const closing = closingDay ? Number(closingDay) : null;
     const due = dueDay ? Number(dueDay) : null;
+    const initialNumber = initialBalance
+      ? Number(initialBalance.replace(",", "."))
+      : 0;
 
     if (closing !== null && (closing < 1 || closing > 31)) {
       setErrorMsg("Dia de fechamento inválido (1 a 31).");
@@ -44,48 +53,48 @@ export function NewAccountButton() {
       return;
     }
 
-    setLoading(true);
+    setSaving(true);
 
     const { error } = await supabase.from("accounts").insert({
       name: name.trim(),
       card_limit: limitNumber,
       closing_day: closing,
       due_day: due,
+      initial_balance: initialNumber,
     });
 
-    setLoading(false);
+    setSaving(false);
 
     if (error) {
       console.error(error);
-      setErrorMsg("Erro ao guardar conta/banco.");
+      setErrorMsg("Erro ao criar conta. Tenta novamente.");
       return;
     }
 
-    setSuccessMsg("Conta registada!");
-    setName("");
-    setCardLimit("");
-    setClosingDay("");
-    setDueDay("");
-
+    resetForm();
+    setOpen(false);
     router.refresh();
-    // se quiser fechar ao salvar:
-    // setOpen(false);
   }
 
   return (
     <>
-      {/* Botão flutuante – só para tela de Bancos */}
+      {/* Botão flutuante */}
       <button
+        type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-20 flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 text-2xl text-black shadow-lg hover:bg-zinc-300 md:bottom-10 md:right-10"
+        className="fixed bottom-6 right-6 flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 text-xl font-semibold text-black shadow-lg shadow-black/50 hover:bg-zinc-300 md:bottom-8 md:right-8"
       >
         +
       </button>
 
+      {/* Modal */}
       {open && (
         <div
-          className="fixed inset-0 z-30 flex items-center justify-center bg-black/60 px-4"
-          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4"
+          onClick={() => {
+            setOpen(false);
+            resetForm();
+          }}
         >
           <div
             className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 p-5 shadow-xl"
@@ -97,7 +106,10 @@ export function NewAccountButton() {
               </h2>
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={() => {
+                  setOpen(false);
+                  resetForm();
+                }}
                 className="text-xs text-zinc-500 hover:text-zinc-300"
               >
                 Fechar
@@ -105,7 +117,7 @@ export function NewAccountButton() {
             </div>
 
             <form className="space-y-4" onSubmit={handleSubmit}>
-              {/* Nome da conta */}
+              {/* Nome */}
               <div className="space-y-1 text-sm">
                 <label className="text-xs text-zinc-400">
                   Nome da conta / banco
@@ -115,12 +127,31 @@ export function NewAccountButton() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
-                  placeholder="Ex: Nubank, Itaú, Conta principal..."
+                  placeholder="Nubank, Itaú, Inter..."
                   required
                 />
               </div>
 
-              {/* Limite de cartão */}
+              {/* Saldo inicial */}
+              <div className="space-y-1 text-sm">
+                <label className="text-xs text-zinc-400">
+                  Saldo inicial (R$)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={initialBalance}
+                  onChange={(e) => setInitialBalance(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                  placeholder="Ex: 1500,00"
+                />
+                <p className="text-[10px] text-zinc-500">
+                  Este é o valor atual da conta hoje. As próximas
+                  receitas e despesas vão ser somadas em cima dele.
+                </p>
+              </div>
+
+              {/* Limite do cartão */}
               <div className="space-y-1 text-sm">
                 <label className="text-xs text-zinc-400">
                   Limite total do cartão (opcional)
@@ -133,10 +164,6 @@ export function NewAccountButton() {
                   className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
                   placeholder="Ex: 2000,00"
                 />
-                <p className="text-[11px] text-zinc-500">
-                  Usado para comparar o quanto já está comprometido nesse
-                  banco.
-                </p>
               </div>
 
               {/* Fechamento / vencimento */}
@@ -175,18 +202,12 @@ export function NewAccountButton() {
                 <p className="text-xs text-red-400">{errorMsg}</p>
               )}
 
-              {successMsg && (
-                <p className="text-xs text-emerald-400">
-                  {successMsg}
-                </p>
-              )}
-
               <button
                 type="submit"
-                disabled={loading}
+                disabled={saving}
                 className="mt-2 w-full rounded-xl bg-zinc-100 py-2 text-sm font-medium text-black hover:bg-zinc-300 disabled:opacity-60"
               >
-                {loading ? "A guardar..." : "Guardar conta"}
+                {saving ? "A criar..." : "Criar conta"}
               </button>
             </form>
           </div>
