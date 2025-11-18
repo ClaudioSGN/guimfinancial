@@ -95,9 +95,7 @@ export function AccountsList({ accounts }: Props) {
         : ""
     );
     setDueDay(
-      acc.dueDay !== null && acc.dueDay !== undefined
-        ? String(acc.dueDay)
-        : ""
+      acc.dueDay !== null && acc.dueDay !== undefined ? String(acc.dueDay) : ""
     );
     setErrorMsg(null);
   }
@@ -160,7 +158,8 @@ export function AccountsList({ accounts }: Props) {
 
     if (error) {
       console.error(error);
-      setErrorMsg("Erro ao guardar edição.");
+      // 👇 mostra o erro real na UI pra saber o que o Supabase está a dizer
+      setErrorMsg(error.message);
       return;
     }
 
@@ -170,20 +169,32 @@ export function AccountsList({ accounts }: Props) {
 
   async function handleDeleteAccount(accountId: string, accountName: string) {
     const ok = window.confirm(
-      `Tens a certeza que queres apagar a conta "${accountName}"?\n\nAtenção: se existirem transações associadas a ela, podes ter erros ou perder o vínculo dessas transações.`
+      `Tens a certeza que queres apagar a conta "${accountName}"?\n\nIsto também vai apagar TODAS as transações associadas a esta conta. Esta ação não pode ser desfeita.`
     );
 
     if (!ok) return;
 
-    const { error } = await supabase
+    // 1) apaga transações associadas (evita erro de FK)
+    const { error: txError } = await supabase
+      .from("transactions")
+      .delete()
+      .eq("account_id", accountId);
+
+    if (txError) {
+      console.error(txError);
+      alert(`Erro ao apagar transações desta conta: ${txError.message}`);
+      return;
+    }
+
+    // 2) apaga a conta
+    const { error: accError } = await supabase
       .from("accounts")
       .delete()
       .eq("id", accountId);
 
-    if (error) {
-      console.error(error);
-      // 👇 Aqui mostramos o erro real pra saber se é FK, RLS, etc.
-      alert(`Erro ao apagar conta: ${error.message}`);
+    if (accError) {
+      console.error(accError);
+      alert(`Erro ao apagar conta: ${accError.message}`);
       return;
     }
 
