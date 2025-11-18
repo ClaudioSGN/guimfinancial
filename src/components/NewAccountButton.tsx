@@ -37,8 +37,11 @@ export function NewAccountButton() {
     const limitNumber = cardLimit
       ? Number(cardLimit.replace(",", "."))
       : null;
+
     const closing = closingDay ? Number(closingDay) : null;
     const due = dueDay ? Number(dueDay) : null;
+
+    // 👇 CORREÇÃO: se não preencher saldo inicial, vai 0 (e não null)
     const initialNumber = initialBalance
       ? Number(initialBalance.replace(",", "."))
       : 0;
@@ -67,6 +70,7 @@ export function NewAccountButton() {
 
     if (error) {
       console.error(error);
+      // se quiser debugar melhor, pode trocar por: setErrorMsg(error.message)
       setErrorMsg("Erro ao criar conta. Tenta novamente.");
       return;
     }
@@ -82,7 +86,7 @@ export function NewAccountButton() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 text-xl font-semibold text-black shadow-lg shadow-black/50 hover:bg-zinc-300 md:bottom-8 md:right-8"
+        className="fixed bottom-6 right-6 flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 text-2xl font-bold text-black shadow-lg shadow-black/40 hover:bg-zinc-300 md:bottom-8 md:right-8"
       >
         +
       </button>
@@ -126,7 +130,7 @@ export function NewAccountButton() {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
                   placeholder="Nubank, Itaú, Inter..."
                   required
                 />
@@ -142,12 +146,12 @@ export function NewAccountButton() {
                   step="0.01"
                   value={initialBalance}
                   onChange={(e) => setInitialBalance(e.target.value)}
-                  className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
                   placeholder="Ex: 1500,00"
                 />
                 <p className="text-[10px] text-zinc-500">
-                  Este é o valor atual da conta hoje. As próximas
-                  receitas e despesas vão ser somadas em cima dele.
+                  Este é o valor atual da conta hoje. As próximas receitas e
+                  despesas vão ser somadas em cima dele.
                 </p>
               </div>
 
@@ -161,7 +165,7 @@ export function NewAccountButton() {
                   step="0.01"
                   value={cardLimit}
                   onChange={(e) => setCardLimit(e.target.value)}
-                  className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
                   placeholder="Ex: 2000,00"
                 />
               </div>
@@ -170,7 +174,7 @@ export function NewAccountButton() {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="space-y-1">
                   <label className="text-xs text-zinc-400">
-                    Dia de fechamento (opcional)
+                    Dia de fechamento (cartão)
                   </label>
                   <input
                     type="number"
@@ -178,13 +182,13 @@ export function NewAccountButton() {
                     max={31}
                     value={closingDay}
                     onChange={(e) => setClosingDay(e.target.value)}
-                    className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
-                    placeholder="Ex: 15"
+                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                    placeholder="Ex: 10"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-zinc-400">
-                    Dia de vencimento (opcional)
+                    Dia de vencimento (fatura)
                   </label>
                   <input
                     type="number"
@@ -192,7 +196,7 @@ export function NewAccountButton() {
                     max={31}
                     value={dueDay}
                     onChange={(e) => setDueDay(e.target.value)}
-                    className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
                     placeholder="Ex: 22"
                   />
                 </div>
