@@ -23,9 +23,10 @@ export function NewAccountButton() {
     setDueDay("");
     setInitialBalance("");
     setErrorMsg(null);
+    setSaving(false);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -34,17 +35,25 @@ export function NewAccountButton() {
       return;
     }
 
-    const limitNumber = cardLimit
-      ? Number(cardLimit.replace(",", "."))
-      : null;
+    const limitNumber =
+      cardLimit.trim() !== "" ? Number(cardLimit.replace(",", ".")) : null;
+    const closing =
+      closingDay.trim() !== "" ? Number(closingDay.trim()) : null;
+    const due = dueDay.trim() !== "" ? Number(dueDay.trim()) : null;
+    const initialNumber =
+      initialBalance.trim() !== ""
+        ? Number(initialBalance.replace(",", "."))
+        : 0; // 👈 se não preencher, vira 0
 
-    const closing = closingDay ? Number(closingDay) : null;
-    const due = dueDay ? Number(dueDay) : null;
+    if (Number.isNaN(limitNumber as number)) {
+      setErrorMsg("Limite do cartão inválido.");
+      return;
+    }
 
-    // 👇 CORREÇÃO: se não preencher saldo inicial, vai 0 (e não null)
-    const initialNumber = initialBalance
-      ? Number(initialBalance.replace(",", "."))
-      : 0;
+    if (Number.isNaN(initialNumber)) {
+      setErrorMsg("Saldo inicial inválido.");
+      return;
+    }
 
     if (closing !== null && (closing < 1 || closing > 31)) {
       setErrorMsg("Dia de fechamento inválido (1 a 31).");
@@ -58,26 +67,40 @@ export function NewAccountButton() {
 
     setSaving(true);
 
-    const { error } = await supabase.from("accounts").insert({
-      name: name.trim(),
-      card_limit: limitNumber,
-      closing_day: closing,
-      due_day: due,
-      initial_balance: initialNumber,
-    });
+    try {
+      console.log("Criando conta...", {
+        name: name.trim(),
+        initialNumber,
+        limitNumber,
+        closing,
+        due,
+      });
 
-    setSaving(false);
+      const { error } = await supabase.from("accounts").insert({
+        name: name.trim(),
+        card_limit: limitNumber,
+        closing_day: closing,
+        due_day: due,
+        initial_balance: initialNumber,
+      });
 
-    if (error) {
-      console.error(error);
-      // se quiser debugar melhor, pode trocar por: setErrorMsg(error.message)
-      setErrorMsg("Erro ao criar conta. Tenta novamente.");
-      return;
+      setSaving(false);
+
+      if (error) {
+        console.error("Erro Supabase ao criar conta:", error);
+        // 👇 mostra o erro REAL do Supabase
+        setErrorMsg(error.message);
+        return;
+      }
+
+      resetForm();
+      setOpen(false);
+      router.refresh();
+    } catch (err: any) {
+      console.error("Erro inesperado ao criar conta:", err);
+      setSaving(false);
+      setErrorMsg("Erro inesperado ao criar conta.");
     }
-
-    resetForm();
-    setOpen(false);
-    router.refresh();
   }
 
   return (
@@ -203,7 +226,9 @@ export function NewAccountButton() {
               </div>
 
               {errorMsg && (
-                <p className="text-xs text-red-400">{errorMsg}</p>
+                <p className="text-xs text-red-400 whitespace-pre-line">
+                  {errorMsg}
+                </p>
               )}
 
               <button
