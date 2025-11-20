@@ -1,6 +1,12 @@
+// app/banks/page.tsx
+
 import { supabase } from "@/lib/supabaseClient";
 import { TopNav } from "@/components/TopNav";
 import { BanksPageClient } from "@/components/BanksPageClient";
+
+// 🔥 força esta página a ser sempre dinâmica (sem cache estático)
+export const dynamic = "force-dynamic";
+// ou, se preferires, poderias usar: export const revalidate = 0;
 
 type AccountRow = {
   id: string;
@@ -29,7 +35,7 @@ function addMonths(date: Date, months: number) {
 // calcula o ciclo de fatura atual baseado no dia de fechamento
 function getCurrentBillingCycle(
   closingDay: number | null,
-  now: Date
+  now: Date,
 ): { start: Date; end: Date } | null {
   if (!closingDay || closingDay < 1 || closingDay > 31) return null;
 
@@ -62,20 +68,20 @@ type AccountWithInvoice = AccountRow & {
 };
 
 async function getAccountsWithInvoice(): Promise<AccountWithInvoice[]> {
-  const [{ data: accountsData, error: accError }, { data: txData, error: txError }] =
-    await Promise.all([
-      supabase
-        .from("accounts")
-        .select(
-          "id, name, initial_balance, card_limit, closing_day, due_day"
-        )
-        .order("name", { ascending: true }),
-      supabase
-        .from("transactions")
-        .select(
-          "type, value, date, account_id, is_installment, installment_total"
-        ),
-    ]);
+  const [
+    { data: accountsData, error: accError },
+    { data: txData, error: txError },
+  ] = await Promise.all([
+    supabase
+      .from("accounts")
+      .select("id, name, initial_balance, card_limit, closing_day, due_day")
+      .order("name", { ascending: true }),
+    supabase
+      .from("transactions")
+      .select(
+        "type, value, date, account_id, is_installment, installment_total",
+      ),
+  ]);
 
   if (accError) {
     console.error("Erro ao carregar contas:", accError.message);
@@ -98,9 +104,7 @@ async function getAccountsWithInvoice(): Promise<AccountWithInvoice[]> {
 
       const accountTxs = txs.filter(
         (t) =>
-          t.account_id === acc.id &&
-          t.type === "expense" &&
-          t.value != null
+          t.account_id === acc.id && t.type === "expense" && t.value != null,
       );
 
       for (const t of accountTxs) {
@@ -131,23 +135,18 @@ async function getAccountsWithInvoice(): Promise<AccountWithInvoice[]> {
           const installmentChargeDate = new Date(
             installmentDate.getFullYear(),
             installmentDate.getMonth(),
-            closingDay
+            closingDay,
           );
 
-          if (
-            installmentChargeDate >= start &&
-            installmentChargeDate < end
-          ) {
+          if (installmentChargeDate >= start && installmentChargeDate < end) {
             invoiceAmount += perInstallmentValue;
           }
         }
       }
     }
 
-    const limit =
-      acc.card_limit != null ? Number(acc.card_limit) : null;
-    const utilization =
-      limit && limit > 0 ? invoiceAmount / limit : null;
+    const limit = acc.card_limit != null ? Number(acc.card_limit) : null;
+    const utilization = limit && limit > 0 ? invoiceAmount / limit : null;
 
     return {
       ...acc,
