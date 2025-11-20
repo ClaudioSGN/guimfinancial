@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { supabase } from "@/lib/supabaseClient";
 import { TopNav } from "@/components/TopNav";
 import { MonthlyDashboard } from "@/components/MonthlyDashboard";
@@ -83,7 +85,7 @@ function addMonths(date: Date, months: number) {
 function buildInsights(
   months: MonthSummary[],
   totalIncome: number,
-  totalExpense: number
+  totalExpense: number,
 ): Insight[] {
   const insights: Insight[] = [];
 
@@ -98,7 +100,7 @@ function buildInsights(
       id: "net-negative",
       title: "Mês fechou no negativo",
       detail: `O mês de ${latest.labelLong} fechou com saldo negativo de ${formatCurrency(
-        latest.net
+        latest.net,
       )}. Talvez valha rever algumas despesas para o próximo mês.`,
       severity: "high",
     });
@@ -107,7 +109,7 @@ function buildInsights(
       id: "net-positive",
       title: "Mês fechou no positivo",
       detail: `O mês de ${latest.labelLong} terminou com saldo positivo de ${formatCurrency(
-        latest.net
+        latest.net,
       )}. Boa — tenta manter esse padrão ou até aumentar o gap entre renda e gastos.`,
       severity: "positive",
     });
@@ -123,7 +125,7 @@ function buildInsights(
         id: "expense-up",
         title: "Gastos aumentaram em relação ao mês anterior",
         detail: `As despesas de ${latest.labelLong} foram cerca de ${Math.round(
-          pct * 100
+          pct * 100,
         )}% maiores do que em ${prev.labelLong}. Dá uma olhada nas categorias que mais cresceram.`,
         severity: "medium",
       });
@@ -132,7 +134,7 @@ function buildInsights(
         id: "expense-down",
         title: "Gastos caíram em relação ao mês anterior",
         detail: `As despesas de ${latest.labelLong} ficaram cerca de ${Math.round(
-          Math.abs(pct) * 100
+          Math.abs(pct) * 100,
         )}% menores que em ${prev.labelLong}. Bom sinal de controle de gastos.`,
         severity: "positive",
       });
@@ -148,7 +150,7 @@ function buildInsights(
       id: "top-category",
       title: "Categoria que mais pesa este mês",
       detail: `A categoria "${top.category}" representa cerca de ${Math.round(
-        pct * 100
+        pct * 100,
       )}% de todas as tuas despesas em ${latest.labelLong}. Talvez seja um bom ponto de atenção.`,
       severity: pct >= 0.35 ? "medium" : "low",
     });
@@ -163,7 +165,7 @@ function buildInsights(
         id: "ratio-very-high",
         title: "Quase toda a renda está indo para despesas",
         detail: `No geral, as despesas estão consumindo cerca de ${Math.round(
-          ratio * 100
+          ratio * 100,
         )}% da sua renda total registada. Isso deixa pouca margem para poupança ou imprevistos.`,
         severity: "high",
       });
@@ -172,7 +174,7 @@ function buildInsights(
         id: "ratio-high",
         title: "Despesas relativamente altas em relação à renda",
         detail: `As despesas somam aproximadamente ${Math.round(
-          ratio * 100
+          ratio * 100,
         )}% da sua renda. Vale a pena garantir que isso está alinhado com os seus objetivos.`,
         severity: "medium",
       });
@@ -190,25 +192,22 @@ function buildInsights(
 }
 
 async function getSummary(): Promise<Summary> {
-  const [
-    { data: accountsData },
-    { data: txData },
-    { data: reminderData },
-  ] = await Promise.all([
-    supabase
-      .from("accounts")
-      .select("id, name, initial_balance")
-      .order("name", { ascending: true }),
-    supabase
-      .from("transactions")
-      .select(
-        "type, value, date, account_id, category, is_installment, installment_total"
-      ),
-    supabase
-      .from("reminder_settings")
-      .select("remind_enabled, remind_hour, remind_minute")
-      .eq("id", "default"),
-  ]);
+  const [{ data: accountsData }, { data: txData }, { data: reminderData }] =
+    await Promise.all([
+      supabase
+        .from("accounts")
+        .select("id, name, initial_balance")
+        .order("name", { ascending: true }),
+      supabase
+        .from("transactions")
+        .select(
+          "type, value, date, account_id, category, is_installment, installment_total",
+        ),
+      supabase
+        .from("reminder_settings")
+        .select("remind_enabled, remind_hour, remind_minute")
+        .eq("id", "default"),
+    ]);
 
   const accounts = (accountsData ?? []) as AccountRow[];
   const txs = (txData ?? []) as TransactionRow[];
@@ -258,10 +257,7 @@ async function getSummary(): Promise<Summary> {
   }
 
   const accountsSummary = Array.from(accountMap.values());
-  const totalBalance = accountsSummary.reduce(
-    (sum, a) => sum + a.balance,
-    0
-  );
+  const totalBalance = accountsSummary.reduce((sum, a) => sum + a.balance, 0);
 
   // --- visão mensal (últimos meses) ---
   type MonthBucket = {
@@ -297,9 +293,7 @@ async function getSummary(): Promise<Summary> {
       bucket.expense += v;
 
       const cat =
-        t.category && t.category.trim() !== ""
-          ? t.category
-          : "Sem categoria";
+        t.category && t.category.trim() !== "" ? t.category : "Sem categoria";
       const prev = bucket.categories.get(cat) ?? 0;
       bucket.categories.set(cat, prev + v);
     }
@@ -308,7 +302,7 @@ async function getSummary(): Promise<Summary> {
   }
 
   const monthKeys = Array.from(monthBuckets.keys()).sort((a, b) =>
-    a < b ? 1 : -1
+    a < b ? 1 : -1,
   );
   const selectedKeys = monthKeys.slice(0, 6);
 
@@ -330,9 +324,7 @@ async function getSummary(): Promise<Summary> {
       year: "2-digit",
     });
 
-    const categories: CategoryStat[] = Array.from(
-      bucket.categories.entries()
-    )
+    const categories: CategoryStat[] = Array.from(bucket.categories.entries())
       .map(([category, total]) => ({ category, total }))
       .sort((a, b) => b.total - a.total);
 
@@ -351,11 +343,7 @@ async function getSummary(): Promise<Summary> {
   const upcomingInstallmentsMap = new Map<string, number>();
 
   const now = new Date();
-  const currentMonthStart = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    1
-  );
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
   for (const t of txs) {
     if (t.type !== "expense") continue;
@@ -385,12 +373,13 @@ async function getSummary(): Promise<Summary> {
     }
   }
 
-  const installmentKeys = Array.from(
-    upcomingInstallmentsMap.keys()
-  ).sort((a, b) => (a < b ? -1 : 1));
+  const installmentKeys = Array.from(upcomingInstallmentsMap.keys()).sort(
+    (a, b) => (a < b ? -1 : 1),
+  );
 
-  const upcomingInstallments: InstallmentMonthSummary[] =
-    installmentKeys.slice(0, 6).map((key) => {
+  const upcomingInstallments: InstallmentMonthSummary[] = installmentKeys
+    .slice(0, 6)
+    .map((key) => {
       const [yearStr, monthStr] = key.split("-");
       const year = Number(yearStr);
       const monthIndex = Number(monthStr) - 1;
@@ -500,8 +489,7 @@ export default async function HomePage() {
           </p>
           {accounts.length === 0 ? (
             <p className="text-xs text-zinc-500">
-              Ainda não há contas registadas. Adicione uma conta na aba
-              Bancos.
+              Ainda não há contas registadas. Adicione uma conta na aba Bancos.
             </p>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
@@ -511,9 +499,7 @@ export default async function HomePage() {
                   className="flex flex-col justify-between rounded-2xl border border-zinc-900 bg-zinc-950/80 px-4 py-3"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-zinc-100">
-                      {acc.name}
-                    </span>
+                    <span className="text-sm text-zinc-100">{acc.name}</span>
                   </div>
                   <div className="mt-1 text-[11px] text-zinc-500">
                     Saldo:{" "}
