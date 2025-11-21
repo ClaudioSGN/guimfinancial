@@ -27,6 +27,7 @@ function parseMoney(input: string): number | null {
 export function TransactionRow({ tx }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const isExpense = tx.type === "expense";
   const isIncome = tx.type === "income";
@@ -53,7 +54,7 @@ export function TransactionRow({ tx }: Props) {
 
   const allPaid = isInstallmentExpense && remainingInstallments === 0;
 
-  // ---------- REGISTAR PARCELA PAGA ----------
+  // ---------- REGISTAR PARCELA PAGA (PARCELADAS) ----------
   async function handleMarkInstallmentPaid() {
     if (!isInstallmentExpense) return;
     if (remainingInstallments <= 0) return;
@@ -77,6 +78,31 @@ export function TransactionRow({ tx }: Props) {
     if (error) {
       console.error("Erro ao registar pagamento de parcela:", error);
       alert("Erro ao registar pagamento de parcela.");
+      return;
+    }
+
+    router.refresh();
+  }
+
+  // ---------- TOGGLE PAGO / EM ABERTO (NÃO PARCELADAS) ----------
+  async function handleTogglePaid() {
+    if (!isExpense || isInstallmentExpense) return;
+    if (saving) return;
+
+    setSaving(true);
+
+    const { error } = await supabase
+      .from("transactions")
+      .update({
+        is_paid: !tx.isPaid,
+      })
+      .eq("id", tx.id);
+
+    setSaving(false);
+
+    if (error) {
+      console.error("Erro ao atualizar estado pago:", error);
+      alert("Erro ao atualizar estado pago.");
       return;
     }
 
@@ -142,7 +168,6 @@ export function TransactionRow({ tx }: Props) {
       category: editCategory || null,
     };
 
-    // Só faz sentido editar is_paid para transações NÃO parceladas
     if (!isInstallmentExpense && isExpense) {
       payload.is_paid = editIsPaid;
     }
@@ -165,8 +190,6 @@ export function TransactionRow({ tx }: Props) {
   }
 
   // ---------- APAGAR ----------
-  const [deleting, setDeleting] = useState(false);
-
   async function handleDelete() {
     if (deleting) return;
 
@@ -196,7 +219,7 @@ export function TransactionRow({ tx }: Props) {
   return (
     <>
       <div className="flex items-start justify-between gap-3 rounded-2xl border border-zinc-900 bg-zinc-950/80 px-4 py-3">
-        {/* Esquerda: descrição + infos */}
+        {/* Esquerda */}
         <div className="flex flex-col gap-1 text-xs text-zinc-300">
           <div className="flex flex-wrap items-center gap-2">
             <span
@@ -233,7 +256,7 @@ export function TransactionRow({ tx }: Props) {
             </span>
           </span>
 
-          {/* Info de parcelamento */}
+          {/* Info parcelamento */}
           {isInstallmentExpense && (
             <div className="space-y-1 text-[11px] text-zinc-500">
               <div>
@@ -272,7 +295,7 @@ export function TransactionRow({ tx }: Props) {
             </div>
           )}
 
-          {/* Não parcelada, mas com estado pago/aberto */}
+          {/* Não parcelada, estado pago/aberto */}
           {!isInstallmentExpense && isExpense && (
             <span className="text-[11px] text-zinc-500">
               Estado:{" "}
@@ -295,7 +318,7 @@ export function TransactionRow({ tx }: Props) {
             {formatCurrency(tx.value)}
           </span>
 
-          {/* Botão registrar parcela */}
+          {/* Botão registrar parcela (parceladas) */}
           {isInstallmentExpense && remainingInstallments > 0 && (
             <button
               type="button"
@@ -311,6 +334,22 @@ export function TransactionRow({ tx }: Props) {
             <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-[10px] text-emerald-300">
               Parcelas concluídas
             </span>
+          )}
+
+          {/* Botão pagar / abrir (NÃO parceladas) */}
+          {!isInstallmentExpense && isExpense && (
+            <button
+              type="button"
+              onClick={handleTogglePaid}
+              disabled={saving}
+              className="rounded-full border border-zinc-700 px-3 py-1 text-[10px] text-zinc-200 hover:border-emerald-400 hover:text-emerald-300 disabled:opacity-60"
+            >
+              {saving
+                ? "A atualizar..."
+                : tx.isPaid
+                  ? "Marcar como em aberto"
+                  : "Marcar como pago"}
+            </button>
           )}
 
           {/* Botões Editar / Apagar */}
@@ -406,7 +445,7 @@ export function TransactionRow({ tx }: Props) {
                 />
               </div>
 
-              {/* pago / em aberto – só para NÃO parceladas */}
+              {/* pago / em aberto – só p/ NÃO parceladas */}
               {!isInstallmentExpense && isExpense && (
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-zinc-400">Já está pago?</span>
