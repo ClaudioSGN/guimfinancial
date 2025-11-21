@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { supabase } from "@/lib/supabaseClient";
 import { TopNav } from "@/components/TopNav";
 import { NewTransactionButton } from "@/components/NewTransactionButton";
@@ -59,7 +61,7 @@ async function getData(): Promise<{
     supabase
       .from("transactions")
       .select(
-        "id, description, value, type, date, created_at, account_id, category, is_installment, installment_total, is_paid, installments_paid"
+        "id, description, value, type, date, created_at, account_id, category, is_installment, installment_total, is_paid, installments_paid",
       )
       .order("date", { ascending: false })
       .order("created_at", { ascending: false }),
@@ -81,7 +83,7 @@ async function getData(): Promise<{
     date: t.date,
     createdAt: t.created_at,
     accountId: t.account_id,
-    accountName: t.account_id ? accountMap.get(t.account_id) ?? null : null,
+    accountName: t.account_id ? (accountMap.get(t.account_id) ?? null) : null,
     category: t.category,
     isInstallment: !!t.is_installment,
     installmentTotal: t.installment_total,
@@ -173,9 +175,7 @@ export default async function TransactionsPage() {
               começar.
             </p>
           ) : (
-            transactions.map((tx) => (
-              <TransactionRow key={tx.id} tx={tx} />
-            ))
+            transactions.map((tx) => <TransactionRow key={tx.id} tx={tx} />)
           )}
         </section>
       </div>

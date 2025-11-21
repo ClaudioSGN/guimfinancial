@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -29,23 +29,45 @@ function parseMoney(input: string): number | null {
   if (!input.trim()) return null;
   const normalized = input.replace(/\./g, "").replace(",", ".");
   const n = Number(normalized);
-  if (Number.isNaN(n)) return null;
-  return n;
+  return Number.isNaN(n) ? null : n;
 }
 
 export function NewTransactionButton({ accounts }: Props) {
   const router = useRouter();
 
+  // lista inicial de contas
+  const [accountList, setAccountList] = useState<AccountRow[]>(accounts);
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
+
+  // busca sempre a lista mais recente quando o modal abre
+  async function refreshAccounts() {
+    setLoadingAccounts(true);
+    const { data, error } = await supabase
+      .from("accounts")
+      .select("id, name")
+      .order("name", { ascending: true });
+
+    setLoadingAccounts(false);
+
+    if (error) {
+      console.error("Erro ao carregar contas:", error);
+      return;
+    }
+
+    setAccountList(data ?? []);
+  }
+
+  useEffect(() => {
+    setAccountList(accounts);
+  }, [accounts]);
+
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<"income" | "expense">("expense");
   const [description, setDescription] = useState("");
   const [value, setValue] = useState("");
-  const [date, setDate] = useState(() => {
-    const d = new Date();
-    return d.toISOString().slice(0, 10);
-  });
-  const [accountId, setAccountId] = useState<string>("");
-  const [category, setCategory] = useState<string>("");
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [accountId, setAccountId] = useState("");
+  const [category, setCategory] = useState("");
   const [isInstallment, setIsInstallment] = useState(false);
   const [installmentTotal, setInstallmentTotal] = useState("");
   const [isPaid, setIsPaid] = useState(true);
@@ -56,8 +78,7 @@ export function NewTransactionButton({ accounts }: Props) {
     setType("expense");
     setDescription("");
     setValue("");
-    const d = new Date();
-    setDate(d.toISOString().slice(0, 10));
+    setDate(new Date().toISOString().slice(0, 10));
     setAccountId("");
     setCategory("");
     setIsInstallment(false);
@@ -68,12 +89,12 @@ export function NewTransactionButton({ accounts }: Props) {
 
   function openModal() {
     resetForm();
+    refreshAccounts(); // 🔥 busca lista atualizada antes de abrir
     setOpen(true);
   }
 
   function closeModal() {
-    if (saving) return;
-    setOpen(false);
+    if (!saving) setOpen(false);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -81,7 +102,7 @@ export function NewTransactionButton({ accounts }: Props) {
     setErrorMsg(null);
 
     const parsedValue = parseMoney(value);
-    if (parsedValue == null || parsedValue <= 0) {
+    if (!parsedValue || parsedValue <= 0) {
       setErrorMsg("Valor inválido.");
       return;
     }
@@ -98,12 +119,8 @@ export function NewTransactionButton({ accounts }: Props) {
 
     let totalInstallments: number | null = null;
     if (isInstallment) {
-      if (!installmentTotal.trim()) {
-        setErrorMsg("Informa o número de parcelas.");
-        return;
-      }
       const n = Number(installmentTotal);
-      if (!Number.isInteger(n) || n < 1 || n > 120) {
+      if (!n || !Number.isInteger(n) || n < 1 || n > 120) {
         setErrorMsg("Número de parcelas inválido.");
         return;
       }
@@ -112,24 +129,18 @@ export function NewTransactionButton({ accounts }: Props) {
 
     setSaving(true);
 
-    const isParcelado =
-      isInstallment && totalInstallments != null && totalInstallments > 0;
-
-    const { error } = await supabase.from("transactions").insert([
-      {
-        type,
-        description: description.trim() || null,
-        value: parsedValue,
-        date,
-        account_id: accountId,
-        category: category || null,
-        is_installment: isParcelado || null,
-        installment_total: totalInstallments,
-        // se for parcelado: começa com 0 parcelas pagas e não está totalmente pago
-        installments_paid: isParcelado ? 0 : 0,
-        is_paid: isParcelado ? false : isPaid,
-      },
-    ]);
+    const { error } = await supabase.from("transactions").insert({
+      type,
+      description: description.trim() || null,
+      value: parsedValue,
+      date,
+      account_id: accountId,
+      category: category || null,
+      is_installment: isInstallment || null,
+      installment_total: totalInstallments,
+      installments_paid: isInstallment ? 0 : 0,
+      is_paid: isInstallment ? false : isPaid,
+    });
 
     setSaving(false);
 
@@ -188,6 +199,7 @@ export function NewTransactionButton({ accounts }: Props) {
                 >
                   Despesa
                 </button>
+
                 <button
                   type="button"
                   onClick={() => setType("income")}
@@ -203,9 +215,7 @@ export function NewTransactionButton({ accounts }: Props) {
 
               {/* descrição */}
               <div className="space-y-1 text-sm">
-                <label className="text-xs text-zinc-400">
-                  Descrição
-                </label>
+                <label className="text-xs text-zinc-400">Descrição</label>
                 <input
                   type="text"
                   value={description}
@@ -218,9 +228,7 @@ export function NewTransactionButton({ accounts }: Props) {
               {/* valor e data */}
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="space-y-1">
-                  <label className="text-xs text-zinc-400">
-                    Valor (R$)
-                  </label>
+                  <label className="text-xs text-zinc-400">Valor (R$)</label>
                   <input
                     type="text"
                     value={value}
@@ -229,10 +237,9 @@ export function NewTransactionButton({ accounts }: Props) {
                     placeholder="0,00"
                   />
                 </div>
+
                 <div className="space-y-1">
-                  <label className="text-xs text-zinc-400">
-                    Data
-                  </label>
+                  <label className="text-xs text-zinc-400">Data</label>
                   <input
                     type="date"
                     value={date}
@@ -244,16 +251,19 @@ export function NewTransactionButton({ accounts }: Props) {
 
               {/* conta */}
               <div className="space-y-1 text-sm">
-                <label className="text-xs text-zinc-400">
-                  Conta / banco
-                </label>
+                <label className="text-xs text-zinc-400">Conta / banco</label>
                 <select
                   value={accountId}
                   onChange={(e) => setAccountId(e.target.value)}
                   className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
                 >
-                  <option value="">Escolhe uma conta</option>
-                  {accounts.map((acc) => (
+                  <option value="">
+                    {loadingAccounts
+                      ? "A carregar contas..."
+                      : "Escolhe uma conta"}
+                  </option>
+
+                  {accountList.map((acc) => (
                     <option key={acc.id} value={acc.id}>
                       {acc.name}
                     </option>
@@ -286,40 +296,36 @@ export function NewTransactionButton({ accounts }: Props) {
                   <input
                     type="checkbox"
                     checked={isInstallment}
-                    onChange={(e) =>
-                      setIsInstallment(e.target.checked)
-                    }
+                    onChange={(e) => setIsInstallment(e.target.checked)}
                     className="h-3 w-3 rounded border-zinc-600 bg-zinc-950 text-zinc-100"
                   />
                   <span>Compra parcelada no cartão</span>
                 </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-xs text-zinc-400">
-                      Nº de parcelas
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={120}
-                      disabled={!isInstallment}
-                      value={installmentTotal}
-                      onChange={(e) =>
-                        setInstallmentTotal(e.target.value)
-                      }
-                      className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none disabled:opacity-50 focus:border-zinc-400"
-                      placeholder="Ex: 6"
-                    />
+
+                {isInstallment && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs text-zinc-400">
+                        Nº de parcelas
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={120}
+                        value={installmentTotal}
+                        onChange={(e) => setInstallmentTotal(e.target.value)}
+                        className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                        placeholder="Ex: 6"
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
-              {/* pago?  (apenas para transações não parceladas) */}
+              {/* pago */}
               {!isInstallment && (
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-zinc-400">
-                    Já está pago?
-                  </span>
+                  <span className="text-zinc-400">Já está pago?</span>
                   <button
                     type="button"
                     onClick={() => setIsPaid((v) => !v)}
@@ -336,9 +342,7 @@ export function NewTransactionButton({ accounts }: Props) {
                 </div>
               )}
 
-              {errorMsg && (
-                <p className="text-xs text-red-400">{errorMsg}</p>
-              )}
+              {errorMsg && <p className="text-xs text-red-400">{errorMsg}</p>}
 
               <button
                 type="submit"

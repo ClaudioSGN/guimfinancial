@@ -13,7 +13,6 @@ export function NewAccountButton() {
   const [initialBalance, setInitialBalance] = useState("");
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
   const router = useRouter();
 
   function resetForm() {
@@ -37,13 +36,15 @@ export function NewAccountButton() {
 
     const limitNumber =
       cardLimit.trim() !== "" ? Number(cardLimit.replace(",", ".")) : null;
-    const closing =
-      closingDay.trim() !== "" ? Number(closingDay.trim()) : null;
+
+    const closing = closingDay.trim() !== "" ? Number(closingDay.trim()) : null;
+
     const due = dueDay.trim() !== "" ? Number(dueDay.trim()) : null;
+
     const initialNumber =
       initialBalance.trim() !== ""
         ? Number(initialBalance.replace(",", "."))
-        : 0; // 👈 se não preencher, vira 0
+        : 0;
 
     if (Number.isNaN(limitNumber as number)) {
       setErrorMsg("Limite do cartão inválido.");
@@ -68,14 +69,6 @@ export function NewAccountButton() {
     setSaving(true);
 
     try {
-      console.log("Criando conta...", {
-        name: name.trim(),
-        initialNumber,
-        limitNumber,
-        closing,
-        due,
-      });
-
       const { error } = await supabase.from("accounts").insert({
         name: name.trim(),
         card_limit: limitNumber,
@@ -88,7 +81,6 @@ export function NewAccountButton() {
 
       if (error) {
         console.error("Erro Supabase ao criar conta:", error);
-        // 👇 mostra o erro REAL do Supabase
         setErrorMsg(error.message);
         return;
       }
@@ -96,16 +88,17 @@ export function NewAccountButton() {
       resetForm();
       setOpen(false);
       router.refresh();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Erro inesperado ao criar conta:", err);
       setSaving(false);
-      setErrorMsg("Erro inesperado ao criar conta.");
+
+      if (err instanceof Error) setErrorMsg(err.message);
+      else setErrorMsg("Erro inesperado ao criar conta.");
     }
   }
 
   return (
     <>
-      {/* Botão flutuante */}
       <button
         type="button"
         onClick={() => setOpen(true)}
@@ -114,7 +107,6 @@ export function NewAccountButton() {
         +
       </button>
 
-      {/* Modal */}
       {open && (
         <div
           className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4"
@@ -154,7 +146,7 @@ export function NewAccountButton() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
-                  placeholder="Nubank, Itaú, Inter..."
+                  placeholder="Nubank, Itaú..."
                   required
                 />
               </div>
@@ -172,13 +164,9 @@ export function NewAccountButton() {
                   className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
                   placeholder="Ex: 1500,00"
                 />
-                <p className="text-[10px] text-zinc-500">
-                  Este é o valor atual da conta hoje. As próximas receitas e
-                  despesas vão ser somadas em cima dele.
-                </p>
               </div>
 
-              {/* Limite do cartão */}
+              {/* Limite */}
               <div className="space-y-1 text-sm">
                 <label className="text-xs text-zinc-400">
                   Limite total do cartão (opcional)
@@ -193,7 +181,7 @@ export function NewAccountButton() {
                 />
               </div>
 
-              {/* Fechamento / vencimento */}
+              {/* Fechamento e Vencimento */}
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="space-y-1">
                   <label className="text-xs text-zinc-400">
@@ -206,9 +194,10 @@ export function NewAccountButton() {
                     value={closingDay}
                     onChange={(e) => setClosingDay(e.target.value)}
                     className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
-                    placeholder="Ex: 10"
+                    placeholder="10"
                   />
                 </div>
+
                 <div className="space-y-1">
                   <label className="text-xs text-zinc-400">
                     Dia de vencimento (fatura)
@@ -220,16 +209,12 @@ export function NewAccountButton() {
                     value={dueDay}
                     onChange={(e) => setDueDay(e.target.value)}
                     className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
-                    placeholder="Ex: 22"
+                    placeholder="22"
                   />
                 </div>
               </div>
 
-              {errorMsg && (
-                <p className="text-xs text-red-400 whitespace-pre-line">
-                  {errorMsg}
-                </p>
-              )}
+              {errorMsg && <p className="text-xs text-red-400">{errorMsg}</p>}
 
               <button
                 type="submit"
