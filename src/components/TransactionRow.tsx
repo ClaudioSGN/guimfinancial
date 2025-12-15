@@ -3,7 +3,22 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import type { UiTransaction } from "@/app/transactions/page";
+type UiTransaction = {
+  id: string;
+  description: string;
+  value: number;
+  type: "income" | "expense";
+  date: string;
+  createdAt: string;
+  accountId: string | null;
+  accountName: string | null;
+  category: string | null;
+  isInstallment: boolean;
+  installmentTotal: number | null;
+  isPaid: boolean;
+  installmentsPaid: number;
+  installmentIndex?: number | null;
+};
 
 type Props = {
   tx: UiTransaction;
@@ -28,6 +43,8 @@ export function TransactionRow({ tx }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const bankName = tx.accountName;
+  const installmentIndex = tx.installmentIndex ?? null;
 
   const isExpense = tx.type === "expense";
   const isIncome = tx.type === "income";
@@ -48,9 +65,11 @@ export function TransactionRow({ tx }: Props) {
     ? Math.max(totalInstallments - tx.installmentsPaid, 0)
     : 0;
 
-  const remainingAmount = isInstallmentExpense
-    ? perInstallment * remainingInstallments
-    : 0;
+  const remainingAmount =
+    isInstallmentExpense && tx.installmentTotal
+      ? perInstallment *
+        Math.max(tx.installmentTotal - tx.installmentsPaid, 0)
+      : 0;
 
   const allPaid = isInstallmentExpense && remainingInstallments === 0;
 
@@ -58,6 +77,9 @@ export function TransactionRow({ tx }: Props) {
   async function handleMarkInstallmentPaid() {
     if (!isInstallmentExpense) return;
     if (remainingInstallments <= 0) return;
+    if (installmentIndex !== null && installmentIndex !== tx.installmentsPaid) {
+      return;
+    }
     if (saving) return;
 
     setSaving(true);
@@ -218,7 +240,7 @@ export function TransactionRow({ tx }: Props) {
 
   return (
     <>
-      <div className="flex items-start justify-between gap-3 rounded-2xl border border-zinc-900 bg-zinc-950/80 px-4 py-3">
+      <div className="flex items-start justify-between gap-3 rounded-2xl border border-[#1a243c] bg-[#0c1428] px-4 py-3 shadow-inner shadow-black/20">
         {/* Esquerda */}
         <div className="flex flex-col gap-1 text-xs text-zinc-300">
           <div className="flex flex-wrap items-center gap-2">
@@ -232,12 +254,11 @@ export function TransactionRow({ tx }: Props) {
               {isIncome ? "Receita" : "Despesa"}
             </span>
 
-            {tx.accountName && (
+            {bankName && (
               <span className="rounded-full border border-zinc-700 px-2 py-[2px] text-[10px] text-zinc-400">
-                {tx.accountName}
+                {bankName}
               </span>
             )}
-
             {tx.category && (
               <span className="rounded-full border border-zinc-700 px-2 py-[2px] text-[10px] text-zinc-400">
                 {tx.category}
@@ -319,7 +340,10 @@ export function TransactionRow({ tx }: Props) {
           </span>
 
           {/* Botão registrar parcela (parceladas) */}
-          {isInstallmentExpense && remainingInstallments > 0 && (
+          {isInstallmentExpense &&
+            remainingInstallments > 0 &&
+            (installmentIndex === null ||
+              installmentIndex === tx.installmentsPaid) && (
             <button
               type="button"
               onClick={handleMarkInstallmentPaid}

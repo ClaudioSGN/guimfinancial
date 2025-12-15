@@ -257,7 +257,7 @@ export function MonthlyDashboard({ months }: { months: MonthSummary[] }) {
                 />
 
                 <Tooltip
-                  formatter={(value: any) =>
+                  formatter={(value: number | string) =>
                     formatCurrency(Number(value) || 0)
                   }
                   contentStyle={{

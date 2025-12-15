@@ -2,7 +2,21 @@
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import type { UiTransaction } from "@/app/transactions/page";
+type UiTransaction = {
+  id: string;
+  description: string;
+  value: number;
+  type: "income" | "expense";
+  date: string;
+  createdAt: string;
+  accountId: string | null;
+  accountName: string | null;
+  category: string | null;
+  isInstallment: boolean;
+  installmentTotal: number | null;
+  isPaid: boolean;
+  installmentsPaid: number;
+};
 
 type Props = {
   tx: UiTransaction;

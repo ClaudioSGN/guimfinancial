@@ -7,6 +7,8 @@ import { supabase } from "@/lib/supabaseClient";
 type AccountRow = {
   id: string;
   name: string;
+  card_limit?: number | null;
+  accountType?: "bank" | "card";
 };
 
 type Props = {
@@ -14,7 +16,7 @@ type Props = {
 };
 
 const CATEGORIES = [
-  "Alimentação",
+  "Alimentacao",
   "Transporte",
   "Assinaturas",
   "Lazer",
@@ -27,7 +29,9 @@ const CATEGORIES = [
 
 function parseMoney(input: string): number | null {
   if (!input.trim()) return null;
-  const normalized = input.replace(/\./g, "").replace(",", ".");
+  const cleaned = input.replace(/[^\d.,-]/g, "").trim();
+  if (!cleaned) return null;
+  const normalized = cleaned.replace(/\./g, "").replace(",", ".");
   const n = Number(normalized);
   return Number.isNaN(n) ? null : n;
 }
@@ -35,16 +39,14 @@ function parseMoney(input: string): number | null {
 export function NewTransactionButton({ accounts }: Props) {
   const router = useRouter();
 
-  // lista inicial de contas
   const [accountList, setAccountList] = useState<AccountRow[]>(accounts);
   const [loadingAccounts, setLoadingAccounts] = useState(false);
 
-  // busca sempre a lista mais recente quando o modal abre
   async function refreshAccounts() {
     setLoadingAccounts(true);
     const { data, error } = await supabase
       .from("accounts")
-      .select("id, name")
+      .select("id, name, card_limit")
       .order("name", { ascending: true });
 
     setLoadingAccounts(false);
@@ -64,32 +66,38 @@ export function NewTransactionButton({ accounts }: Props) {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<"income" | "expense">("expense");
   const [description, setDescription] = useState("");
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState("0,00");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [accountId, setAccountId] = useState("");
+  const [bankAccountId, setBankAccountId] = useState("");
+  const [creditCardId, setCreditCardId] = useState("");
   const [category, setCategory] = useState("");
   const [isInstallment, setIsInstallment] = useState(false);
   const [installmentTotal, setInstallmentTotal] = useState("");
   const [isPaid, setIsPaid] = useState(true);
+  const [isFixedIncome, setIsFixedIncome] = useState(false);
+  const [fixedMonths, setFixedMonths] = useState("12");
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   function resetForm() {
     setType("expense");
     setDescription("");
-    setValue("");
+    setValue("0,00");
     setDate(new Date().toISOString().slice(0, 10));
-    setAccountId("");
+    setBankAccountId("");
+    setCreditCardId("");
     setCategory("");
     setIsInstallment(false);
     setInstallmentTotal("");
     setIsPaid(true);
+    setIsFixedIncome(false);
+    setFixedMonths("12");
     setErrorMsg(null);
   }
 
   function openModal() {
     resetForm();
-    refreshAccounts(); // 🔥 busca lista atualizada antes de abrir
+    refreshAccounts();
     setOpen(true);
   }
 
@@ -103,25 +111,28 @@ export function NewTransactionButton({ accounts }: Props) {
 
     const parsedValue = parseMoney(value);
     if (!parsedValue || parsedValue <= 0) {
-      setErrorMsg("Valor inválido.");
+      setErrorMsg("Valor invalido. Use numeros, ex: 1200,50");
       return;
     }
 
     if (!date) {
-      setErrorMsg("Escolhe uma data.");
+      setErrorMsg("Escolha uma data.");
       return;
     }
 
-    if (!accountId) {
-      setErrorMsg("Escolhe uma conta.");
+    const hasBank = Boolean(bankAccountId);
+    const hasCard = Boolean(creditCardId);
+
+    if (!hasBank && !hasCard) {
+      setErrorMsg("Escolha uma conta bancaria ou um cartao.");
       return;
     }
 
     let totalInstallments: number | null = null;
-    if (isInstallment) {
+    if (type === "expense" && isInstallment) {
       const n = Number(installmentTotal);
       if (!n || !Number.isInteger(n) || n < 1 || n > 120) {
-        setErrorMsg("Número de parcelas inválido.");
+        setErrorMsg("Numero de parcelas invalido.");
         return;
       }
       totalInstallments = n;
@@ -129,29 +140,69 @@ export function NewTransactionButton({ accounts }: Props) {
 
     setSaving(true);
 
-    const { error } = await supabase.from("transactions").insert({
-      type,
-      description: description.trim() || null,
-      value: parsedValue,
-      date,
-      account_id: accountId,
-      category: category || null,
-      is_installment: isInstallment || null,
-      installment_total: totalInstallments,
-      installments_paid: isInstallment ? 0 : 0,
-      is_paid: isInstallment ? false : isPaid,
+    const chosenAccount = creditCardId || bankAccountId || null;
+
+    let monthsCount = 1;
+    if (type === "income" && isFixedIncome) {
+      const n = Number(fixedMonths);
+      if (!n || !Number.isInteger(n) || n < 1 || n > 60) {
+        setErrorMsg("Escolha entre 1 e 60 meses para a receita fixa.");
+        setSaving(false);
+        return;
+      }
+      monthsCount = n;
+    }
+
+    const baseDate = new Date(date);
+    if (Number.isNaN(baseDate.getTime())) {
+      setErrorMsg("Data invalida.");
+      setSaving(false);
+      return;
+    }
+
+    const rows = Array.from({ length: monthsCount }, (_, idx) => {
+      const entryDate = new Date(baseDate);
+      entryDate.setMonth(baseDate.getMonth() + idx);
+      const isoDate = entryDate.toISOString().slice(0, 10);
+      return {
+        type,
+        description: description.trim() || null,
+        value: parsedValue,
+        date: isoDate,
+        account_id: chosenAccount,
+        category: category || null,
+        is_installment: type === "expense" ? isInstallment || null : null,
+        installment_total: type === "expense" ? totalInstallments : null,
+        installments_paid: type === "expense" && isInstallment ? 0 : 0,
+        is_paid: type === "expense" && isInstallment ? false : isPaid,
+      };
     });
+
+    const { error } = await supabase.from("transactions").insert(rows);
 
     setSaving(false);
 
     if (error) {
-      console.error(error);
-      setErrorMsg("Erro ao guardar transação.");
+      console.error("Erro ao guardar transacao:", error);
+      setErrorMsg(error.message || "Erro ao guardar transacao.");
       return;
     }
 
     closeModal();
     router.refresh();
+  }
+
+  function handleValueChange(raw: string) {
+    const digits = raw.replace(/\D/g, "");
+    if (!digits) {
+      setValue("0,00");
+      return;
+    }
+    const padded = digits.padStart(3, "0");
+    const cents = padded.slice(-2);
+    const units = padded.slice(0, -2);
+    const formattedUnits = units.replace(/^0+(?=\d)/, "") || "0";
+    setValue(`${formattedUnits},${cents}`);
   }
 
   return (
@@ -160,7 +211,7 @@ export function NewTransactionButton({ accounts }: Props) {
         onClick={openModal}
         className="rounded-full bg-zinc-100 px-3 py-1.5 text-[11px] font-medium text-black hover:bg-zinc-200"
       >
-        Nova transação
+        Nova transacao
       </button>
 
       {open && (
@@ -173,9 +224,7 @@ export function NewTransactionButton({ accounts }: Props) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-medium text-zinc-100">
-                Nova transação
-              </h2>
+              <h2 className="text-sm font-medium text-zinc-100">Nova transacao</h2>
               <button
                 type="button"
                 onClick={closeModal}
@@ -186,7 +235,6 @@ export function NewTransactionButton({ accounts }: Props) {
             </div>
 
             <form className="space-y-4" onSubmit={handleSubmit}>
-              {/* tipo */}
               <div className="flex gap-2 text-[11px]">
                 <button
                   type="button"
@@ -213,26 +261,25 @@ export function NewTransactionButton({ accounts }: Props) {
                 </button>
               </div>
 
-              {/* descrição */}
               <div className="space-y-1 text-sm">
-                <label className="text-xs text-zinc-400">Descrição</label>
+                <label className="text-xs text-zinc-400">Descricao</label>
                 <input
                   type="text"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
-                  placeholder="Ex: Mercado, salário, Netflix..."
+                  placeholder="Ex: Mercado, salario, Netflix..."
                 />
               </div>
 
-              {/* valor e data */}
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="space-y-1">
                   <label className="text-xs text-zinc-400">Valor (R$)</label>
                   <input
                     type="text"
+                    inputMode="numeric"
                     value={value}
-                    onChange={(e) => setValue(e.target.value)}
+                    onChange={(e) => handleValueChange(e.target.value)}
                     className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
                     placeholder="0,00"
                   />
@@ -249,33 +296,75 @@ export function NewTransactionButton({ accounts }: Props) {
                 </div>
               </div>
 
-              {/* conta */}
-              <div className="space-y-1 text-sm">
-                <label className="text-xs text-zinc-400">Conta / banco</label>
-                <select
-                  value={accountId}
-                  onChange={(e) => setAccountId(e.target.value)}
-                  className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
-                >
-                  <option value="">
-                    {loadingAccounts
-                      ? "A carregar contas..."
-                      : "Escolhe uma conta"}
-                  </option>
-
-                  {accountList.map((acc) => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.name}
+              {type === "income" ? (
+                <div className="space-y-1 text-sm">
+                  <label className="text-xs text-zinc-400">Conta bancaria (onde vai cair)</label>
+                  <select
+                    value={bankAccountId}
+                    onChange={(e) => setBankAccountId(e.target.value)}
+                    className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                  >
+                    <option value="">
+                      {loadingAccounts ? "A carregar contas..." : "Selecione uma conta"}
                     </option>
-                  ))}
-                </select>
-              </div>
 
-              {/* categoria */}
+                    {accountList
+                      .filter((acc) => acc.accountType === "bank" || !acc.card_limit)
+                      .map((acc) => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="space-y-1 text-sm">
+                    <label className="text-xs text-zinc-400">Conta bancaria (opcional)</label>
+                    <select
+                      value={bankAccountId}
+                      onChange={(e) => setBankAccountId(e.target.value)}
+                      className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                    >
+                      <option value="">
+                        {loadingAccounts ? "A carregar contas..." : "Selecione uma conta"}
+                      </option>
+
+                      {accountList
+                        .filter((acc) => acc.accountType === "bank" || !acc.card_limit)
+                        .map((acc) => (
+                          <option key={acc.id} value={acc.id}>
+                            {acc.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1 text-sm">
+                    <label className="text-xs text-zinc-400">Cartao de credito (opcional)</label>
+                    <select
+                      value={creditCardId}
+                      onChange={(e) => setCreditCardId(e.target.value)}
+                      className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                    >
+                      <option value="">
+                        {loadingAccounts ? "A carregar cartoes..." : "Selecione um cartao"}
+                      </option>
+
+                      {accountList
+                        .filter((acc) => acc.accountType === "card" || (acc.card_limit ?? 0) > 0)
+                        .map((acc) => (
+                          <option key={acc.id} value={acc.id}>
+                            {acc.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-1 text-sm">
-                <label className="text-xs text-zinc-400">
-                  Categoria (opcional)
-                </label>
+                <label className="text-xs text-zinc-400">Categoria (opcional)</label>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
@@ -290,42 +379,42 @@ export function NewTransactionButton({ accounts }: Props) {
                 </select>
               </div>
 
-              {/* parcelamento */}
-              <div className="space-y-2 text-sm">
-                <label className="flex items-center gap-2 text-xs text-zinc-400">
-                  <input
-                    type="checkbox"
-                    checked={isInstallment}
-                    onChange={(e) => setIsInstallment(e.target.checked)}
-                    className="h-3 w-3 rounded border-zinc-600 bg-zinc-950 text-zinc-100"
-                  />
-                  <span>Compra parcelada no cartão</span>
-                </label>
+              {type === "expense" && (
+                <div className="space-y-2 text-sm">
+                  <label className="flex items-center gap-2 text-xs text-zinc-400">
+                    <input
+                      type="checkbox"
+                      checked={isInstallment}
+                      onChange={(e) => setIsInstallment(e.target.checked)}
+                      className="h-3 w-3 rounded border-zinc-600 bg-zinc-950 text-zinc-100"
+                    />
+                    <span>Compra parcelada no cartao</span>
+                  </label>
 
-                {isInstallment && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-xs text-zinc-400">
-                        Nº de parcelas
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={120}
-                        value={installmentTotal}
-                        onChange={(e) => setInstallmentTotal(e.target.value)}
-                        className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
-                        placeholder="Ex: 6"
-                      />
+                  {isInstallment && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-xs text-zinc-400">Num de parcelas</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={120}
+                          value={installmentTotal}
+                          onChange={(e) => setInstallmentTotal(e.target.value)}
+                          className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                          placeholder="Ex: 6"
+                        />
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
 
-              {/* pago */}
-              {!isInstallment && (
+              {(!isInstallment || type === "income") && (
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-zinc-400">Já está pago?</span>
+                  <span className="text-zinc-400">
+                    {type === "income" ? "Ja esta recebido?" : "Ja esta pago?"}
+                  </span>
                   <button
                     type="button"
                     onClick={() => setIsPaid((v) => !v)}
@@ -342,6 +431,39 @@ export function NewTransactionButton({ accounts }: Props) {
                 </div>
               )}
 
+              {type === "income" && (
+                <div className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 text-sm">
+                  <label className="flex items-center gap-2 text-xs text-zinc-300">
+                    <input
+                      type="checkbox"
+                      checked={isFixedIncome}
+                      onChange={(e) => setIsFixedIncome(e.target.checked)}
+                      className="h-3 w-3 rounded border-zinc-600 bg-zinc-950 text-zinc-100"
+                    />
+                    <span>Receita fixa todo mes (ex: salario)</span>
+                  </label>
+                  {isFixedIncome && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-xs text-zinc-400">Para quantos meses?</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={60}
+                          value={fixedMonths}
+                          onChange={(e) => setFixedMonths(e.target.value)}
+                          className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                          placeholder="Ex: 12"
+                        />
+                        <p className="text-[10px] text-zinc-500">
+                          Cria a mesma receita neste dia pelos proximos meses.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {errorMsg && <p className="text-xs text-red-400">{errorMsg}</p>}
 
               <button
@@ -349,7 +471,7 @@ export function NewTransactionButton({ accounts }: Props) {
                 disabled={saving}
                 className="mt-2 w-full rounded-full bg-zinc-100 px-3 py-1.5 text-[11px] font-medium text-black hover:bg-zinc-200 disabled:opacity-60"
               >
-                {saving ? "A guardar..." : "Guardar transação"}
+                {saving ? "A guardar..." : "Guardar transacao"}
               </button>
             </form>
           </div>

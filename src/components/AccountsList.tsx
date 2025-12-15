@@ -211,17 +211,17 @@ export function AccountsList({ accounts }: Props) {
         {accounts.map((acc) => {
           const visual = getBankVisual(acc.name);
 
-          const usedPercent =
-            acc.cardLimit &&
-            acc.cardLimit > 0 &&
-            acc.invoiceCurrent !== null
-              ? Math.round((acc.invoiceCurrent / acc.cardLimit) * 100)
-              : null;
+      const usedPercent =
+        acc.cardLimit &&
+        acc.cardLimit > 0 &&
+        acc.invoiceCurrent !== null
+          ? Math.round((acc.invoiceCurrent / acc.cardLimit) * 100)
+          : null;
 
           return (
             <div
               key={acc.id}
-              className="flex flex-col justify-between rounded-2xl border border-zinc-900 bg-zinc-950/80 px-4 py-3"
+              className="flex flex-col justify-between rounded-2xl border border-[#1a243c] bg-[#0b1226] px-4 py-3 shadow-inner shadow-black/20"
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="flex flex-col">
@@ -230,9 +230,14 @@ export function AccountsList({ accounts }: Props) {
                   >
                     {visual.label}
                   </span>
-                  <span className="mt-1 text-sm font-medium text-zinc-100">
-                    {acc.name}
-                  </span>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="text-sm font-semibold text-zinc-100">
+                      {acc.name}
+                    </span>
+                    <span className="rounded-full border border-[#233153] bg-[#0f172a] px-2 py-[2px] text-[10px] text-slate-300">
+                      {acc.accountType === "card" ? "Cartão" : "Conta"}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="flex flex-col items-end gap-1 text-right">
@@ -243,12 +248,14 @@ export function AccountsList({ accounts }: Props) {
                     {formatCurrency(acc.balance)}
                   </span>
 
-                  <span className="mt-1 text-[11px] text-zinc-500">
-                    Saldo inicial:{" "}
-                    <span className="text-zinc-300">
-                      {formatCurrency(acc.initialBalance)}
+                  {acc.accountType !== "card" && (
+                    <span className="mt-1 text-[11px] text-zinc-500">
+                      Saldo inicial:{" "}
+                      <span className="text-zinc-300">
+                        {formatCurrency(acc.initialBalance)}
+                      </span>
                     </span>
-                  </span>
+                  )}
 
                   {acc.cardLimit && (
                     <span className="mt-1 text-[11px] text-zinc-500">
@@ -351,24 +358,26 @@ export function AccountsList({ accounts }: Props) {
                 />
               </div>
 
-              {/* Saldo inicial / ajuste */}
-              <div className="space-y-1 text-sm">
-                <label className="text-xs text-zinc-400">
-                  Saldo inicial / ajuste (R$)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={initialBalance}
-                  onChange={(e) => setInitialBalance(e.target.value)}
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
-                  placeholder="Ex: 1500,00"
-                />
-                <p className="text-[10px] text-zinc-500">
-                  Se alterares este valor, o saldo atual vai ser recalculado a
-                  partir daqui.
-                </p>
-              </div>
+              {/* Saldo inicial / ajuste (apenas contas bancárias) */}
+              {editing?.accountType !== "card" && (
+                <div className="space-y-1 text-sm">
+                  <label className="text-xs text-zinc-400">
+                    Saldo inicial / ajuste (R$)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={initialBalance}
+                    onChange={(e) => setInitialBalance(e.target.value)}
+                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                    placeholder="Ex: 1500,00"
+                  />
+                  <p className="text-[10px] text-zinc-500">
+                    Se alterares este valor, o saldo atual vai ser recalculado a
+                    partir daqui.
+                  </p>
+                </div>
+              )}
 
               {/* Limite do cartão */}
               <div className="space-y-1 text-sm">

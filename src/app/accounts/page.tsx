@@ -14,6 +14,16 @@ export type AccountStat = {
   closingDay: number | null;
   dueDay: number | null;
   invoiceCurrent: number | null; // fatura aberta atual
+  accountType?: "bank" | "card";
+};
+
+type AccountRow = {
+  id: string;
+  name: string;
+  card_limit: number | null;
+  closing_day: number | null;
+  due_day: number | null;
+  initial_balance: number | null;
 };
 
 function formatCurrency(value: number) {
@@ -85,19 +95,22 @@ async function getAccountsData(): Promise<AccountStat[]> {
   }
 
   const accounts = (accountsData ?? []).map((acc) => {
-    const init = Number((acc as any).initial_balance ?? 0);
+    const account = acc as AccountRow;
+    const init = Number(account.initial_balance ?? 0);
 
+    const cardLimit = account.card_limit ?? null;
     return {
-      id: acc.id as string,
-      name: acc.name as string,
+      id: account.id,
+      name: account.name,
       balance: init, // começa do saldo inicial
       income: 0,
       expense: 0,
       initialBalance: init,
-      cardLimit: (acc.card_limit as number | null) ?? null,
-      closingDay: (acc.closing_day as number | null) ?? null,
-      dueDay: (acc.due_day as number | null) ?? null,
+      cardLimit,
+      closingDay: account.closing_day ?? null,
+      dueDay: account.due_day ?? null,
       invoiceCurrent: null,
+      accountType: cardLimit && cardLimit > 0 ? "card" : "bank",
     } as AccountStat;
   });
 

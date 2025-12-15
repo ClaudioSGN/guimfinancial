@@ -292,8 +292,7 @@ export async function GET(req: NextRequest) {
       "0"
     )}.pdf`;
 
-    // cast para satisfazer o tipo BodyInit
-    return new NextResponse(pdfBytes as any, {
+    return new NextResponse(pdfBytes, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
