@@ -293,7 +293,8 @@ export async function GET(req: NextRequest) {
       "0"
     )}.pdf`;
 
-    return new NextResponse(pdfBytes, {
+    // ensure body is a supported type for the Response constructor
+    return new NextResponse(pdfBytes.buffer, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
