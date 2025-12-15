@@ -26,6 +26,7 @@ function formatCurrency(value: number) {
 
 function truncate(text: string, max: number) {
   if (max <= 3) return text.slice(0, max);
+  // keep pdf-friendly trimming in one place (avoid inline declarations for ES5 strict mode)
   return text.length > max ? `${text.slice(0, max - 3)}...` : text;
 }
 
