@@ -293,9 +293,12 @@ export async function GET(req: NextRequest) {
       "0"
     )}.pdf`;
 
-    const pdfBlob = new Blob([pdfBytes], { type: "application/pdf" });
+    const pdfArrayBuffer = pdfBytes.buffer.slice(
+      pdfBytes.byteOffset,
+      pdfBytes.byteOffset + pdfBytes.byteLength,
+    );
 
-    return new NextResponse(pdfBlob, {
+    return new NextResponse(pdfArrayBuffer, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
