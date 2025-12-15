@@ -293,10 +293,7 @@ export async function GET(req: NextRequest) {
       "0"
     )}.pdf`;
 
-    const pdfArrayBuffer = pdfBytes.buffer.slice(
-      pdfBytes.byteOffset,
-      pdfBytes.byteOffset + pdfBytes.byteLength,
-    );
+    const pdfArrayBuffer: ArrayBuffer = Uint8Array.from(pdfBytes).buffer;
 
     return new NextResponse(pdfArrayBuffer, {
       status: 200,
