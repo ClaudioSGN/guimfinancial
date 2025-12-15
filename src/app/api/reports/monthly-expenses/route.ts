@@ -24,6 +24,11 @@ function formatCurrency(value: number) {
   });
 }
 
+function truncate(text: string, max: number) {
+  if (max <= 3) return text.slice(0, max);
+  return text.length > max ? `${text.slice(0, max - 3)}...` : text;
+}
+
 function getMonthRange(year: number, month: number) {
   const start = new Date(year, month - 1, 1);
   const end = new Date(year, month, 1);
@@ -162,10 +167,6 @@ export async function GET(req: NextRequest) {
     cursorY -= 10;
 
     const lineHeight = 12;
-
-    function truncate(text: string, max: number) {
-      return text.length > max ? text.slice(0, max - 1) + "…" : text;
-    }
 
     for (const tx of txs) {
       // se faltar espaço, cria nova página
