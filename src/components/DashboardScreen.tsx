@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AccountsList } from "@/components/AccountsList";
 import { NewAccountButton } from "@/components/NewAccountButton";
 import { NewTransactionButton } from "@/components/NewTransactionButton";
@@ -79,7 +79,22 @@ export function DashboardScreen({
   goals,
 }: Props) {
   const [active, setActive] = useState<TabKey>("Resumo");
+  const [isMobile, setIsMobile] = useState(false);
   const chartsReady = true;
+  useEffect(() => {
+    const handleResize = () =>
+      setIsMobile(typeof window !== "undefined" ? window.innerWidth < 768 : false);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const flowChartHeight = isMobile ? 220 : 280;
+  const categoryChartHeight = isMobile ? 240 : 320;
+  const categoryChartMargin = isMobile
+    ? { top: 8, right: 12, left: 12, bottom: 8 }
+    : { top: 14, right: 32, left: 90, bottom: 14 };
+  const categoryLabelWidth = isMobile ? 100 : 140;
   const monthOptions = useMemo(() => {
     const set = new Map<string, string>();
     const now = new Date();
@@ -331,9 +346,9 @@ export function DashboardScreen({
               </div>
             </div>
 
-            <div className="h-72 w-full min-h-[280px]">
+            <div className="w-full min-h-[240px]">
               {chartsReady ? (
-                <ResponsiveContainer width="100%" height={280} minHeight={240}>
+                <ResponsiveContainer width="100%" height={flowChartHeight} minHeight={220}>
                   <LineChart data={flowSeries}>
                     <CartesianGrid
                       stroke="#1f2a45"
@@ -349,7 +364,7 @@ export function DashboardScreen({
                     />
                     <YAxis
                       stroke="#64748b"
-                      tick={{ fill: "#94a3b8", fontSize: 10 }}
+                      tick={{ fill: "#94a3b8", fontSize: isMobile ? 9 : 10 }}
                       axisLine={{ stroke: "#1f2a45" }}
                       tickFormatter={(v) => `R$ ${v.toFixed(0)}`}
                       tickLine={false}
@@ -396,7 +411,7 @@ export function DashboardScreen({
                       ) : null;
                     })()}
                     <Legend
-                      wrapperStyle={{ color: "#e2e8f0", fontSize: 11 }}
+                      wrapperStyle={{ color: "#e2e8f0", fontSize: isMobile ? 10 : 11 }}
                       formatter={(value) => {
                         if (value === "income") return "Receita";
                         if (value === "expense") return "Despesa";
@@ -407,7 +422,7 @@ export function DashboardScreen({
                       type="monotone"
                       dataKey="income"
                       stroke="#22c55e"
-                      strokeWidth={2}
+                      strokeWidth={isMobile ? 1.8 : 2.2}
                       dot={false}
                       name="income"
                     />
@@ -415,7 +430,7 @@ export function DashboardScreen({
                       type="monotone"
                       dataKey="expense"
                       stroke="#ef4444"
-                      strokeWidth={2}
+                      strokeWidth={isMobile ? 1.8 : 2.2}
                       dot={false}
                       name="expense"
                     />
@@ -423,7 +438,7 @@ export function DashboardScreen({
                       type="monotone"
                       dataKey="net"
                       stroke="#38bdf8"
-                      strokeWidth={2}
+                      strokeWidth={isMobile ? 1.8 : 2.2}
                       dot={false}
                       strokeDasharray="6 4"
                       name="net"
@@ -438,7 +453,7 @@ export function DashboardScreen({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-[#1a243c] bg-[#0d1427] p-5 shadow-lg shadow-black/30">
+          <div className="rounded-2xl border border-[#121a30] bg-[#0b1326] p-4 shadow-lg shadow-black/30 sm:p-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-col gap-1">
                 <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
@@ -465,32 +480,50 @@ export function DashboardScreen({
               </div>
             </div>
 
-            <div className="h-80 w-full min-h-[300px]">
+            <div className="w-full min-h-[220px]">
               {chartsReady && categoryChartData.length ? (
-                <ResponsiveContainer width="100%" height="100%" minHeight={280}>
+                <ResponsiveContainer
+                  width="100%"
+                  height={categoryChartHeight}
+                  minHeight={220}
+                >
                   <BarChart
                     data={categoryChartData}
                     layout="vertical"
-                    margin={{ top: 12, right: 24, left: 60, bottom: 12 }}
-                    barCategoryGap="18%"
-                    barGap={8}
+                    margin={categoryChartMargin}
+                    barCategoryGap={isMobile ? "28%" : "18%"}
+                    barGap={isMobile ? 6 : 10}
                   >
-                    <CartesianGrid stroke="#13203a" strokeDasharray="3 3" />
+                    <CartesianGrid
+                      stroke="#101a30"
+                      strokeDasharray="2 6"
+                      vertical={false}
+                    />
                     <XAxis
                       type="number"
                       stroke="#64748b"
-                      tick={{ fill: "#94a3b8", fontSize: 10 }}
-                      axisLine={{ stroke: "#1f2a45" }}
+                      tick={{ fill: "#8fa2c5", fontSize: isMobile ? 9 : 10 }}
+                      axisLine={false}
+                      tickLine={false}
                       tickFormatter={(v) => `R$ ${v.toFixed(0)}`}
+                      padding={{ left: 4, right: isMobile ? 8 : 12 }}
                     />
                     <YAxis
                       type="category"
                       dataKey="category"
                       stroke="#64748b"
-                      tick={{ fill: "#cbd5e1", fontSize: 11 }}
-                      axisLine={{ stroke: "#1f2a45" }}
+                      tick={{
+                        fill: "#cbd5e1",
+                        fontSize: isMobile ? 10 : 11,
+                      }}
+                      tickFormatter={(label: string) =>
+                        label.length > (isMobile ? 12 : 18)
+                          ? `${label.slice(0, isMobile ? 11 : 16)}…`
+                          : label
+                      }
+                      axisLine={false}
                       tickLine={false}
-                      width={140}
+                      width={categoryLabelWidth}
                     />
                     <Tooltip
                       contentStyle={{
@@ -503,7 +536,11 @@ export function DashboardScreen({
                       formatter={(value: number) => [`R$ ${value.toFixed(2)}`, "Total"]}
                       labelFormatter={(label: string) => label}
                     />
-                    <Bar dataKey="total" radius={[10, 10, 10, 10]} maxBarSize={42}>
+                    <Bar
+                      dataKey="total"
+                      radius={[10, 10, 10, 10]}
+                      maxBarSize={isMobile ? 38 : 46}
+                    >
                       {categoryChartData.map((item) => (
                         <Cell key={item.category} fill={item.color} />
                       ))}
