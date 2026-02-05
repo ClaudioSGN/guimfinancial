@@ -1,12 +1,13 @@
+"use client";
+
 // app/banks/page.tsx
 
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { TopNav } from "@/components/TopNav";
 import { BanksPageClient } from "@/components/BanksPageClient";
 
 // 🔥 força esta página a ser sempre dinâmica (sem cache estático)
-export const dynamic = "force-dynamic";
-// ou, se preferires, poderias usar: export const revalidate = 0;
 
 type AccountRow = {
   id: string;
@@ -158,8 +159,36 @@ async function getAccountsWithInvoice(): Promise<AccountWithInvoice[]> {
   return accountsWithInvoice;
 }
 
-export default async function BanksPage() {
-  const accounts = await getAccountsWithInvoice();
+export default function BanksPage() {
+  const [accounts, setAccounts] = useState<AccountWithInvoice[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+
+    async function load() {
+      try {
+        setLoading(true);
+        const data = await getAccountsWithInvoice();
+        if (active) setAccounts(data);
+      } catch (error) {
+        console.error("Erro ao carregar contas:", error);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    function handleRefresh() {
+      load();
+    }
+
+    load();
+    window.addEventListener("data-refresh", handleRefresh);
+    return () => {
+      active = false;
+      window.removeEventListener("data-refresh", handleRefresh);
+    };
+  }, []);
 
   return (
     <main className="min-h-screen bg-black text-zinc-100">
@@ -178,7 +207,7 @@ export default async function BanksPage() {
             </div>
           </div>
 
-          <BanksPageClient initialAccounts={accounts} />
+          <BanksPageClient initialAccounts={accounts} loading={loading} />
         </section>
       </div>
     </main>

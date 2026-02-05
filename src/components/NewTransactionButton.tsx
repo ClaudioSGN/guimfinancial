@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
 
 type AccountRow = {
   id: string;
@@ -27,18 +27,7 @@ const CATEGORIES = [
   "Outros",
 ];
 
-function parseMoney(input: string): number | null {
-  if (!input.trim()) return null;
-  const cleaned = input.replace(/[^\d.,-]/g, "").trim();
-  if (!cleaned) return null;
-  const normalized = cleaned.replace(/\./g, "").replace(",", ".");
-  const n = Number(normalized);
-  return Number.isNaN(n) ? null : n;
-}
-
 export function NewTransactionButton({ accounts }: Props) {
-  const router = useRouter();
-
   const [accountList, setAccountList] = useState<AccountRow[]>(accounts);
   const [loadingAccounts, setLoadingAccounts] = useState(false);
 
@@ -66,7 +55,7 @@ export function NewTransactionButton({ accounts }: Props) {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<"income" | "expense">("expense");
   const [description, setDescription] = useState("");
-  const [value, setValue] = useState("0,00");
+  const [value, setValue] = useState("R$ 0");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [bankAccountId, setBankAccountId] = useState("");
   const [creditCardId, setCreditCardId] = useState("");
@@ -82,7 +71,7 @@ export function NewTransactionButton({ accounts }: Props) {
   function resetForm() {
     setType("expense");
     setDescription("");
-    setValue("0,00");
+    setValue("R$ 0");
     setDate(new Date().toISOString().slice(0, 10));
     setBankAccountId("");
     setCreditCardId("");
@@ -109,8 +98,8 @@ export function NewTransactionButton({ accounts }: Props) {
     e.preventDefault();
     setErrorMsg(null);
 
-    const parsedValue = parseMoney(value);
-    if (!parsedValue || parsedValue <= 0) {
+    const parsedValue = parseCentsInput(value);
+    if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
       setErrorMsg("Valor invalido. Use numeros, ex: 1200,50");
       return;
     }
@@ -189,20 +178,7 @@ export function NewTransactionButton({ accounts }: Props) {
     }
 
     closeModal();
-    router.refresh();
-  }
-
-  function handleValueChange(raw: string) {
-    const digits = raw.replace(/\D/g, "");
-    if (!digits) {
-      setValue("0,00");
-      return;
-    }
-    const padded = digits.padStart(3, "0");
-    const cents = padded.slice(-2);
-    const units = padded.slice(0, -2);
-    const formattedUnits = units.replace(/^0+(?=\d)/, "") || "0";
-    setValue(`${formattedUnits},${cents}`);
+    window.dispatchEvent(new Event("data-refresh"));
   }
 
   return (
@@ -279,9 +255,10 @@ export function NewTransactionButton({ accounts }: Props) {
                     type="text"
                     inputMode="numeric"
                     value={value}
-                    onChange={(e) => handleValueChange(e.target.value)}
+                    onChange={(e) => setValue(formatCentsInput(e.target.value))}
                     className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
-                    placeholder="0,00"
+                    pattern="[0-9]*"
+                    placeholder="R$ 0"
                   />
                 </div>
 

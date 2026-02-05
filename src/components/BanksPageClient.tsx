@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -34,10 +33,11 @@ function formatCurrency(value: number) {
 
 export function BanksPageClient({
   initialAccounts,
+  loading = false,
 }: {
   initialAccounts: AccountRow[];
+  loading?: boolean;
 }) {
-  const router = useRouter();
   const [editing, setEditing] = useState<AccountRow | null>(null);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -167,7 +167,7 @@ export function BanksPageClient({
     }
 
     closeModal();
-    router.refresh();
+    window.dispatchEvent(new Event("data-refresh"));
   }
 
   async function handleDelete(acc: AccountRow) {
@@ -187,7 +187,7 @@ export function BanksPageClient({
       return;
     }
 
-    router.refresh();
+    window.dispatchEvent(new Event("data-refresh"));
   }
 
   return (
@@ -206,7 +206,9 @@ export function BanksPageClient({
       </div>
 
       {/* Lista de contas */}
-      {initialAccounts.length === 0 ? (
+      {loading && initialAccounts.length === 0 ? (
+        <p className="mt-3 text-xs text-zinc-500">A carregar contas...</p>
+      ) : initialAccounts.length === 0 ? (
         <p className="mt-3 text-xs text-zinc-500">
           Ainda não há contas registadas. Cria a tua primeira conta.
         </p>

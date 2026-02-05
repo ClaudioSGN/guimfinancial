@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { motion, AnimatePresence } from "framer-motion";
+import { formatCentsFromNumber, formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
 
 type GoalRow = {
   id: string;
@@ -44,7 +44,6 @@ export function GoalsPageClient({
 }: {
   initialGoals: GoalRow[];
 }) {
-  const router = useRouter();
   const [creating, setCreating] = useState(false);
   const [editingGoal, setEditingGoal] = useState<GoalRow | null>(null);
   const [saving, setSaving] = useState(false);
@@ -52,16 +51,16 @@ export function GoalsPageClient({
 
   const [form, setForm] = useState<GoalFormState>({
     name: "",
-    targetAmount: "",
-    currentAmount: "",
+    targetAmount: "R$ 0",
+    currentAmount: "R$ 0",
     deadline: "",
   });
 
   function openCreate() {
     setForm({
       name: "",
-      targetAmount: "",
-      currentAmount: "",
+      targetAmount: "R$ 0",
+      currentAmount: "R$ 0",
       deadline: "",
     });
     setErrorMsg(null);
@@ -72,8 +71,8 @@ export function GoalsPageClient({
   function openEdit(goal: GoalRow) {
     setForm({
       name: goal.name,
-      targetAmount: String(goal.target_amount).replace(".", ","),
-      currentAmount: String(goal.current_amount).replace(".", ","),
+      targetAmount: formatCentsFromNumber(goal.target_amount),
+      currentAmount: formatCentsFromNumber(goal.current_amount),
       deadline: goal.deadline ? goal.deadline.slice(0, 10) : "",
     });
     setErrorMsg(null);
@@ -88,33 +87,24 @@ export function GoalsPageClient({
     setErrorMsg(null);
   }
 
-  function parseMoney(input: string): number | null {
-    if (!input.trim()) return null;
-    const normalized = input.replace(/\./g, "").replace(",", ".");
-    const n = Number(normalized);
-    if (Number.isNaN(n) || n < 0) return null;
-    return n;
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrorMsg(null);
 
-    const target = parseMoney(form.targetAmount);
-    const current =
-      parseMoney(form.currentAmount) ?? (editingGoal ? 0 : 0);
+    const target = parseCentsInput(form.targetAmount);
+    const current = parseCentsInput(form.currentAmount);
 
     if (!form.name.trim()) {
       setErrorMsg("Dá um nome à meta.");
       return;
     }
 
-    if (target === null || target <= 0) {
+    if (!Number.isFinite(target) || target <= 0) {
       setErrorMsg("Define um valor-alvo maior que zero.");
       return;
     }
 
-    if (current < 0 || current > target) {
+    if (!Number.isFinite(current) || current < 0 || current > target) {
       setErrorMsg(
         "O valor atual não pode ser negativo nem maior que o alvo."
       );
@@ -161,7 +151,7 @@ export function GoalsPageClient({
     }
 
     closeModal();
-    router.refresh();
+    window.dispatchEvent(new Event("data-refresh"));
   }
 
   async function handleDelete(goal: GoalRow) {
@@ -181,7 +171,7 @@ export function GoalsPageClient({
       return;
     }
 
-    router.refresh();
+    window.dispatchEvent(new Event("data-refresh"));
   }
 
   return (
@@ -337,11 +327,13 @@ export function GoalsPageClient({
                   onChange={(e) =>
                     setForm((f) => ({
                       ...f,
-                      targetAmount: e.target.value,
+                      targetAmount: formatCentsInput(e.target.value),
                     }))
                   }
                   className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
-                  placeholder="0,00"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="R$ 0"
                 />
               </div>
 
@@ -355,11 +347,13 @@ export function GoalsPageClient({
                   onChange={(e) =>
                     setForm((f) => ({
                       ...f,
-                      currentAmount: e.target.value,
+                      currentAmount: formatCentsInput(e.target.value),
                     }))
                   }
                   className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
-                  placeholder="0,00"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="R$ 0"
                 />
               </div>
 

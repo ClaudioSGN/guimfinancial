@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { AccountsList } from "@/components/AccountsList";
@@ -9,19 +9,15 @@ import { GoalsPageClient } from "@/components/GoalsPageClient";
 import { TopBar } from "@/components/TopBar";
 import {
   ResponsiveContainer,
-  LineChart,
-  Line,
   CartesianGrid,
   XAxis,
   YAxis,
   Tooltip,
-  Legend,
-  ReferenceLine,
   BarChart,
   Bar,
   Cell,
 } from "recharts";
-import type { AccountStat } from "@/app/accounts/page";
+import type { AccountStat } from "@/lib/accountTypes";
 type UiTransaction = {
   id: string;
   description: string;
@@ -89,7 +85,6 @@ export function DashboardScreen({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const flowChartHeight = isMobile ? 220 : 280;
   const categoryChartHeight = isMobile ? 240 : 320;
   const categoryChartMargin = isMobile
     ? { top: 8, right: 12, left: 12, bottom: 8 }
@@ -220,34 +215,6 @@ export function DashboardScreen({
     return { totalIncome, totalExpense, openExpenseTotal };
   }, [filteredTransactions]);
 
-  const flowSeries = useMemo(() => {
-    if (!effectiveSelectedMonth) return [];
-    const [yearStr, monthStr] = effectiveSelectedMonth.split("-");
-    const year = Number(yearStr);
-    const month = Number(monthStr) - 1; // JS month
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const perDay = Array.from({ length: daysInMonth }, (_, idx) => ({
-      day: idx + 1,
-      income: 0,
-      expense: 0,
-      net: 0,
-    }));
-
-    filteredTransactions.forEach((tx) => {
-      const d = new Date(tx.date);
-      const day = d.getDate();
-      const value = Number(tx.value) || 0;
-      if (tx.type === "income") perDay[day - 1].income += value;
-      if (tx.type === "expense") perDay[day - 1].expense += value;
-    });
-
-    let running = 0;
-    return perDay.map((row) => {
-      running += row.income - row.expense;
-      return { ...row, net: running };
-    });
-  }, [effectiveSelectedMonth, filteredTransactions]);
-
   const [categoryMode, setCategoryMode] = useState<"mixed" | "expense" | "income">("expense");
   const categoryStats = useMemo(() => {
     const filtered =
@@ -334,126 +301,8 @@ export function DashboardScreen({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-[#1a243c] bg-[#0d1427] p-5 shadow-lg shadow-black/30">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-col gap-1">
-                <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
-                  Fluxo financeiro
-                </p>
-                <p className="text-sm text-slate-300">
-                  Receita x despesa por dia do mês selecionado
-                </p>
-              </div>
-            </div>
 
-            <div className="w-full min-h-[240px]">
-              {chartsReady ? (
-                <ResponsiveContainer width="100%" height={flowChartHeight} minHeight={220}>
-                  <LineChart data={flowSeries}>
-                    <CartesianGrid
-                      stroke="#1f2a45"
-                      strokeDasharray="3 3"
-                      vertical={false}
-                    />
-                    <XAxis
-                      dataKey="day"
-                      stroke="#64748b"
-                      tick={{ fill: "#94a3b8", fontSize: 10 }}
-                      axisLine={{ stroke: "#1f2a45" }}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      stroke="#64748b"
-                      tick={{ fill: "#94a3b8", fontSize: isMobile ? 9 : 10 }}
-                      axisLine={{ stroke: "#1f2a45" }}
-                      tickFormatter={(v) => `R$ ${v.toFixed(0)}`}
-                      tickLine={false}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#0b1226",
-                        border: "1px solid #1f2a45",
-                        borderRadius: 12,
-                        color: "#e2e8f0",
-                        fontSize: 12,
-                      }}
-                      formatter={(value: number, name: string) => [
-                        `R$ ${value.toFixed(2)}`,
-                        name === "income"
-                          ? "Receita"
-                          : name === "expense"
-                            ? "Despesa"
-                            : "Saldo acumulado",
-                      ]}
-                      labelFormatter={(label: number) => `Dia ${label}`}
-                    />
-                    {(() => {
-                      const today = new Date();
-                      const [y, m] = effectiveSelectedMonth
-                        ? effectiveSelectedMonth.split("-").map(Number)
-                        : [];
-                      const isCurrentMonth =
-                        y === today.getFullYear() &&
-                        m === today.getMonth() + 1;
-                      const day = today.getDate();
-                      return isCurrentMonth ? (
-                        <ReferenceLine
-                          x={day}
-                          stroke="#38bdf8"
-                          strokeDasharray="4 4"
-                          label={{
-                            position: "top",
-                            value: "Hoje",
-                            fill: "#94a3b8",
-                            fontSize: 11,
-                          }}
-                        />
-                      ) : null;
-                    })()}
-                    <Legend
-                      wrapperStyle={{ color: "#e2e8f0", fontSize: isMobile ? 10 : 11 }}
-                      formatter={(value) => {
-                        if (value === "income") return "Receita";
-                        if (value === "expense") return "Despesa";
-                        return "Saldo acumulado";
-                      }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="income"
-                      stroke="#22c55e"
-                      strokeWidth={isMobile ? 1.8 : 2.2}
-                      dot={false}
-                      name="income"
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="expense"
-                      stroke="#ef4444"
-                      strokeWidth={isMobile ? 1.8 : 2.2}
-                      dot={false}
-                      name="expense"
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="net"
-                      stroke="#38bdf8"
-                      strokeWidth={isMobile ? 1.8 : 2.2}
-                      dot={false}
-                      strokeDasharray="6 4"
-                      name="net"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex h-full items-center justify-center text-xs text-slate-500">
-                  Carregando gráfico...
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-[#121a30] bg-[#0b1326] p-4 shadow-lg shadow-black/30 sm:p-5">
+<div className="rounded-2xl border border-[#121a30] bg-[#0b1326] p-4 shadow-lg shadow-black/30 sm:p-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-col gap-1">
                 <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">

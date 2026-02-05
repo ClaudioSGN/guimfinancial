@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { formatCentsFromNumber, formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
 type UiTransaction = {
   id: string;
   description: string;
@@ -32,15 +32,7 @@ function formatCurrency(value: number) {
   });
 }
 
-function parseMoney(input: string): number | null {
-  if (!input.trim()) return null;
-  const normalized = input.replace(/\./g, "").replace(",", ".");
-  const n = Number(normalized);
-  return Number.isNaN(n) ? null : n;
-}
-
 export function TransactionRow({ tx }: Props) {
-  const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const bankName = tx.accountName;
@@ -103,7 +95,7 @@ export function TransactionRow({ tx }: Props) {
       return;
     }
 
-    router.refresh();
+    window.dispatchEvent(new Event("data-refresh"));
   }
 
   // ---------- TOGGLE PAGO / EM ABERTO (NÃO PARCELADAS) ----------
@@ -128,18 +120,13 @@ export function TransactionRow({ tx }: Props) {
       return;
     }
 
-    router.refresh();
+    window.dispatchEvent(new Event("data-refresh"));
   }
 
   // ---------- EDIÇÃO ----------
   const [editing, setEditing] = useState(false);
   const [editDescription, setEditDescription] = useState(tx.description);
-  const [editValue, setEditValue] = useState(
-    tx.value.toLocaleString("pt-BR", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }),
-  );
+  const [editValue, setEditValue] = useState(formatCentsFromNumber(tx.value));
   const [editDate, setEditDate] = useState(tx.date);
   const [editCategory, setEditCategory] = useState(tx.category ?? "");
   const [editIsPaid, setEditIsPaid] = useState(tx.isPaid);
@@ -148,12 +135,7 @@ export function TransactionRow({ tx }: Props) {
 
   function openEdit() {
     setEditDescription(tx.description);
-    setEditValue(
-      tx.value.toLocaleString("pt-BR", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }),
-    );
+    setEditValue(formatCentsFromNumber(tx.value));
     setEditDate(tx.date);
     setEditCategory(tx.category ?? "");
     setEditIsPaid(tx.isPaid);
@@ -170,8 +152,8 @@ export function TransactionRow({ tx }: Props) {
     e.preventDefault();
     setEditError(null);
 
-    const parsedValue = parseMoney(editValue);
-    if (!parsedValue || parsedValue <= 0) {
+    const parsedValue = parseCentsInput(editValue);
+    if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
       setEditError("Valor inválido.");
       return;
     }
@@ -208,7 +190,7 @@ export function TransactionRow({ tx }: Props) {
     }
 
     setEditing(false);
-    router.refresh();
+    window.dispatchEvent(new Event("data-refresh"));
   }
 
   // ---------- APAGAR ----------
@@ -235,7 +217,7 @@ export function TransactionRow({ tx }: Props) {
       return;
     }
 
-    router.refresh();
+    window.dispatchEvent(new Event("data-refresh"));
   }
 
   return (
@@ -439,7 +421,9 @@ export function TransactionRow({ tx }: Props) {
                   <input
                     type="text"
                     value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
+                    onChange={(e) => setEditValue(formatCentsInput(e.target.value))}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
                   />
                 </div>

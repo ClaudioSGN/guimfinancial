@@ -3,6 +3,10 @@ import "./globals.css";
 import { ReactNode } from "react";
 import { PwaRegister } from "@/components/PwaRegister";
 import { DailyReminderWatcher } from "@/components/DailyReminderWatcher";
+import { LanguageProvider } from "@/lib/language";
+import { AuthProvider } from "@/lib/auth";
+import { AuthGate } from "@/components/AuthGate";
+import { UpdateChecker } from "@/components/UpdateChecker";
 
 export const metadata: Metadata = {
   title: "Guim Finanças - Dashboard",
@@ -12,17 +16,15 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="pt-BR">
-      <body className="flex h-screen overflow-hidden bg-[#0b1226] text-slate-50">
-        <DailyReminderWatcher />
-        <PwaRegister />
-
-        <div className="flex min-h-screen w-full flex-col overflow-hidden">
-          <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-8">
-            <div className="mx-auto flex max-w-6xl flex-col gap-6">
-              {children}
-            </div>
-          </main>
-        </div>
+      <body className="min-h-screen bg-[#0D0F14] text-slate-50">
+        <LanguageProvider>
+          <AuthProvider>
+            <DailyReminderWatcher />
+            <PwaRegister />
+            <UpdateChecker />
+            <AuthGate>{children}</AuthGate>
+          </AuthProvider>
+        </LanguageProvider>
       </body>
     </html>
   );

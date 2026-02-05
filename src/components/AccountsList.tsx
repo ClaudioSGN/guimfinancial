@@ -1,10 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import type { AccountStat } from "@/app/accounts/page";
-import { formatCurrency } from "@/app/accounts/page";
+import type { AccountStat } from "@/lib/accountTypes";
+
+function formatCurrency(value: number | null | undefined) {
+  const safe = Number(value) || 0;
+  return safe.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+  });
+}
 
 function getBankVisual(name: string): {
   label: string;
@@ -65,8 +72,6 @@ type Props = {
 };
 
 export function AccountsList({ accounts }: Props) {
-  const router = useRouter();
-
   const [editing, setEditing] = useState<AccountStat | null>(null);
   const [name, setName] = useState("");
   const [initialBalance, setInitialBalance] = useState("");
@@ -164,7 +169,7 @@ export function AccountsList({ accounts }: Props) {
     }
 
     resetEditState();
-    router.refresh();
+    window.dispatchEvent(new Event("data-refresh"));
   }
 
   async function handleDeleteAccount(accountId: string, accountName: string) {
@@ -202,7 +207,7 @@ export function AccountsList({ accounts }: Props) {
       resetEditState();
     }
 
-    router.refresh();
+    window.dispatchEvent(new Event("data-refresh"));
   }
 
   return (

@@ -1,11 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 export function NewAccountButton() {
-  const router = useRouter();
   const [chooserOpen, setChooserOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [accountType, setAccountType] = useState<"bank" | "card">("bank");
@@ -102,7 +100,7 @@ export function NewAccountButton() {
     resetForm();
     setOpen(false);
     setChooserOpen(false);
-    router.refresh();
+    window.dispatchEvent(new Event("data-refresh"));
   }
 
   return (

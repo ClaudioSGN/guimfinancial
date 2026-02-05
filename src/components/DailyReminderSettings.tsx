@@ -11,6 +11,8 @@ type Props = {
   };
 };
 
+const REMINDER_SETTINGS_ID = "00000000-0000-0000-0000-000000000001";
+
 function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
@@ -48,7 +50,7 @@ export function DailyReminderSettings({ initialSettings }: Props) {
 
     const { error } = await supabase.from("reminder_settings").upsert([
       {
-        id: "default",
+        id: REMINDER_SETTINGS_ID,
         remind_enabled: enabled,
         remind_hour: hour,
         remind_minute: minute,
@@ -64,7 +66,12 @@ export function DailyReminderSettings({ initialSettings }: Props) {
     }
 
     if (typeof window !== "undefined") {
-      localStorage.removeItem("daily-reminder-shown");
+      for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith("reminder-shown-")) {
+          localStorage.removeItem(key);
+        }
+      }
     }
 
     setSaved(true);
