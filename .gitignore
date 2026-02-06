@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local tooling binaries
+/tools/wix-light-wrapper/light.exe
+/tools/wix-light-wrapper/light.pdb

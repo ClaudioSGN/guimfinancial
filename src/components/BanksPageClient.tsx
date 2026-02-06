@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "@/lib/auth";
 
 type AccountRow = {
   id: string;
@@ -38,6 +39,7 @@ export function BanksPageClient({
   initialAccounts: AccountRow[];
   loading?: boolean;
 }) {
+  const { user } = useAuth();
   const [editing, setEditing] = useState<AccountRow | null>(null);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -103,6 +105,11 @@ export function BanksPageClient({
     e.preventDefault();
     setErrorMsg(null);
 
+    if (!user) {
+      setErrorMsg("Você precisa estar logado para criar/editar contas.");
+      return;
+    }
+
     if (!form.name.trim()) {
       setErrorMsg("Dá um nome à conta/banco.");
       return;
@@ -130,6 +137,7 @@ export function BanksPageClient({
     if (creating) {
       const { error } = await supabase.from("accounts").insert([
         {
+          user_id: user.id,
           name: form.name.trim(),
           initial_balance: initialBalance,
           card_limit: cardLimit,
@@ -142,7 +150,7 @@ export function BanksPageClient({
 
       if (error) {
         console.error(error);
-        setErrorMsg("Erro ao criar conta.");
+        setErrorMsg(error.message || "Erro ao criar conta.");
         return;
       }
     } else if (editing) {
@@ -155,13 +163,14 @@ export function BanksPageClient({
           closing_day: closingDay,
           due_day: dueDay,
         })
-        .eq("id", editing.id);
+        .eq("id", editing.id)
+        .eq("user_id", user.id);
 
       setSaving(false);
 
       if (error) {
         console.error(error);
-        setErrorMsg("Erro ao guardar alterações.");
+        setErrorMsg(error.message || "Erro ao guardar alterações.");
         return;
       }
     }
@@ -171,6 +180,11 @@ export function BanksPageClient({
   }
 
   async function handleDelete(acc: AccountRow) {
+    if (!user) {
+      alert("Você precisa estar logado.");
+      return;
+    }
+
     const ok = window.confirm(
       `Apagar a conta "${acc.name}"? Todas as transações associadas podem ficar órfãs.`
     );
@@ -179,7 +193,8 @@ export function BanksPageClient({
     const { error } = await supabase
       .from("accounts")
       .delete()
-      .eq("id", acc.id);
+      .eq("id", acc.id)
+      .eq("user_id", user.id);
 
     if (error) {
       console.error(error);

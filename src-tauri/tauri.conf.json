@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "GuimFinancial",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "identifier": "com.guimaraes.guimfinancial",
   "build": {
     "frontendDist": "../out",
@@ -25,7 +25,15 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "msi"
+    ],
+    "createUpdaterArtifacts": true,
+    "windows": {
+      "wix": {
+        "upgradeCode": "af3e2738-dceb-5f6e-a143-5835c830cb14"
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -36,11 +44,10 @@
   },
   "plugins": {
     "updater": {
-      "active": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM0QzIzNENEOTc2REYwODgKUldTSThHMlh6VFRDTkpLcFBjZTJsdXZ1WnZhYVBQZm1GVzZiR2ZMaWVlaEZsTVk2VVY1WVZycjYK",
       "endpoints": [
-        "https://YOUR-UPDATE-ENDPOINT/latest.json"
-      ],
-      "pubkey": "YOUR_PUBLIC_KEY"
+        "https://github.com/ClaudioSGN/guimfinancial/releases/latest/download/latest.json"
+      ]
     }
   }
 }

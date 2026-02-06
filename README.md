@@ -1,24 +1,33 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+GuimFinancial is a Tauri + Next.js desktop app.
 
 ## Getting Started
 
-First, run the development server:
+Run the web dev server (for UI development):
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Run the desktop app in dev mode:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run tauri:dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Build (MSI)
+
+The production build uses static export (`out/`) and bundles an MSI via Tauri:
+
+```bash
+npm run tauri:build
+```
+
+## Updater (Signing)
+
+To generate updater artifacts (`bundle.createUpdaterArtifacts: true`), set:
+
+- `TAURI_SIGNING_PRIVATE_KEY` = path to your private key file (keep it secret)
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` = your key password (if any)
 
 ## Learn More
 

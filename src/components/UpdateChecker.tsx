@@ -35,17 +35,19 @@ export function UpdateChecker() {
         ]);
 
         const bundleType = await getBundleType().catch(() => null);
-        if (bundleType && bundleType !== BundleType.Msi) {
+        // Only prompt updates for the MSI distribution channel.
+        if (bundleType !== BundleType.Msi) {
           return;
         }
 
         const result: UpdaterResult | null = await check();
-        if (!cancelled && result?.available) {
+        if (!cancelled && result) {
           setUpdate(result);
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Falha ao verificar atualizações.");
+          console.error("[updater] check failed:", err);
+          setError(err instanceof Error ? err.message : "Falha ao verificar atualizacoes.");
         }
       } finally {
         if (!cancelled) setChecking(false);
@@ -69,10 +71,10 @@ export function UpdateChecker() {
         await update.download();
         await update.install();
       } else {
-        throw new Error("Atualizador indisponível.");
+        throw new Error("Atualizador indisponivel.");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao instalar atualização.");
+      setError(err instanceof Error ? err.message : "Falha ao instalar atualizacao.");
     } finally {
       setInstalling(false);
     }

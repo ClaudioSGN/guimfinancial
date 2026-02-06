@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/lib/auth";
 
 export function NewAccountButton() {
+  const { user } = useAuth();
   const [chooserOpen, setChooserOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [accountType, setAccountType] = useState<"bank" | "card">("bank");
@@ -35,6 +37,11 @@ export function NewAccountButton() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setErrorMsg(null);
+
+    if (!user) {
+      setErrorMsg("Você precisa estar logado para criar uma conta.");
+      return;
+    }
 
     if (!name.trim()) {
       setErrorMsg("O nome da conta não pode estar vazio.");
@@ -80,6 +87,7 @@ export function NewAccountButton() {
     setSaving(true);
 
     const payload = {
+      user_id: user.id,
       name: name.trim(),
       card_limit: accountType === "card" ? limitNumber : null,
       closing_day: accountType === "card" ? closing : null,

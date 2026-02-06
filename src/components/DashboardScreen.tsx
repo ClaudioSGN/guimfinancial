@@ -382,8 +382,8 @@ export function DashboardScreen({
                         color: "#e2e8f0",
                         fontSize: 12,
                       }}
-                      formatter={(value: number) => [`R$ ${value.toFixed(2)}`, "Total"]}
-                      labelFormatter={(label: string) => label}
+                      formatter={(value) => `R$ ${Number(value ?? 0).toFixed(2)}`}
+                      labelFormatter={(label) => `${label ?? ""}`}
                     />
                     <Bar
                       dataKey="total"

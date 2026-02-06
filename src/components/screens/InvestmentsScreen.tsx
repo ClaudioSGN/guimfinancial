@@ -54,6 +54,106 @@ type Purchase = {
 
 const BRAPI_KEY = process.env.NEXT_PUBLIC_BRAPI_KEY;
 const B3_SUFFIX = ".SA";
+const BRAPI_DEFAULT_HEADERS = {
+  Accept: "application/json,text/plain,*/*",
+};
+
+function toPoints(entries: Array<{ time: number; price: number }> | PricePoint[]) {
+  return entries
+    .map((entry) => ({
+      time: Number(entry?.time ?? 0),
+      price: Number(entry?.price ?? 0),
+    }))
+    .filter((entry) => entry.time && entry.price)
+    .sort((a, b) => a.time - b.time);
+}
+
+async function fetchB3History(symbol: string): Promise<PricePoint[]> {
+  const normalized = normalizeB3Symbol(symbol);
+
+  const tryBrapi = async (token?: string) => {
+    const tokenParam = token ? `&token=${token}` : "";
+    const res = await fetch(
+      `https://brapi.dev/api/quote/${encodeURIComponent(
+        normalized,
+      )}?range=1y&interval=1d${tokenParam}`,
+      { cache: "no-store", headers: BRAPI_DEFAULT_HEADERS },
+    );
+    if (!res.ok) return [];
+    const json = await res.json();
+    const item = (json?.results ?? []).find(
+      (result: any) =>
+        result?.symbol &&
+        normalizeB3Symbol(String(result.symbol)) === normalized,
+    );
+    const history =
+      item?.historicalDataPrice ?? item?.historicalData ?? item?.prices ?? [];
+    const points = history
+      .map((entry: any) => {
+        const rawDate =
+          entry?.date ?? entry?.timestamp ?? entry?.time ?? entry?.datetime;
+        let time = 0;
+        if (typeof rawDate === "number") {
+          time = rawDate > 1e12 ? rawDate : rawDate * 1000;
+        } else if (typeof rawDate === "string") {
+          const parsed = Date.parse(rawDate);
+          if (!Number.isNaN(parsed)) {
+            time = parsed;
+          }
+        }
+        const price = Number(
+          entry?.close ??
+            entry?.adjustedClose ??
+            entry?.price ??
+            entry?.value ??
+            0,
+        );
+        if (!time || !price) return null;
+        return { time, price };
+      })
+      .filter(Boolean) as PricePoint[];
+    return points.length ? toPoints(points) : [];
+  };
+
+  try {
+    if (BRAPI_KEY) {
+      const withKey = await tryBrapi(BRAPI_KEY);
+      if (withKey.length) return withKey;
+    }
+
+    const withoutKey = await tryBrapi();
+    if (withoutKey.length) return withoutKey;
+  } catch (err) {
+    console.error(err);
+  }
+
+  return [];
+}
+
+async function fetchCryptoHistory(symbol: string): Promise<PricePoint[]> {
+  const id = normalizeCryptoId(symbol);
+
+  try {
+    const res = await fetch(
+      `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(
+        id,
+      )}/market_chart?vs_currency=brl&days=365`,
+      { cache: "no-store" },
+    );
+
+    if (!res.ok) return [];
+    const json = await res.json();
+    const prices = json?.prices ?? [];
+    const points = prices.map((entry: [number, number]) => ({
+      time: Number(entry[0]),
+      price: Number(entry[1]),
+    }));
+    return points.length ? toPoints(points) : [];
+  } catch (err) {
+    console.error(err);
+    return [];
+  }
+}
 
 function normalizeB3Symbol(value: string) {
   return value.toUpperCase().replace(/\s+/g, "").replace(B3_SUFFIX, "");
@@ -207,22 +307,9 @@ export function InvestmentsScreen() {
   const fetchHistoryForAsset = useCallback(
     async (asset: Investment) => {
       try {
-        const res = await fetch(
-          `/api/market-history?type=${asset.type}&symbol=${encodeURIComponent(
-            asset.symbol,
-          )}`,
-          { cache: "no-store" },
-        );
-        if (!res.ok) return [];
-        const json = await res.json();
-        const history = Array.isArray(json?.history) ? json.history : [];
-        return history
-          .map((entry: PricePoint) => ({
-            time: Number(entry?.time ?? 0),
-            price: Number(entry?.price ?? 0),
-          }))
-          .filter((entry: PricePoint) => entry.time && entry.price)
-          .sort((a: PricePoint, b: PricePoint) => a.time - b.time);
+        return asset.type === "b3"
+          ? await fetchB3History(asset.symbol)
+          : await fetchCryptoHistory(asset.symbol);
       } catch (err) {
         console.error(err);
         return [];
@@ -772,7 +859,7 @@ export function InvestmentsScreen() {
                         />
                       ) : null}
                       <Tooltip
-                        formatter={(value: number) => formatCurrency(value, language)}
+                        formatter={(value) => formatCurrency(Number(value ?? 0), language)}
                         labelFormatter={(label) => formatShortDate(String(label), language)}
                         contentStyle={{
                           background: "#0F121A",

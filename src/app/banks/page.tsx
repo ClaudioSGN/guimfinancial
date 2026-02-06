@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { TopNav } from "@/components/TopNav";
 import { BanksPageClient } from "@/components/BanksPageClient";
+import { useAuth } from "@/lib/auth";
 
 // 🔥 força esta página a ser sempre dinâmica (sem cache estático)
 
@@ -68,7 +69,7 @@ type AccountWithInvoice = AccountRow & {
   current_invoice_utilization: number | null; // 0–1 se houver limite
 };
 
-async function getAccountsWithInvoice(): Promise<AccountWithInvoice[]> {
+async function getAccountsWithInvoice(userId: string): Promise<AccountWithInvoice[]> {
   const [
     { data: accountsData, error: accError },
     { data: txData, error: txError },
@@ -76,12 +77,14 @@ async function getAccountsWithInvoice(): Promise<AccountWithInvoice[]> {
     supabase
       .from("accounts")
       .select("id, name, initial_balance, card_limit, closing_day, due_day")
+      .eq("user_id", userId)
       .order("name", { ascending: true }),
     supabase
       .from("transactions")
       .select(
         "type, value, date, account_id, is_installment, installment_total",
-      ),
+      )
+      .eq("user_id", userId),
   ]);
 
   if (accError) {
@@ -160,6 +163,7 @@ async function getAccountsWithInvoice(): Promise<AccountWithInvoice[]> {
 }
 
 export default function BanksPage() {
+  const { user } = useAuth();
   const [accounts, setAccounts] = useState<AccountWithInvoice[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -167,9 +171,14 @@ export default function BanksPage() {
     let active = true;
 
     async function load() {
+      if (!user) {
+        setAccounts([]);
+        setLoading(false);
+        return;
+      }
       try {
         setLoading(true);
-        const data = await getAccountsWithInvoice();
+        const data = await getAccountsWithInvoice(user.id);
         if (active) setAccounts(data);
       } catch (error) {
         console.error("Erro ao carregar contas:", error);
@@ -188,7 +197,7 @@ export default function BanksPage() {
       active = false;
       window.removeEventListener("data-refresh", handleRefresh);
     };
-  }, []);
+  }, [user]);
 
   return (
     <main className="min-h-screen bg-black text-zinc-100">

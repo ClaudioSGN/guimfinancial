@@ -74,10 +74,8 @@ export function CategoryPieCard({
             ))}
           </Pie>
           <Tooltip
-            formatter={(value: number | string) =>
-              formatCurrency(Number(value))
-            }
-            labelFormatter={(label: string | number) => `${label}`}
+            formatter={(value) => formatCurrency(Number(value ?? 0))}
+            labelFormatter={(label) => `${label ?? ""}`}
             contentStyle={{
               backgroundColor: "#09090b",
               border: "1px solid #27272a",
