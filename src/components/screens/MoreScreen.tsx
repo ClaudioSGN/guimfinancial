@@ -7,6 +7,7 @@ import { useLanguage } from "@/lib/language";
 import { useAuth } from "@/lib/auth";
 import { loadProfileSettings, saveProfileSettings } from "@/lib/profile";
 import { supabase } from "@/lib/supabaseClient";
+import { CheckForUpdatesCard } from "@/components/CheckForUpdatesCard";
 
 const STORAGE_KEYS = {
   enabled: "dailyReminderEnabled",
@@ -351,6 +352,9 @@ export function MoreScreen() {
             <p className="text-sm font-semibold text-[#E4E7EC]">{t("more.export")}</p>
             <p className="text-xs text-[#8B94A6]">{t("more.exportHint")}</p>
           </Link>
+
+          <CheckForUpdatesCard />
+
           {user ? (
             <div className="space-y-2">
               <button
