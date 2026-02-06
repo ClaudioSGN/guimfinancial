@@ -12,7 +12,11 @@ type UpdaterResult = {
 };
 
 function isTauriRuntime() {
-  return typeof window !== "undefined" && Boolean((window as { __TAURI__?: unknown }).__TAURI__);
+  if (typeof window === "undefined") return false;
+  const w = window as unknown as { __TAURI__?: unknown; __TAURI_INTERNALS__?: unknown };
+  // `window.__TAURI__` is only present when `app.withGlobalTauri` is enabled.
+  // `window.__TAURI_INTERNALS__` is the default runtime surface used by the JS API.
+  return Boolean(w.__TAURI__ || w.__TAURI_INTERNALS__);
 }
 
 export function UpdateChecker() {
