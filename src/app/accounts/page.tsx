@@ -74,7 +74,8 @@ export default function AccountsPage() {
     ]);
 
     if (error) {
-      setErrorMsg(t("accounts.saveError"));
+      console.error("Supabase accounts insert error:", error);
+      setErrorMsg(error.message || t("accounts.saveError"));
       setSaving(false);
       return;
     }
@@ -127,7 +128,8 @@ export default function AccountsPage() {
     setEditSaving(false);
 
     if (error) {
-      setErrorMsg(t("accounts.saveError"));
+      console.error("Supabase accounts update error:", error);
+      setErrorMsg(error.message || t("accounts.saveError"));
       return;
     }
 
