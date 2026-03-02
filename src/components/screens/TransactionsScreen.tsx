@@ -117,24 +117,49 @@ export function TransactionsScreen() {
     setLoading(true);
     setErrorMsg(null);
     const { end } = getMonthRange(selectedMonth);
+    const txColumns =
+      "id,type,amount,description,category,date,account_id,is_fixed,is_installment,installment_total,installments_paid,is_paid";
+    const txColumnsFallback =
+      "id,type,amount,description,category,date,account_id,is_installment,installment_total,installments_paid,is_paid";
 
-    const [txResult, accountsResult] = await Promise.all([
+    const [txResultWithFixed, accountsResult] = await Promise.all([
       supabase
         .from("transactions")
-        .select("id,type,amount,description,category,date,account_id,is_fixed,is_installment,installment_total,installments_paid,is_paid")
+        .select(txColumns)
         .eq("user_id", user.id)
         .lte("date", end)
         .order("date", { ascending: false }),
       supabase.from("accounts").select("id,balance").eq("user_id", user.id),
     ]);
 
-    if (txResult.error) {
+    let txData = txResultWithFixed.data;
+    let txError = txResultWithFixed.error;
+    const rawError = `${txError?.code ?? ""} ${txError?.message ?? ""}`.toLowerCase();
+    const missingFixedColumn =
+      !!txError && txError.code === "42703" && rawError.includes("is_fixed");
+
+    if (missingFixedColumn) {
+      const fallback = await supabase
+        .from("transactions")
+        .select(txColumnsFallback)
+        .eq("user_id", user.id)
+        .lte("date", end)
+        .order("date", { ascending: false });
+
+      txError = fallback.error;
+      txData = (fallback.data ?? []).map((item) => ({
+        ...item,
+        is_fixed: null,
+      }));
+    }
+
+    if (txError) {
       setErrorMsg(t("transactions.loadError"));
       setLoading(false);
       return;
     }
 
-    setBaseTransactions((txResult.data ?? []) as Transaction[]);
+    setBaseTransactions((txData ?? []) as Transaction[]);
     setAccounts((accountsResult.data ?? []) as Account[]);
     setLoading(false);
   }, [t, selectedMonth, user]);
