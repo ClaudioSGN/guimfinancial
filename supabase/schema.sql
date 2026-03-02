@@ -27,6 +27,7 @@ create table if not exists transactions (
   description text,
   category text,
   date date not null,
+  is_fixed boolean,
   is_installment boolean,
   installment_total int,
   installments_paid int,
@@ -38,6 +39,7 @@ alter table transactions add column if not exists is_installment boolean;
 alter table transactions add column if not exists installment_total int;
 alter table transactions add column if not exists installments_paid int;
 alter table transactions add column if not exists is_paid boolean;
+alter table transactions add column if not exists is_fixed boolean;
 
 create table if not exists transfers (
   id uuid primary key default gen_random_uuid(),

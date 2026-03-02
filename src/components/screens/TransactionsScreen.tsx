@@ -15,6 +15,7 @@ type Transaction = {
   category: string | null;
   date: string;
   account_id: string | null;
+  is_fixed: boolean | null;
   is_installment: boolean | null;
   installment_total: number | null;
   installments_paid: number | null;
@@ -120,7 +121,7 @@ export function TransactionsScreen() {
     const [txResult, accountsResult] = await Promise.all([
       supabase
         .from("transactions")
-        .select("id,type,amount,description,category,date,account_id,is_installment,installment_total,installments_paid,is_paid")
+        .select("id,type,amount,description,category,date,account_id,is_fixed,is_installment,installment_total,installments_paid,is_paid")
         .eq("user_id", user.id)
         .lte("date", end)
         .order("date", { ascending: false }),
@@ -519,6 +520,7 @@ export function TransactionsScreen() {
             const amount = item.displayAmount;
             const isIncome = item.type === "income";
             const isCard = item.type === "card_expense";
+            const isFixedExpense = !isIncome && !!item.is_fixed;
             const isInstallment = !!item.is_installment && (item.installment_total ?? 0) > 0;
             const totalInstallments = item.installment_total ?? 0;
             const paidInstallments = item.installments_paid ?? 0;
@@ -565,6 +567,11 @@ export function TransactionsScreen() {
                         {paidInstallments >= totalInstallments ? "Pago" : "Em aberto"}
                       </span>
                     </div>
+                  ) : null}
+                  {isFixedExpense ? (
+                    <span className="inline-flex rounded-full border border-[#3A8F8A] bg-[#163137] px-2 py-[2px] text-[10px] text-[#64D1C4]">
+                      {t("newEntry.fixedExpense")}
+                    </span>
                   ) : null}
                 </div>
                 <div className="flex flex-col items-end gap-2 text-right">

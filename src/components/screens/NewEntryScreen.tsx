@@ -44,6 +44,7 @@ export function NewEntryScreen({ entryType }: Props) {
   const isTransfer = entryType === "transfer";
   const isCardExpense = entryType === "card_expense";
   const needsAccount = entryType === "income" || entryType === "expense";
+  const isExpenseEntry = entryType === "expense" || entryType === "card_expense";
 
   const [amount, setAmount] = useState("R$ 0");
   const [description, setDescription] = useState("");
@@ -57,6 +58,7 @@ export function NewEntryScreen({ entryType }: Props) {
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [isFixed, setIsFixed] = useState(false);
   const [isInstallment, setIsInstallment] = useState(false);
   const [installmentTotal, setInstallmentTotal] = useState("");
   const [createCardOpen, setCreateCardOpen] = useState(false);
@@ -174,6 +176,7 @@ export function NewEntryScreen({ entryType }: Props) {
           description: description || null,
           category: category || null,
           date,
+          is_fixed: isExpenseEntry ? isFixed : null,
           is_installment: isCardExpense ? isInstallment || null : null,
           installment_total: isCardExpense ? totalInstallments : null,
           installments_paid: isCardExpense && isInstallment ? 0 : null,
@@ -182,7 +185,17 @@ export function NewEntryScreen({ entryType }: Props) {
       ]);
 
       if (error) {
-        setErrorMsg(t("newEntry.saveError"));
+        const rawError = `${error.code ?? ""} ${error.message ?? ""}`.toLowerCase();
+        const missingFixedColumn =
+          rawError.includes("is_fixed") &&
+          (error.code === "42703" || rawError.includes("column"));
+        setErrorMsg(
+          missingFixedColumn
+            ? language === "pt"
+              ? "Atualize o banco com supabase/schema.sql para usar a opcao de despesa fixa."
+              : "Update your database with supabase/schema.sql to use the fixed expense option."
+            : t("newEntry.saveError"),
+        );
         setSaving(false);
         return;
       }
@@ -390,6 +403,20 @@ export function NewEntryScreen({ entryType }: Props) {
                   + {t("newEntry.createCard")}
                 </button>
               </div>
+            </div>
+          ) : null}
+
+          {isExpenseEntry ? (
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm text-[#C7CEDA]">
+                <input
+                  type="checkbox"
+                  checked={isFixed}
+                  onChange={(event) => setIsFixed(event.target.checked)}
+                  className="h-4 w-4 rounded border-[#2A3140] bg-[#0F141E] text-[#5DD6C7]"
+                />
+                <span>{t("newEntry.fixedExpense")}</span>
+              </label>
             </div>
           ) : null}
 
