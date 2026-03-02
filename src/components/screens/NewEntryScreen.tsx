@@ -59,6 +59,13 @@ export function NewEntryScreen({ entryType }: Props) {
   const [saved, setSaved] = useState(false);
   const [isInstallment, setIsInstallment] = useState(false);
   const [installmentTotal, setInstallmentTotal] = useState("");
+  const [createCardOpen, setCreateCardOpen] = useState(false);
+  const [newCardName, setNewCardName] = useState("");
+  const [newCardLimitAmount, setNewCardLimitAmount] = useState("R$ 0");
+  const [newCardClosingDay, setNewCardClosingDay] = useState("");
+  const [newCardDueDay, setNewCardDueDay] = useState("");
+  const [createCardSaving, setCreateCardSaving] = useState(false);
+  const [createCardError, setCreateCardError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadRefs() {
@@ -193,6 +200,82 @@ export function NewEntryScreen({ entryType }: Props) {
     router.back();
   }
 
+  function resetCreateCardForm() {
+    setNewCardName("");
+    setNewCardLimitAmount("R$ 0");
+    setNewCardClosingDay("");
+    setNewCardDueDay("");
+    setCreateCardError(null);
+    setCreateCardSaving(false);
+  }
+
+  function openCreateCardModal() {
+    resetCreateCardForm();
+    setCreateCardOpen(true);
+  }
+
+  function closeCreateCardModal() {
+    if (createCardSaving) return;
+    setCreateCardOpen(false);
+    resetCreateCardForm();
+  }
+
+  async function handleCreateCard() {
+    if (!user) return;
+    setCreateCardError(null);
+
+    const parsedLimit = parseCentsInput(newCardLimitAmount);
+    const parsedClosing = Number(newCardClosingDay);
+    const parsedDue = Number(newCardDueDay);
+
+    if (!newCardName.trim()) {
+      setCreateCardError(t("cards.nameError"));
+      return;
+    }
+    if (!Number.isFinite(parsedLimit) || parsedLimit <= 0) {
+      setCreateCardError(t("newEntry.createCardLimitError"));
+      return;
+    }
+    if (!Number.isInteger(parsedClosing) || parsedClosing < 1 || parsedClosing > 31) {
+      setCreateCardError(t("newEntry.createCardClosingDayError"));
+      return;
+    }
+    if (!Number.isInteger(parsedDue) || parsedDue < 1 || parsedDue > 31) {
+      setCreateCardError(t("newEntry.createCardDueDayError"));
+      return;
+    }
+
+    setCreateCardSaving(true);
+    const { data, error } = await supabase
+      .from("credit_cards")
+      .insert([
+        {
+          user_id: user.id,
+          name: newCardName.trim(),
+          limit_amount: parsedLimit,
+          closing_day: parsedClosing,
+          due_day: parsedDue,
+        },
+      ])
+      .select("id,name")
+      .single();
+    setCreateCardSaving(false);
+
+    if (error) {
+      setCreateCardError(t("cards.saveError"));
+      return;
+    }
+
+    const created = data as Card;
+    setCards((prev) =>
+      [...prev, created].sort((a, b) => a.name.localeCompare(b.name)),
+    );
+    setCardId(created.id);
+    setCreateCardOpen(false);
+    resetCreateCardForm();
+    window.dispatchEvent(new Event("data-refresh"));
+  }
+
   const displayDate = useMemo(() => {
     const value = new Date(date);
     return value.toLocaleDateString(language === "pt" ? "pt-BR" : "en-US");
@@ -299,6 +382,13 @@ export function NewEntryScreen({ entryType }: Props) {
                     </button>
                   ))
                 )}
+                <button
+                  type="button"
+                  onClick={openCreateCardModal}
+                  className="rounded-full border border-dashed border-[#5DD6C7]/70 bg-[#0F141E] px-3 py-1 text-xs text-[#5DD6C7] hover:border-[#5DD6C7] hover:bg-[#1A2230]"
+                >
+                  + {t("newEntry.createCard")}
+                </button>
               </div>
             </div>
           ) : null}
@@ -400,6 +490,77 @@ export function NewEntryScreen({ entryType }: Props) {
           {saving ? t("common.saving") : t("common.save")}
         </button>
       </div>
+
+      {createCardOpen ? (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4"
+          onClick={closeCreateCardModal}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-[#1E232E] bg-[#121621] p-5"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-sm font-semibold text-[#E5E8EF]">
+                {t("newEntry.createCardTitle")}
+              </p>
+              <button
+                type="button"
+                onClick={closeCreateCardModal}
+                className="text-xs text-[#8B94A6]"
+              >
+                {t("common.cancel")}
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <input
+                value={newCardName}
+                onChange={(event) => setNewCardName(event.target.value)}
+                placeholder={t("cards.namePlaceholder")}
+                className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
+              />
+              <input
+                value={newCardLimitAmount}
+                onChange={(event) =>
+                  setNewCardLimitAmount(formatCentsInput(event.target.value))
+                }
+                placeholder={t("cards.limitPlaceholder")}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
+              />
+              <input
+                value={newCardClosingDay}
+                onChange={(event) => setNewCardClosingDay(event.target.value)}
+                placeholder={t("cards.closingDayPlaceholder")}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
+              />
+              <input
+                value={newCardDueDay}
+                onChange={(event) => setNewCardDueDay(event.target.value)}
+                placeholder={t("cards.dueDayPlaceholder")}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
+              />
+              {createCardError ? (
+                <p className="text-xs text-red-400">{createCardError}</p>
+              ) : null}
+              <button
+                type="button"
+                onClick={handleCreateCard}
+                disabled={createCardSaving}
+                className="w-full rounded-xl bg-[#E6EDF3] py-3 text-sm font-semibold text-[#0C1018] disabled:opacity-60"
+              >
+                {createCardSaving ? t("common.saving") : t("newEntry.createCardSubmit")}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

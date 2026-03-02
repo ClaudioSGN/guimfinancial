@@ -12,15 +12,12 @@ type UpdaterResult = {
   install?: () => Promise<void>;
 };
 
-function isTauriRuntime() {
-  if (typeof window === "undefined") return false;
-  const w = window as unknown as {
-    __TAURI__?: unknown;
-    __TAURI_INTERNALS__?: unknown;
-  };
-  // `window.__TAURI__` is only present when `app.withGlobalTauri` is enabled.
-  // `window.__TAURI_INTERNALS__` is the default runtime surface used by the JS API.
-  return Boolean(w.__TAURI__ || w.__TAURI_INTERNALS__);
+function isLikelyNonTauriRuntimeError(error: unknown) {
+  const message =
+    error instanceof Error ? error.message : String(error ?? "");
+  return /__TAURI|TAURI_INTERNALS|ipc|invoke|not available|not initialized/i.test(
+    message,
+  );
 }
 
 export function CheckForUpdatesCard() {
@@ -71,12 +68,6 @@ export function CheckForUpdatesCard() {
     setUpdate(null);
     setStatus("idle");
 
-    if (!isTauriRuntime()) {
-      setStatus("error");
-      setError(copy.tauriOnly);
-      return;
-    }
-
     setChecking(true);
     try {
       const [{ check }, { getBundleType, BundleType, getVersion }] =
@@ -104,7 +95,11 @@ export function CheckForUpdatesCard() {
     } catch (err) {
       console.error("[updater] manual check failed:", err);
       setStatus("error");
-      setError(err instanceof Error ? err.message : copy.error);
+      if (isLikelyNonTauriRuntimeError(err)) {
+        setError(copy.tauriOnly);
+      } else {
+        setError(err instanceof Error ? err.message : copy.error);
+      }
     } finally {
       setChecking(false);
     }

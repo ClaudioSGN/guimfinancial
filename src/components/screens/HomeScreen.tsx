@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import { getErrorMessage, isTransientNetworkError } from "@/lib/errorUtils";
 import { getMonthShortName } from "../../../shared/i18n";
 import { useLanguage } from "@/lib/language";
 import { useAuth } from "@/lib/auth";
@@ -48,6 +49,15 @@ type CreditCard = {
   limit_amount: number | string;
   closing_day: number;
   due_day: number;
+};
+
+type CardReminder = {
+  id: string;
+  name: string;
+  status: "closed" | "expired";
+  days: number;
+  closingDay: number;
+  dueDay: number;
 };
 
 type Investment = {
@@ -116,6 +126,16 @@ function formatShortDate(date: Date, language: "pt" | "en") {
     day: "2-digit",
     month: "2-digit",
   }).format(date);
+}
+
+function getSafeDayInMonth(year: number, month: number, day: number) {
+  const maxDay = new Date(year, month + 1, 0).getDate();
+  return Math.min(Math.max(day, 1), maxDay);
+}
+
+function getDayWord(days: number, language: "pt" | "en") {
+  if (language === "pt") return days === 1 ? "dia" : "dias";
+  return days === 1 ? "day" : "days";
 }
 
 function getInitials(name?: string) {
@@ -253,89 +273,108 @@ export function HomeScreen() {
 
     const { end } = getMonthRange(selectedMonth);
 
-    const [accountsResult, transactionsResult, cardsResult, investmentsResult, purchasesResult] =
-      await Promise.all([
-      supabase
-        .from("accounts")
-        .select("id,name,balance")
-        .eq("user_id", user.id)
-        .order("name", { ascending: true }),
-      supabase
-        .from("transactions")
-        .select("id,type,amount,date,description,category,is_installment,installment_total,installments_paid,is_paid")
-        .eq("user_id", user.id)
-        .lte("date", end)
-        .order("date", { ascending: false }),
-      supabase
-        .from("credit_cards")
-        .select("id,name,limit_amount,closing_day,due_day")
-        .eq("user_id", user.id)
-        .order("name", { ascending: true }),
-      supabase
-        .from("investments")
-        .select("id,type,symbol,name,quantity,average_price")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("investment_purchases")
-        .select("total_invested")
-        .eq("user_id", user.id),
-    ]);
+    try {
+      const [
+        accountsResult,
+        transactionsResult,
+        cardsResult,
+        investmentsResult,
+        purchasesResult,
+      ] = await Promise.all([
+        supabase
+          .from("accounts")
+          .select("id,name,balance")
+          .eq("user_id", user.id)
+          .order("name", { ascending: true }),
+        supabase
+          .from("transactions")
+          .select("id,type,amount,date,description,category,is_installment,installment_total,installments_paid,is_paid")
+          .eq("user_id", user.id)
+          .lte("date", end)
+          .order("date", { ascending: false }),
+        supabase
+          .from("credit_cards")
+          .select("id,name,limit_amount,closing_day,due_day")
+          .eq("user_id", user.id)
+          .order("name", { ascending: true }),
+        supabase
+          .from("investments")
+          .select("id,type,symbol,name,quantity,average_price")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("investment_purchases")
+          .select("total_invested")
+          .eq("user_id", user.id),
+      ]);
 
-    if (
-      accountsResult.error ||
-      transactionsResult.error ||
-      cardsResult.error ||
-      investmentsResult.error ||
-      purchasesResult.error
-    ) {
-      const error =
+      if (
         accountsResult.error ||
         transactionsResult.error ||
         cardsResult.error ||
         investmentsResult.error ||
-        purchasesResult.error;
-      console.error("Supabase load error", error);
-      if (error?.code === "42P01") {
-        setErrorMsg(t("home.schemaMissing"));
-      } else {
-        setErrorMsg(t("home.dataLoadError"));
+        purchasesResult.error
+      ) {
+        const error =
+          accountsResult.error ||
+          transactionsResult.error ||
+          cardsResult.error ||
+          investmentsResult.error ||
+          purchasesResult.error;
+        if (isTransientNetworkError(error)) {
+          console.warn("[home] supabase load error:", getErrorMessage(error));
+        } else {
+          console.error("Supabase load error", error);
+        }
+        if (error?.code === "42P01") {
+          setErrorMsg(t("home.schemaMissing"));
+        } else {
+          setErrorMsg(t("home.dataLoadError"));
+        }
+        setLoading(false);
+        return;
       }
+
+      const nextAccounts = (accountsResult.data ?? []) as Account[];
+      const transactions = (transactionsResult.data ?? []) as Transaction[];
+      const nextCards = (cardsResult.data ?? []) as CreditCard[];
+      const nextInvestments = (investmentsResult.data ?? []) as Investment[];
+      const nextInvestedTotal = (purchasesResult.data ?? []).reduce((sum, item) => {
+        return sum + (Number(item.total_invested) || 0);
+      }, 0);
+
+      const total = nextAccounts.reduce(
+        (sum, account) => sum + (Number(account.balance) || 0),
+        0,
+      );
+      const monthTx = buildMonthTransactions(transactions, selectedMonth);
+      const monthIncome = monthTx.reduce((sum, tx) => {
+        return tx.type === "income" ? sum + tx.displayAmount : sum;
+      }, 0);
+      const monthExpenses = monthTx.reduce((sum, tx) => {
+        return tx.type === "expense" || tx.type === "card_expense"
+          ? sum + tx.displayAmount
+          : sum;
+      }, 0);
+
+      setTotalBalance(total || monthIncome - monthExpenses);
+      setIncome(monthIncome);
+      setExpenses(monthExpenses);
+      setAccounts(nextAccounts);
+      setCards(nextCards);
+      setTransactions(transactions);
+      setInvestments(nextInvestments);
+      setInvestedTotal(nextInvestedTotal);
       setLoading(false);
-      return;
+    } catch (error) {
+      if (isTransientNetworkError(error)) {
+        console.warn("[home] supabase request failed:", getErrorMessage(error));
+      } else {
+        console.error("[home] unexpected load error:", error);
+      }
+      setErrorMsg(t("home.dataLoadError"));
+      setLoading(false);
     }
-
-    const nextAccounts = (accountsResult.data ?? []) as Account[];
-    const transactions = (transactionsResult.data ?? []) as Transaction[];
-    const nextCards = (cardsResult.data ?? []) as CreditCard[];
-    const nextInvestments = (investmentsResult.data ?? []) as Investment[];
-    const nextInvestedTotal = (purchasesResult.data ?? []).reduce((sum, item) => {
-      return sum + (Number(item.total_invested) || 0);
-    }, 0);
-
-    const total = nextAccounts.reduce(
-      (sum, account) => sum + (Number(account.balance) || 0),
-      0,
-    );
-    const monthTx = buildMonthTransactions(transactions, selectedMonth);
-    const monthIncome = monthTx.reduce((sum, tx) => {
-      return tx.type === "income" ? sum + tx.displayAmount : sum;
-    }, 0);
-    const monthExpenses = monthTx.reduce((sum, tx) => {
-      return tx.type === "expense" || tx.type === "card_expense"
-        ? sum + tx.displayAmount
-        : sum;
-    }, 0);
-
-    setTotalBalance(total || monthIncome - monthExpenses);
-    setIncome(monthIncome);
-    setExpenses(monthExpenses);
-    setAccounts(nextAccounts);
-    setCards(nextCards);
-    setTransactions(transactions);
-    setInvestments(nextInvestments);
-    setInvestedTotal(nextInvestedTotal);
-    setLoading(false);
   }, [selectedMonth, t, user]);
 
   useEffect(() => {
@@ -411,6 +450,73 @@ export function HomeScreen() {
   const categoryMax = useMemo(() => {
     return Math.max(1, ...categoryTotals.map(([, value]) => value));
   }, [categoryTotals]);
+
+  const cardReminders = useMemo<CardReminder[]>(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const year = today.getFullYear();
+    const month = today.getMonth();
+
+    return cards
+      .map((card) => {
+        const closingDay = Number(card.closing_day);
+        const dueDay = Number(card.due_day);
+        if (
+          !Number.isFinite(closingDay) ||
+          !Number.isFinite(dueDay) ||
+          closingDay < 1 ||
+          closingDay > 31 ||
+          dueDay < 1 ||
+          dueDay > 31
+        ) {
+          return null;
+        }
+
+        const closingDate = new Date(
+          year,
+          month,
+          getSafeDayInMonth(year, month, closingDay),
+        );
+        const dueDate = new Date(year, month, getSafeDayInMonth(year, month, dueDay));
+
+        if (today > dueDate) {
+          const days = Math.floor(
+            (today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24),
+          );
+          return {
+            id: card.id,
+            name: card.name,
+            status: "expired" as const,
+            days,
+            closingDay,
+            dueDay,
+          };
+        }
+
+        if (today >= closingDate) {
+          const days = Math.floor(
+            (today.getTime() - closingDate.getTime()) / (1000 * 60 * 60 * 24),
+          );
+          return {
+            id: card.id,
+            name: card.name,
+            status: "closed" as const,
+            days,
+            closingDay,
+            dueDay,
+          };
+        }
+
+        return null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => {
+        if (!a || !b) return 0;
+        if (a.status !== b.status) return a.status === "expired" ? -1 : 1;
+        if (a.days !== b.days) return b.days - a.days;
+        return a.name.localeCompare(b.name);
+      }) as CardReminder[];
+  }, [cards]);
 
   const displayName =
     (user?.user_metadata?.username as string | undefined) ||
@@ -939,6 +1045,73 @@ export function HomeScreen() {
                     >
                       {isIncome ? "+" : "-"} {formatCurrency(tx.displayAmount, language)}
                     </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5 sm:col-span-2 lg:col-span-12">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-[#C7CEDA]">
+                {t("home.cardReminderTitle")}
+              </p>
+              <p className="text-xs text-[#8B94A6]">
+                {t("home.cardReminderSubtitle")}
+              </p>
+            </div>
+            <span className="rounded-full border border-[#263043] bg-[#0F141E] px-3 py-1 text-[11px] text-[#9AA3B2]">
+              {cardReminders.length}
+            </span>
+          </div>
+          {cards.length === 0 ? (
+            <p className="text-xs text-[#8B94A6]">{t("home.noCards")}</p>
+          ) : cardReminders.length === 0 ? (
+            <p className="text-xs text-[#8B94A6]">{t("home.cardReminderEmpty")}</p>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {cardReminders.map((card) => {
+                const isExpired = card.status === "expired";
+                return (
+                  <div
+                    key={card.id}
+                    className={`rounded-xl border px-4 py-3 ${
+                      isExpired
+                        ? "border-red-500/35 bg-[#261419]"
+                        : "border-amber-500/35 bg-[#241E12]"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-[#E4E7EC]">{card.name}</p>
+                        <p className="mt-1 text-[11px] text-[#A8B2C3]">
+                          {t("cards.closes")} {card.closingDay} - {t("cards.due")} {card.dueDay}
+                        </p>
+                      </div>
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                          isExpired
+                            ? "border-red-500/50 text-red-300"
+                            : "border-amber-500/50 text-amber-300"
+                        }`}
+                      >
+                        {isExpired
+                          ? t("home.cardReminderExpiredBadge")
+                          : t("home.cardReminderClosedBadge")}
+                      </span>
+                    </div>
+                    <p
+                      className={`mt-3 text-xs ${
+                        isExpired ? "text-red-200" : "text-amber-200"
+                      }`}
+                    >
+                      {isExpired
+                        ? t("home.cardReminderExpiredSince")
+                        : t("home.cardReminderClosedSince")}{" "}
+                      {card.days} {getDayWord(card.days, language)}
+                    </p>
                   </div>
                 );
               })}

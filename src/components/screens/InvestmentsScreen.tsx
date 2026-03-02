@@ -57,6 +57,19 @@ const B3_SUFFIX = ".SA";
 const BRAPI_DEFAULT_HEADERS = {
   Accept: "application/json,text/plain,*/*",
 };
+const BRAPI_BACKOFF_MS = 30 * 1000;
+const BRAPI_PERMANENT_SYMBOL_CODES = new Set([
+  "INVALID_STOCK",
+  "INVALID_SYMBOL",
+  "SYMBOL_NOT_FOUND",
+  "QUOTE_NOT_FOUND",
+  "NO_RESULTS",
+  "NOT_FOUND",
+]);
+let brapiBlockedUntil = 0;
+const badB3Symbols = new Set<string>();
+let brapiUseToken = Boolean(BRAPI_KEY);
+let brapiHistoryRange = "1y";
 
 function toPoints(entries: Array<{ time: number; price: number }> | PricePoint[]) {
   return entries
@@ -68,18 +81,193 @@ function toPoints(entries: Array<{ time: number; price: number }> | PricePoint[]
     .sort((a, b) => a.time - b.time);
 }
 
+function isLikelyB3Symbol(value: string) {
+  return /^[A-Z0-9]{4,8}$/.test(value);
+}
+
+function isLikelyCryptoId(value: string) {
+  return /^[a-z0-9-]{2,64}$/.test(value);
+}
+
+function isBrapiBlocked() {
+  return Date.now() < brapiBlockedUntil;
+}
+
+function pickSupportedBrapiRange(message?: string) {
+  if (!message) return null;
+  const fromMessage = message.match(/Ranges permitidos:\s*([^\n]+)/i)?.[1];
+  if (!fromMessage) return null;
+  const available = fromMessage
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const preferredOrder = ["1y", "3mo", "1mo", "5d", "1d"];
+  return preferredOrder.find((range) => available.includes(range)) ?? null;
+}
+
+function extractBrapiErrorDetails(payload: any) {
+  const codeCandidates = [
+    payload?.code,
+    payload?.errorCode,
+    payload?.error?.code,
+    payload?.errors?.[0]?.code,
+  ];
+  const messageCandidates = [
+    payload?.message,
+    payload?.error_description,
+    payload?.error?.message,
+    typeof payload?.error === "string" ? payload.error : undefined,
+    payload?.errors?.[0]?.message,
+  ];
+  const code = codeCandidates.find((value) => typeof value === "string");
+  const message = messageCandidates.find((value) => typeof value === "string");
+  return {
+    code: code ? String(code) : undefined,
+    message: message ? String(message) : undefined,
+  };
+}
+
+function isPermanentB3SymbolError(code?: string, message?: string) {
+  if (code && BRAPI_PERMANENT_SYMBOL_CODES.has(code.toUpperCase())) {
+    return true;
+  }
+  if (!message) return false;
+  const lower = message.toLowerCase();
+  return (
+    (lower.includes("symbol") && lower.includes("invalid")) ||
+    lower.includes("symbol not found") ||
+    lower.includes("nao encontrado")
+  );
+}
+
+function handleBrapiFailure(
+  status: number,
+  normalizedSymbol?: string,
+  usedToken?: boolean,
+  code?: string,
+  message?: string,
+) {
+  if (status === 400 && code?.toUpperCase() === "INVALID_RANGE") {
+    const nextRange = pickSupportedBrapiRange(message);
+    if (nextRange) {
+      brapiHistoryRange = nextRange;
+    } else if (brapiHistoryRange === "1y") {
+      brapiHistoryRange = "3mo";
+    }
+    return;
+  }
+  if (
+    (status === 400 || status === 404) &&
+    normalizedSymbol &&
+    isPermanentB3SymbolError(code, message)
+  ) {
+    badB3Symbols.add(normalizedSymbol);
+    return;
+  }
+  if ((status === 401 || status === 403) && usedToken) {
+    brapiUseToken = false;
+    return;
+  }
+  if (status === 429 || status >= 500 || status === 0) {
+    brapiBlockedUntil = Date.now() + BRAPI_BACKOFF_MS;
+  }
+}
+
+async function fetchSingleB3Quote(normalized: string): Promise<Quote | null> {
+  if (isBrapiBlocked()) return null;
+  if (!isLikelyB3Symbol(normalized) || badB3Symbols.has(normalized)) return null;
+
+  const requestQuote = async (useToken: boolean): Promise<Quote | null> => {
+    const tokenParam = useToken && BRAPI_KEY ? `?token=${encodeURIComponent(BRAPI_KEY)}` : "";
+    const res = await fetch(
+      `https://brapi.dev/api/quote/${encodeURIComponent(normalized)}${tokenParam}`,
+      { cache: "no-store", headers: BRAPI_DEFAULT_HEADERS },
+    );
+    if (!res.ok) {
+      let errorCode: string | undefined;
+      let errorMessage: string | undefined;
+      try {
+        const json = await res.json();
+        const details = extractBrapiErrorDetails(json);
+        errorCode = details.code;
+        errorMessage = details.message;
+      } catch {
+        // ignore json parse for error body
+      }
+      handleBrapiFailure(res.status, normalized, useToken, errorCode, errorMessage);
+      return null;
+    }
+    const json = await res.json();
+    const item = (json?.results ?? []).find(
+      (result: any) =>
+        result?.symbol &&
+        normalizeB3Symbol(String(result.symbol)) === normalized,
+    );
+    if (item?.regularMarketPrice == null) return null;
+    return {
+      price: Number(item.regularMarketPrice) || 0,
+      changePct:
+        item.regularMarketChangePercent != null
+          ? Number(item.regularMarketChangePercent)
+          : null,
+    };
+  };
+
+  try {
+    const useToken = brapiUseToken && Boolean(BRAPI_KEY);
+    const withPreferredMode = await requestQuote(useToken);
+    if (withPreferredMode) {
+      return withPreferredMode;
+    }
+    if (useToken && !isBrapiBlocked()) {
+      return await requestQuote(false);
+    }
+    return null;
+  } catch {
+    handleBrapiFailure(0, normalized, brapiUseToken && Boolean(BRAPI_KEY));
+    return null;
+  }
+}
+
 async function fetchB3History(symbol: string): Promise<PricePoint[]> {
   const normalized = normalizeB3Symbol(symbol);
+  if (isBrapiBlocked()) return [];
+  if (!isLikelyB3Symbol(normalized) || badB3Symbols.has(normalized)) return [];
 
-  const tryBrapi = async (token?: string) => {
-    const tokenParam = token ? `&token=${token}` : "";
+  const requestHistory = async (
+    useToken: boolean,
+    range: string,
+  ): Promise<{ points: PricePoint[]; invalidRange: boolean }> => {
+    const query = new URLSearchParams({
+      range,
+      interval: "1d",
+    });
+    if (useToken && BRAPI_KEY) {
+      query.set("token", BRAPI_KEY);
+    }
     const res = await fetch(
       `https://brapi.dev/api/quote/${encodeURIComponent(
         normalized,
-      )}?range=1y&interval=1d${tokenParam}`,
+      )}?${query.toString()}`,
       { cache: "no-store", headers: BRAPI_DEFAULT_HEADERS },
     );
-    if (!res.ok) return [];
+    if (!res.ok) {
+      let errorCode: string | undefined;
+      let errorMessage: string | undefined;
+      try {
+        const json = await res.json();
+        const details = extractBrapiErrorDetails(json);
+        errorCode = details.code;
+        errorMessage = details.message;
+      } catch {
+        // ignore json parse for error body
+      }
+      handleBrapiFailure(res.status, normalized, useToken, errorCode, errorMessage);
+      return {
+        points: [],
+        invalidRange: res.status === 400 && errorCode?.toUpperCase() === "INVALID_RANGE",
+      };
+    }
     const json = await res.json();
     const item = (json?.results ?? []).find(
       (result: any) =>
@@ -112,21 +300,31 @@ async function fetchB3History(symbol: string): Promise<PricePoint[]> {
         return { time, price };
       })
       .filter(Boolean) as PricePoint[];
-    return points.length ? toPoints(points) : [];
+    return { points: points.length ? toPoints(points) : [], invalidRange: false };
   };
 
   try {
-    if (BRAPI_KEY) {
-      const withKey = await tryBrapi(BRAPI_KEY);
-      if (withKey.length) return withKey;
+    const useToken = brapiUseToken && Boolean(BRAPI_KEY);
+    let historyRange = brapiHistoryRange;
+    let withPreferredMode = await requestHistory(useToken, historyRange);
+    if (!withPreferredMode.points.length && withPreferredMode.invalidRange && !isBrapiBlocked()) {
+      historyRange = brapiHistoryRange;
+      withPreferredMode = await requestHistory(useToken, historyRange);
     }
-
-    const withoutKey = await tryBrapi();
-    if (withoutKey.length) return withoutKey;
-  } catch (err) {
-    console.error(err);
+    if (withPreferredMode.points.length) {
+      return withPreferredMode.points;
+    }
+    if (useToken && !isBrapiBlocked()) {
+      let withoutToken = await requestHistory(false, historyRange);
+      if (!withoutToken.points.length && withoutToken.invalidRange && !isBrapiBlocked()) {
+        historyRange = brapiHistoryRange;
+        withoutToken = await requestHistory(false, historyRange);
+      }
+      if (withoutToken.points.length) return withoutToken.points;
+    }
+  } catch {
+    handleBrapiFailure(0, normalized, brapiUseToken && Boolean(BRAPI_KEY));
   }
-
   return [];
 }
 
@@ -319,58 +517,52 @@ export function InvestmentsScreen() {
   );
 
   useEffect(() => {
-    let mounted = true;
     async function init() {
       await loadAssets();
     }
-    init();
-    return () => {
-      mounted = false;
-    };
+    void init();
   }, [loadAssets]);
 
   const fetchQuotes = useCallback(async () => {
     if (!assets.length) return;
     setQuoteError(null);
 
-    const b3Symbols = assets
+    const b3Symbols = Array.from(new Set(assets
       .filter((asset) => asset.type === "b3")
-      .map((asset) => normalizeB3Symbol(asset.symbol));
-    const cryptoIds = assets
+      .map((asset) => normalizeB3Symbol(asset.symbol))
+      .filter((symbol) => isLikelyB3Symbol(symbol) && !badB3Symbols.has(symbol))));
+    const cryptoIds = Array.from(new Set(assets
       .filter((asset) => asset.type === "crypto")
-      .map((asset) => normalizeCryptoId(asset.symbol));
+      .map((asset) => normalizeCryptoId(asset.symbol))
+      .filter((id) => isLikelyCryptoId(id))));
 
     const nextQuotes: Record<string, Quote> = {};
+    let hadFailures = false;
 
     if (b3Symbols.length) {
-      if (BRAPI_KEY) {
-        try {
-          const res = await fetch(
-            `https://brapi.dev/api/quote/${b3Symbols.join(",")}?token=${BRAPI_KEY}`,
+      if (isBrapiBlocked()) {
+        hadFailures = true;
+      } else {
+        const [firstSymbol, ...restSymbols] = b3Symbols;
+        const firstQuote = await fetchSingleB3Quote(firstSymbol);
+        if (firstQuote) {
+          nextQuotes[firstSymbol] = firstQuote;
+        }
+        if (!isBrapiBlocked() && restSymbols.length) {
+          const responses = await Promise.all(
+            restSymbols.map(async (normalized) => {
+              const quote = await fetchSingleB3Quote(normalized);
+              return { normalized, quote };
+            }),
           );
-          if (!res.ok) {
-            setQuoteError(t("investments.quoteError"));
-          } else {
-            const json = await res.json();
-            const results = json?.results ?? [];
-            results.forEach((item: any) => {
-              if (!item?.symbol || item?.regularMarketPrice == null) return;
-              const normalized = normalizeB3Symbol(String(item.symbol));
-              nextQuotes[normalized] = {
-                price: Number(item.regularMarketPrice) || 0,
-                changePct:
-                  item.regularMarketChangePercent != null
-                    ? Number(item.regularMarketChangePercent)
-                    : null,
-              };
-            });
-            if (!results.length) {
-              setQuoteError(t("investments.quoteError"));
-            }
-          }
-        } catch (err) {
-          console.error(err);
-          setQuoteError(t("investments.quoteError"));
+          responses.forEach(({ normalized, quote }) => {
+            if (!quote) return;
+            nextQuotes[normalized] = quote;
+          });
+        }
+        const hasAtLeastOneB3Quote = b3Symbols.some((symbol) => nextQuotes[symbol]);
+        if (!hasAtLeastOneB3Quote) {
+          hadFailures = true;
         }
       }
     }
@@ -381,6 +573,12 @@ export function InvestmentsScreen() {
           ",",
         )}&vs_currencies=brl&include_24hr_change=true`;
         const res = await fetch(url);
+        if (!res.ok) {
+          hadFailures = true;
+          setQuotes(nextQuotes);
+          setQuoteError(t("investments.quoteError"));
+          return;
+        }
         const json = await res.json();
         cryptoIds.forEach((id) => {
           const entry = json?.[id];
@@ -388,18 +586,20 @@ export function InvestmentsScreen() {
           nextQuotes[id] = {
             price: Number(entry.brl) || 0,
             changePct:
-              entry?.brl_24h_change != null
+            entry?.brl_24h_change != null
                 ? Number(entry.brl_24h_change)
                 : null,
           };
         });
-      } catch (err) {
-        console.error(err);
-        setQuoteError(t("investments.quoteError"));
+      } catch {
+        hadFailures = true;
       }
     }
 
     setQuotes(nextQuotes);
+    if (hadFailures) {
+      setQuoteError(t("investments.quoteError"));
+    }
   }, [assets, t]);
 
   useEffect(() => {
@@ -415,12 +615,15 @@ export function InvestmentsScreen() {
       }
       const requestId = Date.now();
       historyFetchRef.current = requestId;
-      const entries = await Promise.all(
-        assets.map(async (asset) => {
-          const history = await fetchHistoryForAsset(asset);
-          return [asset.id, history] as const;
-        }),
-      );
+      const entries: Array<readonly [string, PricePoint[]]> = [];
+      for (const asset of assets) {
+        if (asset.type === "b3" && isBrapiBlocked()) {
+          entries.push([asset.id, []]);
+          continue;
+        }
+        const history = await fetchHistoryForAsset(asset);
+        entries.push([asset.id, history]);
+      }
       if (cancelled) return;
       if (historyFetchRef.current !== requestId) return;
       const next: Record<string, PricePoint[]> = {};
@@ -500,47 +703,41 @@ export function InvestmentsScreen() {
     previewFetchRef.current = now;
 
     async function fetchPreview() {
-      if (type === "b3") {
-        if (!BRAPI_KEY) return;
-        const sym = normalizeB3Symbol(trimmedSymbol);
-        const res = await fetch(`https://brapi.dev/api/quote/${sym}?token=${BRAPI_KEY}`);
-        if (!res.ok) return;
-        const json = await res.json();
-        const item = (json?.results ?? []).find(
-          (result: any) =>
-            result?.symbol &&
-            normalizeB3Symbol(String(result.symbol)) === sym,
+      try {
+        if (type === "b3") {
+          const sym = normalizeB3Symbol(trimmedSymbol);
+          const quote = await fetchSingleB3Quote(sym);
+          setPreviewQuote(quote);
+          return;
+        }
+        const id = normalizeCryptoId(trimmedSymbol);
+        if (!isLikelyCryptoId(id)) {
+          setPreviewQuote(null);
+          return;
+        }
+        const res = await fetch(
+          `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=brl&include_24hr_change=true`,
+          { cache: "no-store" },
         );
-        if (item?.regularMarketPrice != null) {
+        if (!res.ok) {
+          setPreviewQuote(null);
+          return;
+        }
+        const json = await res.json();
+        if (json?.[id]?.brl != null) {
           setPreviewQuote({
-            price: Number(item.regularMarketPrice) || 0,
-            changePct:
-              item.regularMarketChangePercent != null
-                ? Number(item.regularMarketChangePercent)
-                : null,
+            price: Number(json[id].brl) || 0,
+            changePct: json[id].brl_24h_change ?? null,
           });
         } else {
           setPreviewQuote(null);
         }
-        return;
-      }
-      const id = normalizeCryptoId(trimmedSymbol);
-      const res = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=brl&include_24hr_change=true`,
-      );
-      if (!res.ok) return;
-      const json = await res.json();
-      if (json?.[id]?.brl != null) {
-        setPreviewQuote({
-          price: Number(json[id].brl) || 0,
-          changePct: json[id].brl_24h_change ?? null,
-        });
-      } else {
+      } catch {
         setPreviewQuote(null);
       }
     }
 
-    fetchPreview();
+    void fetchPreview();
   }, [showModal, isCreate, symbol, type]);
 
   async function handleRemove(id: string) {
@@ -790,14 +987,14 @@ export function InvestmentsScreen() {
           const summary = buildChartSummary(history);
           const exchangeLabel =
             asset.type === "b3"
-              ? `BVMF • ${normalizeB3Symbol(asset.symbol)}`
-              : `CRYPTO • ${normalizeCryptoId(asset.symbol).toUpperCase()}`;
+              ? `BVMF â€¢ ${normalizeB3Symbol(asset.symbol)}`
+              : `CRYPTO â€¢ ${normalizeCryptoId(asset.symbol).toUpperCase()}`;
           return (
             <button
               key={asset.id}
               type="button"
               onClick={() => openDetails(asset)}
-              className="flex min-h-[260px] flex-col justify-between gap-3 rounded-2xl border border-[#1E232E] bg-[#121621] p-4 text-left"
+              className="flex min-h-[260px] min-w-0 flex-col justify-between gap-3 rounded-2xl border border-[#1E232E] bg-[#121621] p-4 text-left"
             >
               <div className="space-y-1">
                 <p className="text-[11px] uppercase tracking-[0.2em] text-[#8B94A6]">
@@ -824,9 +1021,9 @@ export function InvestmentsScreen() {
                   ) : null}
                 </div>
               </div>
-              <div className="h-40">
+              <div className="h-40 min-w-0">
                 {history.length ? (
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={120}>
                     <AreaChart data={history}>
                       <defs>
                         <linearGradient id={`asset-${asset.id}`} x1="0" y1="0" x2="0" y2="1">

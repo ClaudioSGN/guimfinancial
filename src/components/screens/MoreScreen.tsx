@@ -36,6 +36,9 @@ export function MoreScreen() {
   const [profileErrorMsg, setProfileErrorMsg] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [resettingData, setResettingData] = useState(false);
+  const [resetDataError, setResetDataError] = useState<string | null>(null);
+  const [resetDataSuccess, setResetDataSuccess] = useState(false);
 
   useEffect(() => {
     const storedEnabled = window.localStorage.getItem(STORAGE_KEYS.enabled);
@@ -175,6 +178,69 @@ export function MoreScreen() {
     } finally {
       setSigningOut(false);
     }
+  }
+
+  async function handleResetAllData() {
+    if (!user || resettingData) return;
+    setResetDataError(null);
+    setResetDataSuccess(false);
+
+    const confirmed = window.confirm(t("more.resetDataConfirm"));
+    if (!confirmed) return;
+
+    const typed = window.prompt(`${t("more.resetDataTypeToConfirm")} RESET`);
+    if (typed?.trim().toUpperCase() !== "RESET") {
+      setResetDataError(t("more.resetDataTypingMismatch"));
+      return;
+    }
+
+    setResettingData(true);
+
+    const tables = [
+      "investment_purchases",
+      "investments",
+      "transactions",
+      "transfers",
+      "credit_cards",
+      "accounts",
+      "reminder_settings",
+      "goals",
+    ] as const;
+
+    const errors: string[] = [];
+
+    for (const table of tables) {
+      // Some installations may not have optional tables (ex: goals) yet.
+      const { error } = await (supabase.from(table as any) as any)
+        .delete()
+        .eq("user_id", user.id);
+      if (!error) continue;
+      if (error.code === "42P01") continue;
+      errors.push(`${table}: ${error.message}`);
+    }
+
+    setResettingData(false);
+
+    if (errors.length > 0) {
+      console.error("[more] reset data errors:", errors);
+      setResetDataError(t("more.resetDataError"));
+      return;
+    }
+
+    window.localStorage.removeItem(STORAGE_KEYS.enabled);
+    window.localStorage.removeItem(STORAGE_KEYS.time);
+    for (let i = window.localStorage.length - 1; i >= 0; i -= 1) {
+      const key = window.localStorage.key(i);
+      if (key && key.startsWith("reminder-shown-")) {
+        window.localStorage.removeItem(key);
+      }
+    }
+    setEnabled(true);
+    setHour(9);
+    setMinute(0);
+    window.dispatchEvent(new Event("data-refresh"));
+    setResetDataSuccess(true);
+    setTimeout(() => setResetDataSuccess(false), 3000);
   }
 
   return (
@@ -357,6 +423,22 @@ export function MoreScreen() {
 
           {user ? (
             <div className="space-y-2">
+              <button
+                type="button"
+                onClick={handleResetAllData}
+                disabled={resettingData}
+                className="w-full rounded-2xl border border-[#5D3A16] bg-[#24190E] p-4 text-left disabled:opacity-60"
+              >
+                <p className="text-sm font-semibold text-[#F2C38B]">
+                  {resettingData ? t("common.loading") : t("more.resetData")}
+                </p>
+                <p className="text-xs text-[#D6B086]">{t("more.resetDataHint")}</p>
+              </button>
+              {resetDataError ? <p className="text-xs text-red-400">{resetDataError}</p> : null}
+              {resetDataSuccess ? (
+                <p className="text-xs text-[#5DD6C7]">{t("more.resetDataSuccess")}</p>
+              ) : null}
+
               <button
                 type="button"
                 onClick={handleSignOut}

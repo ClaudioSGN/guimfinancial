@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/lib/auth";
+import { getErrorMessage, isTransientNetworkError } from "@/lib/errorUtils";
 
 type ReminderSettings = {
   enabled: boolean;
@@ -43,43 +45,61 @@ function getReminderKey(kind: string, dateKey: string, id?: string) {
   return `reminder-shown-${kind}-${id ?? "global"}-${dateKey}`;
 }
 
-async function fetchSettingsFromSupabase(): Promise<ReminderSettings | null> {
-  const { data, error } = await supabase
-    .from("reminder_settings")
-    .select("remind_enabled, remind_hour, remind_minute")
-    .eq("id", REMINDER_SETTINGS_ID)
-    .maybeSingle();
+function logReminderLoadError(scope: string, error: unknown) {
+  if (isTransientNetworkError(error)) {
+    console.warn(`[reminder] ${scope}:`, getErrorMessage(error));
+    return;
+  }
+  console.error(`[reminder] ${scope}:`, error);
+}
 
-  if (error) {
-    console.error("Erro ao carregar reminder_settings:", error.message);
+async function fetchSettingsFromSupabase(): Promise<ReminderSettings | null> {
+  try {
+    const { data, error } = await supabase
+      .from("reminder_settings")
+      .select("remind_enabled, remind_hour, remind_minute")
+      .eq("id", REMINDER_SETTINGS_ID)
+      .maybeSingle();
+
+    if (error) {
+      logReminderLoadError("erro ao carregar reminder_settings", error);
+      return null;
+    }
+
+    if (!data) return null;
+
+    return {
+      enabled: !!data.remind_enabled,
+      hour: data.remind_hour ?? 20,
+      minute: data.remind_minute ?? 0,
+    };
+  } catch (error) {
+    logReminderLoadError("falha ao carregar reminder_settings", error);
     return null;
   }
-
-  if (!data) return null;
-
-  return {
-    enabled: !!data.remind_enabled,
-    hour: data.remind_hour ?? 20,
-    minute: data.remind_minute ?? 0,
-  };
 }
 
 async function fetchCreditCards(): Promise<CreditCardReminder[]> {
-  const { data, error } = await supabase
-    .from("credit_cards")
-    .select("id,name,closing_day,due_day");
+  try {
+    const { data, error } = await supabase
+      .from("credit_cards")
+      .select("id,name,closing_day,due_day");
 
-  if (error) {
-    console.error("Erro ao carregar credit_cards:", error.message);
+    if (error) {
+      logReminderLoadError("erro ao carregar credit_cards", error);
+      return [];
+    }
+
+    return (data ?? []).map((card) => ({
+      id: card.id,
+      name: card.name ?? "Cartao",
+      closingDay: card.closing_day ?? null,
+      dueDay: card.due_day ?? null,
+    }));
+  } catch (error) {
+    logReminderLoadError("falha ao carregar credit_cards", error);
     return [];
   }
-
-  return (data ?? []).map((card) => ({
-    id: card.id,
-    name: card.name ?? "Cartao",
-    closingDay: card.closing_day ?? null,
-    dueDay: card.due_day ?? null,
-  }));
 }
 
 async function ensureNotificationPermission(enabled: boolean) {
@@ -225,10 +245,14 @@ function maybeShowNotifications(
   });
 }
 export function DailyReminderWatcher() {
+  const { user, loading } = useAuth();
+  const userId = user?.id;
   const [settings, setSettings] = useState<ReminderSettings | null>(null);
   const [cards, setCards] = useState<CreditCardReminder[]>([]);
 
   useEffect(() => {
+    if (loading || !userId) return;
+
     let mounted = true;
 
     async function init() {
@@ -257,7 +281,7 @@ export function DailyReminderWatcher() {
       mounted = false;
       window.removeEventListener("data-refresh", handleRefresh);
     };
-  }, []);
+  }, [loading, userId]);
 
   useEffect(() => {
     if (!settings) return;

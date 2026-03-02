@@ -4,6 +4,28 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
+type AuthErrorLike = {
+  message?: string;
+  code?: string;
+  status?: number;
+};
+
+function formatAuthError(error: unknown): string {
+  if (error && typeof error === "object") {
+    const authError = error as AuthErrorLike;
+    const message = authError.message ?? "Authentication failed.";
+    if (message === "Database error querying schema") {
+      return "Supabase auth error: database schema query failed. Check Supabase Authentication logs/hooks.";
+    }
+    const details: string[] = [];
+    if (authError.code) details.push(`code=${authError.code}`);
+    if (typeof authError.status === "number") details.push(`status=${authError.status}`);
+    return details.length > 0 ? `${message} (${details.join(", ")})` : message;
+  }
+  if (typeof error === "string") return error;
+  return "Authentication failed.";
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<"login" | "signup">("login");
@@ -31,13 +53,18 @@ export default function LoginPage() {
               data: { username: username.trim() },
             },
           });
-    const { error } = await action;
-    setSaving(false);
-    if (error) {
-      setErrorMsg(error.message);
-      return;
+    try {
+      const { error } = await action;
+      if (error) {
+        setErrorMsg(formatAuthError(error));
+        return;
+      }
+      router.replace("/");
+    } catch (error) {
+      setErrorMsg(formatAuthError(error));
+    } finally {
+      setSaving(false);
     }
-    router.replace("/");
   }
 
   return (
