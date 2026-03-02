@@ -25,10 +25,27 @@ jobs:
       - name: Install deps
         run: npm ci
 
+      - name: Validate tag version
+        shell: pwsh
+        run: |
+          $tagVersion = "${{ github.ref_name }}".TrimStart("v")
+          $packageVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ($tagVersion -ne $packageVersion) {
+            throw "Tag version ($tagVersion) does not match package.json version ($packageVersion)"
+          }
+
+      - name: Normalize signing key
+        shell: pwsh
+        run: |
+          $cleanKey = "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" -replace '\s', ''
+          if ([string]::IsNullOrWhiteSpace($cleanKey)) {
+            throw "TAURI_SIGNING_PRIVATE_KEY secret is empty after normalization"
+          }
+          "TAURI_SIGNING_PRIVATE_KEY=$cleanKey" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Build signed MSI
         run: npm run tauri:build
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
