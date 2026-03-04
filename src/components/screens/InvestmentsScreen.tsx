@@ -475,6 +475,7 @@ export function InvestmentsScreen() {
   const [mode, setMode] = useState<"quantity" | "value">("quantity");
   const [quantity, setQuantity] = useState("");
   const [investedValue, setInvestedValue] = useState("");
+  const [manualPrice, setManualPrice] = useState("");
   const [date, setDate] = useState(toDateString(new Date()));
   const [previewQuote, setPreviewQuote] = useState<Quote | null>(null);
   const previewFetchRef = useRef<number>(0);
@@ -641,8 +642,11 @@ export function InvestmentsScreen() {
   const activeAsset = selectedAsset;
   const currentAvg = activeAsset ? new Big(activeAsset.average_price || 0) : new Big(0);
   const currentQty = activeAsset ? new Big(activeAsset.quantity || 0) : new Big(0);
-  const priceBig =
+  const previewPriceBig =
     previewQuote?.price != null ? new Big(previewQuote.price) : null;
+  const manualPriceValue = parseCentsInput(manualPrice);
+  const manualPriceBig = manualPriceValue > 0 ? new Big(manualPriceValue) : null;
+  const priceBig = manualPriceBig ?? previewPriceBig;
   const quantityBig = parseBig(quantity);
   const investedCents = parseCentsInput(investedValue);
   const investedBig = investedCents > 0 ? new Big(investedCents) : null;
@@ -683,6 +687,9 @@ export function InvestmentsScreen() {
   }, [priceBig, quantityBig, investedBig, mode, currentAvg, currentQty, decimals]);
 
   const preview = previewQuote;
+  const displayPrice = manualPriceBig
+    ? Number(manualPriceBig.toString())
+    : preview?.price ?? null;
 
   useEffect(() => {
     if (!showModal || !isCreate) return;
@@ -794,6 +801,7 @@ export function InvestmentsScreen() {
     setMode("quantity");
     setQuantity("");
     setInvestedValue("");
+    setManualPrice("");
     setDate(toDateString(new Date()));
     setPreviewQuote(null);
     setErrorMsg(null);
@@ -1209,6 +1217,19 @@ export function InvestmentsScreen() {
                       className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
                     />
                   )}
+                  <div>
+                    <input
+                      value={manualPrice}
+                      onChange={(event) => setManualPrice(formatCentsInput(event.target.value))}
+                      placeholder={t("investments.manualPrice")}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
+                    />
+                    <p className="mt-1 text-[11px] text-[#8B94A6]">
+                      {t("investments.manualPriceHint")}
+                    </p>
+                  </div>
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-2">
@@ -1227,8 +1248,8 @@ export function InvestmentsScreen() {
                       {t("investments.currentPrice")}
                     </p>
                     <p className="text-sm font-semibold text-[#E5E8EF]">
-                      {preview?.price != null
-                        ? formatCurrency(preview.price, language)
+                      {displayPrice != null
+                        ? formatCurrency(displayPrice, language)
                         : "--"}
                     </p>
                   </div>

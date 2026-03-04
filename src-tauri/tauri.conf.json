@@ -1,7 +1,7 @@
 {
     "$schema":  "../node_modules/@tauri-apps/cli/config.schema.json",
     "productName":  "GuimFinancial",
-    "version":  "0.1.8",
+    "version":  "0.1.9",
     "identifier":  "com.guimaraes.guimfinancial",
     "build":  {
                   "frontendDist":  "../out",
@@ -51,3 +51,4 @@
                                 }
                 }
 }
+
