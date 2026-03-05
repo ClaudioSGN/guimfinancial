@@ -29,6 +29,7 @@ type Transaction = {
   type: "income" | "expense" | "card_expense";
   amount: number | string;
   date: string;
+  card_id: string | null;
   description: string | null;
   category: string | null;
   is_installment: boolean | null;
@@ -288,7 +289,7 @@ export function HomeScreen() {
           .order("name", { ascending: true }),
         supabase
           .from("transactions")
-          .select("id,type,amount,date,description,category,is_installment,installment_total,installments_paid,is_paid")
+          .select("id,type,amount,date,card_id,description,category,is_installment,installment_total,installments_paid,is_paid")
           .eq("user_id", user.id)
           .lte("date", end)
           .order("date", { ascending: false }),
@@ -518,6 +519,37 @@ export function HomeScreen() {
       }) as CardReminder[];
   }, [cards]);
 
+  const cardUsedById = useMemo(() => {
+    const usage: Record<string, number> = {};
+
+    transactions.forEach((tx) => {
+      if (tx.type !== "card_expense" || !tx.card_id) return;
+
+      const amount = Number(tx.amount) || 0;
+      if (amount <= 0) return;
+
+      let outstanding = amount;
+      const isInstallment = !!tx.is_installment && (tx.installment_total ?? 0) > 0;
+
+      if (isInstallment) {
+        const totalInstallments = tx.installment_total ?? 0;
+        if (totalInstallments <= 0) return;
+        const paidInstallments = Math.min(
+          Math.max(tx.installments_paid ?? 0, 0),
+          totalInstallments,
+        );
+        const paidAmount = (amount / totalInstallments) * paidInstallments;
+        outstanding = Math.max(amount - paidAmount, 0);
+      } else if (tx.is_paid) {
+        outstanding = 0;
+      }
+
+      usage[tx.card_id] = (usage[tx.card_id] ?? 0) + outstanding;
+    });
+
+    return usage;
+  }, [transactions]);
+
   const displayName =
     (user?.user_metadata?.username as string | undefined) ||
     profile.name ||
@@ -661,7 +693,7 @@ export function HomeScreen() {
             ) : null}
           </div>
         </div>
-        <Link href="/more#profile" className="group flex items-center gap-3">
+        <Link href="/profile" className="group flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[#1A2230] bg-[#101620] text-xs font-semibold text-[#E2E6ED] transition group-hover:border-[#2B364B]">
             {profile.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -676,7 +708,7 @@ export function HomeScreen() {
           </div>
           <div className="hidden sm:flex flex-col text-right">
             <span className="text-xs font-semibold text-[#E2E6ED]">{displayName}</span>
-            <span className="text-[10px] text-[#8B94A6]">{t("more.title")}</span>
+            <span className="text-[10px] text-[#8B94A6]">{t("profile.title")}</span>
           </div>
         </Link>
       </div>
@@ -782,8 +814,8 @@ export function HomeScreen() {
             </div>
           </div>
 
-          <div className="mt-5 h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="mt-5 h-64 w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={180}>
               <ComposedChart data={flowSeries}>
                 <defs>
                   <linearGradient id="homeNetFill" x1="0" y1="0" x2="0" y2="1">
@@ -960,14 +992,46 @@ export function HomeScreen() {
                   key={card.id}
                   className="flex items-center justify-between gap-3 rounded-xl border border-[#1C2332] bg-[#0F141E] px-4 py-3"
                 >
-                  <div>
+                  <div className="flex-1">
                     <p className="text-sm font-semibold text-[#E4E7EC]">{card.name}</p>
                     <p className="text-xs text-[#8B94A6]">
                       {t("cards.closes")} {card.closing_day} - {t("cards.due")} {card.due_day}
                     </p>
+                    <div className="mt-2 h-1.5 rounded-full bg-[#1A2230]">
+                      <div
+                        className="h-1.5 rounded-full bg-[#5DD6C7]"
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            Math.max(
+                              0,
+                              ((cardUsedById[card.id] ?? 0) /
+                                Math.max(Number(card.limit_amount) || 0, 1)) *
+                                100,
+                            ),
+                          )}%`,
+                        }}
+                      />
+                    </div>
                   </div>
                   <div className="flex flex-col items-end gap-2 text-right">
-                    <span className="text-xs font-semibold text-[#A8B2C3]">
+                    <span className="text-xs font-semibold text-[#5DD6C7]">
+                      {t("home.cardLimitAvailable")}{" "}
+                      {loading
+                        ? "..."
+                        : formatCurrency(
+                            (Number(card.limit_amount) || 0) - (cardUsedById[card.id] ?? 0),
+                            language,
+                          )}
+                    </span>
+                    <span className="text-[11px] text-[#8B94A6]">
+                      {t("home.cardLimitUsed")}{" "}
+                      {loading
+                        ? "..."
+                        : formatCurrency(cardUsedById[card.id] ?? 0, language)}
+                    </span>
+                    <span className="text-[11px] text-[#8B94A6]">
+                      {t("home.cardLimitTotal")}{" "}
                       {loading ? "..." : formatCurrency(Number(card.limit_amount) || 0, language)}
                     </span>
                     <button

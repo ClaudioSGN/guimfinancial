@@ -16,6 +16,7 @@ import {
 import { supabase } from "@/lib/supabaseClient";
 import { useLanguage } from "@/lib/language";
 import { useAuth } from "@/lib/auth";
+import { AppIcon } from "@/components/AppIcon";
 import { formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
 import {
   computeNewAveragePrice,
@@ -35,6 +36,11 @@ type Investment = {
 type Quote = {
   price: number;
   changePct?: number | null;
+  dyPct?: number | null;
+  pVp?: number | null;
+  sharesOutstanding?: number | null;
+  bookValue?: number | null;
+  vacancyPct?: number | null;
 };
 
 type PricePoint = {
@@ -52,8 +58,33 @@ type Purchase = {
   input_value: number | string | null;
 };
 
+type InvestmentMetricKey =
+  | "dyPct"
+  | "pVp"
+  | "sharesOutstanding"
+  | "bookValue"
+  | "vacancyPct";
+
+type InvestmentFilterSettings = {
+  enabled: boolean;
+  showOnlyAbove: boolean;
+  limits: Record<InvestmentMetricKey, string>;
+};
+
 const BRAPI_KEY = process.env.NEXT_PUBLIC_BRAPI_KEY;
 const B3_SUFFIX = ".SA";
+const INVESTMENT_FILTER_STORAGE_PREFIX = "guimfinancial:investments:dy-filter";
+const DEFAULT_INVESTMENT_FILTER: InvestmentFilterSettings = {
+  enabled: true,
+  showOnlyAbove: false,
+  limits: {
+    dyPct: "10",
+    pVp: "1.5",
+    sharesOutstanding: "",
+    bookValue: "",
+    vacancyPct: "10",
+  },
+};
 const BRAPI_DEFAULT_HEADERS = {
   Accept: "application/json,text/plain,*/*",
 };
@@ -70,6 +101,11 @@ let brapiBlockedUntil = 0;
 const badB3Symbols = new Set<string>();
 let brapiUseToken = Boolean(BRAPI_KEY);
 let brapiHistoryRange = "1y";
+const INVESTIDOR10_PROXY_PREFIXES = [
+  "https://api.codetabs.com/v1/proxy/?quest=",
+  "https://api.allorigins.win/raw?url=",
+];
+const investidor10FundamentalsCache = new Map<string, Partial<Quote> | null>();
 
 function toPoints(entries: Array<{ time: number; price: number }> | PricePoint[]) {
   return entries
@@ -140,6 +176,163 @@ function isPermanentB3SymbolError(code?: string, message?: string) {
   );
 }
 
+function parseNumberish(value: unknown) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const withoutPercent = trimmed.replace(/%/g, "").replace(/\s+/g, "");
+  const commaCount = (withoutPercent.match(/,/g) ?? []).length;
+  const dotCount = (withoutPercent.match(/\./g) ?? []).length;
+  let normalized = withoutPercent;
+  if (commaCount > 0 && dotCount > 0) {
+    normalized = withoutPercent.replace(/\./g, "").replace(/,/g, ".");
+  } else if (commaCount > 0) {
+    normalized = withoutPercent.replace(/,/g, ".");
+  } else if (dotCount > 1) {
+    normalized = withoutPercent.replace(/\./g, "");
+  }
+  const cleaned = normalized.replace(/[^0-9+-.]/g, "");
+  if (!cleaned || cleaned === "." || cleaned === "+" || cleaned === "-") return null;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizePercentValue(value: unknown) {
+  const numeric = parseNumberish(value);
+  if (numeric == null) return null;
+  if (numeric > -1 && numeric < 1 && numeric !== 0) return numeric * 100;
+  return numeric;
+}
+
+function parseNumberWithScale(value: unknown) {
+  if (typeof value !== "string") {
+    return parseNumberish(value);
+  }
+  const numeric = parseNumberish(value);
+  if (numeric == null) return null;
+  const normalizedText = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  if (normalizedText.includes("trilh")) return numeric * 1_000_000_000_000;
+  if (normalizedText.includes("bilh")) return numeric * 1_000_000_000;
+  if (normalizedText.includes("milh")) return numeric * 1_000_000;
+  if (/\bmil\b/.test(normalizedText)) return numeric * 1_000;
+  return numeric;
+}
+
+function extractRegexValue(content: string, pattern: RegExp) {
+  const match = content.match(pattern);
+  return match?.[1]?.trim() ?? null;
+}
+
+function extractInvestidor10CardValue(content: string, title: string) {
+  return extractRegexValue(
+    content,
+    new RegExp(
+      `<span[^>]*title=["']${title}["'][^>]*>[\\s\\S]*?<\\/span>[\\s\\S]*?<div[^>]*class=["'][^"']*_card-body[^"']*["'][^>]*>[\\s\\S]*?<span>\\s*([^<]+?)\\s*<\\/span>`,
+      "i",
+    ),
+  );
+}
+
+function extractInvestidor10InfoValue(content: string, labelPattern: string) {
+  return extractRegexValue(
+    content,
+    new RegExp(
+      `<span[^>]*class=["'][^"']*name[^"']*["'][^>]*>[\\s\\S]*?${labelPattern}[\\s\\S]*?<\\/span>[\\s\\S]*?<div[^>]*class=["'][^"']*value[^"']*["'][^>]*>[\\s\\S]*?<span>\\s*([^<]+?)\\s*<\\/span>`,
+      "i",
+    ),
+  );
+}
+
+function parseInvestidor10FiiFundamentals(content: string) {
+  const dyText =
+    extractInvestidor10CardValue(content, "Dividend Yield") ??
+    extractRegexValue(content, /DY\s*\(12M\)\s*:\s*([0-9.,]+%)/i);
+  const pvpText =
+    extractInvestidor10CardValue(content, "P\/VP") ??
+    extractRegexValue(content, /P\/VP\s*:\s*([0-9.,]+)/i);
+  const sharesText =
+    extractInvestidor10InfoValue(content, "COTAS\\s+EMITIDAS") ??
+    extractRegexValue(
+      content,
+      /content--info--item--title[^>]*>\s*N[U\u00da]MERO DE COTAS\s*<\/span>[\s\S]*?content--info--item--value[^>]*>\s*([^<]+?)\s*<\/span>/i,
+    );
+  const bookValueText =
+    extractInvestidor10InfoValue(content, "VALOR\\s+PATRIMONIAL") ??
+    extractRegexValue(
+      content,
+      /content--info--item--title[^>]*>\s*VALOR PATRIMONIAL\s*<\/span>[\s\S]*?content--info--item--value[^>]*>\s*([^<]+?)\s*<\/span>/i,
+    );
+  const vacancyText = extractInvestidor10InfoValue(content, "VAC[\\u00c2A]NCIA");
+
+  const parsed: Partial<Quote> = {};
+  const dyValue = normalizePercentValue(dyText);
+  const pvpValue = parseNumberish(pvpText);
+  const sharesValue = parseNumberWithScale(sharesText);
+  const bookValue = parseNumberWithScale(bookValueText);
+  const vacancyValue = normalizePercentValue(vacancyText);
+
+  if (dyValue != null) parsed.dyPct = dyValue;
+  if (pvpValue != null) parsed.pVp = pvpValue;
+  if (sharesValue != null) parsed.sharesOutstanding = sharesValue;
+  if (bookValue != null) parsed.bookValue = bookValue;
+  if (vacancyValue != null) parsed.vacancyPct = vacancyValue;
+
+  return Object.keys(parsed).length ? parsed : null;
+}
+
+async function fetchTextWithTimeout(url: string, timeoutMs: number) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
+    return await response.text();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchFiiFundamentalsFallback(normalized: string) {
+  if (investidor10FundamentalsCache.has(normalized)) {
+    return investidor10FundamentalsCache.get(normalized) ?? null;
+  }
+
+  const target = `https://investidor10.com.br/fiis/${normalized.toLowerCase()}/`;
+  for (const proxyPrefix of INVESTIDOR10_PROXY_PREFIXES) {
+    const proxyUrl = `${proxyPrefix}${encodeURIComponent(target)}`;
+    const html = await fetchTextWithTimeout(proxyUrl, 12000);
+    if (!html) continue;
+    const parsed = parseInvestidor10FiiFundamentals(html);
+    if (parsed) {
+      investidor10FundamentalsCache.set(normalized, parsed);
+      return parsed;
+    }
+  }
+
+  investidor10FundamentalsCache.set(normalized, null);
+  return null;
+}
+
+function shouldUseFiiFallback(normalized: string, longName: unknown) {
+  const companyName = typeof longName === "string" ? longName.toLowerCase() : "";
+  return (
+    companyName.includes("fundo de investimento imobiliario") ||
+    companyName.includes("fii") ||
+    /11$/.test(normalized)
+  );
+}
+
 function handleBrapiFailure(
   status: number,
   normalizedSymbol?: string,
@@ -173,9 +366,13 @@ function handleBrapiFailure(
   }
 }
 
-async function fetchSingleB3Quote(normalized: string): Promise<Quote | null> {
+async function fetchSingleB3Quote(
+  normalized: string,
+  options: { includeFundamentalsFallback?: boolean } = {},
+): Promise<Quote | null> {
   if (isBrapiBlocked()) return null;
   if (!isLikelyB3Symbol(normalized) || badB3Symbols.has(normalized)) return null;
+  const { includeFundamentalsFallback = true } = options;
 
   const requestQuote = async (useToken: boolean): Promise<Quote | null> => {
     const tokenParam = useToken && BRAPI_KEY ? `?token=${encodeURIComponent(BRAPI_KEY)}` : "";
@@ -204,13 +401,64 @@ async function fetchSingleB3Quote(normalized: string): Promise<Quote | null> {
         normalizeB3Symbol(String(result.symbol)) === normalized,
     );
     if (item?.regularMarketPrice == null) return null;
-    return {
+    const rawDy =
+      item?.dividendYield ??
+      item?.dividend_yield ??
+      item?.regularMarketDividendYield ??
+      item?.trailingAnnualDividendYield;
+    const rawPvp =
+      item?.priceToBook ??
+      item?.priceToBookRatio ??
+      item?.pvp;
+    const rawSharesOutstanding =
+      item?.sharesOutstanding ??
+      item?.totalShares ??
+      item?.shares;
+    const rawBookValue =
+      item?.bookValue ??
+      item?.netWorth ??
+      item?.patrimonialValue;
+    const rawVacancy =
+      item?.vacancy ??
+      item?.vacancia ??
+      item?.vacancyRate;
+    const quote: Quote = {
       price: Number(item.regularMarketPrice) || 0,
       changePct:
         item.regularMarketChangePercent != null
           ? Number(item.regularMarketChangePercent)
           : null,
+      dyPct: normalizePercentValue(rawDy),
+      pVp: parseNumberish(rawPvp),
+      sharesOutstanding: parseNumberish(rawSharesOutstanding),
+      bookValue: parseNumberish(rawBookValue),
+      vacancyPct: normalizePercentValue(rawVacancy),
     };
+
+    const hasMissingFundamentals =
+      quote.dyPct == null ||
+      quote.pVp == null ||
+      quote.sharesOutstanding == null ||
+      quote.bookValue == null ||
+      quote.vacancyPct == null;
+
+    if (
+      includeFundamentalsFallback &&
+      hasMissingFundamentals &&
+      shouldUseFiiFallback(normalized, item?.longName)
+    ) {
+      const fallback = await fetchFiiFundamentalsFallback(normalized);
+      if (fallback) {
+        quote.dyPct = quote.dyPct ?? fallback.dyPct ?? null;
+        quote.pVp = quote.pVp ?? fallback.pVp ?? null;
+        quote.sharesOutstanding =
+          quote.sharesOutstanding ?? fallback.sharesOutstanding ?? null;
+        quote.bookValue = quote.bookValue ?? fallback.bookValue ?? null;
+        quote.vacancyPct = quote.vacancyPct ?? fallback.vacancyPct ?? null;
+      }
+    }
+
+    return quote;
   };
 
   try {
@@ -365,6 +613,12 @@ function normalizeSymbol(type: "b3" | "crypto", value: string) {
   return type === "b3" ? normalizeB3Symbol(value) : normalizeCryptoId(value);
 }
 
+function getAssetQuoteKey(asset: Investment) {
+  return asset.type === "b3"
+    ? normalizeB3Symbol(asset.symbol)
+    : normalizeCryptoId(asset.symbol);
+}
+
 function getQuantityDecimals(type: "b3" | "crypto") {
   return type === "crypto" ? 8 : 0;
 }
@@ -409,6 +663,65 @@ function formatPercent(value: number, language: "pt" | "en") {
     maximumFractionDigits: 2,
   });
   return `${value >= 0 ? "+" : ""}${formatter.format(value)}%`;
+}
+
+function formatPlainPercent(value: number, language: "pt" | "en") {
+  const formatter = new Intl.NumberFormat(language === "pt" ? "pt-BR" : "en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `${formatter.format(value)}%`;
+}
+
+function parseFilterThreshold(value: string) {
+  const cleaned = value.trim().replace(",", ".");
+  if (!cleaned) return null;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getMetricValue(
+  quote: Quote | null | undefined,
+  key: InvestmentMetricKey,
+) {
+  if (!quote) return null;
+  const value = quote[key];
+  return value != null && Number.isFinite(value) ? value : null;
+}
+
+function isMetricAboveLimit(
+  quote: Quote | null | undefined,
+  settings: InvestmentFilterSettings,
+  key: InvestmentMetricKey,
+) {
+  if (!settings.enabled) return false;
+  const metricValue = getMetricValue(quote, key);
+  if (metricValue == null) return false;
+  const threshold = parseFilterThreshold(settings.limits[key]);
+  if (threshold == null) return false;
+  return metricValue > threshold;
+}
+
+function getExceededMetrics(
+  quote: Quote | null | undefined,
+  settings: InvestmentFilterSettings,
+): InvestmentMetricKey[] {
+  if (!settings.enabled) return [];
+  const metricKeys: InvestmentMetricKey[] = [
+    "dyPct",
+    "pVp",
+    "sharesOutstanding",
+    "bookValue",
+    "vacancyPct",
+  ];
+  return metricKeys.filter((key) => isMetricAboveLimit(quote, settings, key));
+}
+
+function formatCompactNumber(value: number, language: "pt" | "en") {
+  return new Intl.NumberFormat(language === "pt" ? "pt-BR" : "en-US", {
+    notation: "compact",
+    maximumFractionDigits: 2,
+  }).format(value);
 }
 
 function buildChartSummary(history: PricePoint[]) {
@@ -486,6 +799,13 @@ export function InvestmentsScreen() {
   const [editSymbol, setEditSymbol] = useState("");
   const [editName, setEditName] = useState("");
   const [editSaving, setEditSaving] = useState(false);
+  const [investmentFilter, setInvestmentFilter] = useState<InvestmentFilterSettings>(
+    DEFAULT_INVESTMENT_FILTER,
+  );
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterStorageKey = user?.id
+    ? `${INVESTMENT_FILTER_STORAGE_PREFIX}:${user.id}`
+    : null;
 
   const loadAssets = useCallback(async () => {
     if (!user) return;
@@ -523,6 +843,79 @@ export function InvestmentsScreen() {
     }
     void init();
   }, [loadAssets]);
+
+  useEffect(() => {
+    if (!filterStorageKey || typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(filterStorageKey);
+      if (!raw) {
+        setInvestmentFilter(DEFAULT_INVESTMENT_FILTER);
+        return;
+      }
+      const parsed = JSON.parse(raw) as any;
+      const hasLimitsObject =
+        parsed && typeof parsed === "object" && parsed.limits && typeof parsed.limits === "object";
+
+      if (hasLimitsObject) {
+        setInvestmentFilter({
+          enabled:
+            typeof parsed.enabled === "boolean"
+              ? parsed.enabled
+              : DEFAULT_INVESTMENT_FILTER.enabled,
+          showOnlyAbove:
+            typeof parsed.showOnlyAbove === "boolean"
+              ? parsed.showOnlyAbove
+              : DEFAULT_INVESTMENT_FILTER.showOnlyAbove,
+          limits: {
+            dyPct:
+              typeof parsed.limits.dyPct === "string"
+                ? parsed.limits.dyPct
+                : DEFAULT_INVESTMENT_FILTER.limits.dyPct,
+            pVp:
+              typeof parsed.limits.pVp === "string"
+                ? parsed.limits.pVp
+                : DEFAULT_INVESTMENT_FILTER.limits.pVp,
+            sharesOutstanding:
+              typeof parsed.limits.sharesOutstanding === "string"
+                ? parsed.limits.sharesOutstanding
+                : DEFAULT_INVESTMENT_FILTER.limits.sharesOutstanding,
+            bookValue:
+              typeof parsed.limits.bookValue === "string"
+                ? parsed.limits.bookValue
+                : DEFAULT_INVESTMENT_FILTER.limits.bookValue,
+            vacancyPct:
+              typeof parsed.limits.vacancyPct === "string"
+                ? parsed.limits.vacancyPct
+                : DEFAULT_INVESTMENT_FILTER.limits.vacancyPct,
+          },
+        });
+      } else {
+        // Migrate old DY-only filter shape
+        setInvestmentFilter({
+          ...DEFAULT_INVESTMENT_FILTER,
+          enabled:
+            typeof parsed?.enabled === "boolean"
+              ? parsed.enabled
+              : DEFAULT_INVESTMENT_FILTER.enabled,
+          showOnlyAbove: parsed?.view === "bad",
+          limits: {
+            ...DEFAULT_INVESTMENT_FILTER.limits,
+            dyPct:
+              typeof parsed?.threshold === "string"
+                ? parsed.threshold
+                : DEFAULT_INVESTMENT_FILTER.limits.dyPct,
+          },
+        });
+      }
+    } catch {
+      setInvestmentFilter(DEFAULT_INVESTMENT_FILTER);
+    }
+  }, [filterStorageKey]);
+
+  useEffect(() => {
+    if (!filterStorageKey || typeof window === "undefined") return;
+    window.localStorage.setItem(filterStorageKey, JSON.stringify(investmentFilter));
+  }, [filterStorageKey, investmentFilter]);
 
   const fetchQuotes = useCallback(async () => {
     if (!assets.length) return;
@@ -713,7 +1106,9 @@ export function InvestmentsScreen() {
       try {
         if (type === "b3") {
           const sym = normalizeB3Symbol(trimmedSymbol);
-          const quote = await fetchSingleB3Quote(sym);
+          const quote = await fetchSingleB3Quote(sym, {
+            includeFundamentalsFallback: false,
+          });
           setPreviewQuote(quote);
           return;
         }
@@ -968,9 +1363,53 @@ export function InvestmentsScreen() {
     await loadAssets();
   }
 
+  const exceededMetricsByAssetId = useMemo(() => {
+    const next: Record<string, InvestmentMetricKey[]> = {};
+    assets.forEach((asset) => {
+      const key = getAssetQuoteKey(asset);
+      next[asset.id] = getExceededMetrics(quotes[key], investmentFilter);
+    });
+    return next;
+  }, [assets, quotes, investmentFilter]);
+
+  const assetsAboveLimit = useMemo(
+    () => assets.filter((asset) => (exceededMetricsByAssetId[asset.id] ?? []).length > 0),
+    [assets, exceededMetricsByAssetId],
+  );
+
+  const filteredAssets = useMemo(() => {
+    if (!investmentFilter.enabled || !investmentFilter.showOnlyAbove) return assets;
+    return assetsAboveLimit;
+  }, [assets, assetsAboveLimit, investmentFilter.enabled, investmentFilter.showOnlyAbove]);
+
+  const metricConfig = useMemo(
+    () => [
+      { key: "dyPct" as const, label: t("investments.metricDy"), isPercent: true },
+      { key: "pVp" as const, label: t("investments.metricPvp"), isPercent: false },
+      { key: "sharesOutstanding" as const, label: t("investments.metricShares"), isPercent: false },
+      { key: "bookValue" as const, label: t("investments.metricBookValue"), isPercent: false },
+      { key: "vacancyPct" as const, label: t("investments.metricVacancy"), isPercent: true },
+    ],
+    [t],
+  );
+
+  const metricLabelByKey = useMemo(() => {
+    const map: Record<InvestmentMetricKey, string> = {
+      dyPct: "",
+      pVp: "",
+      sharesOutstanding: "",
+      bookValue: "",
+      vacancyPct: "",
+    };
+    metricConfig.forEach((metric) => {
+      map[metric.key] = metric.label;
+    });
+    return map;
+  }, [metricConfig]);
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between">
         <div>
           <p className="text-[11px] uppercase tracking-[0.2em] text-[#7F8694]">
             {t("investments.title")}
@@ -980,23 +1419,53 @@ export function InvestmentsScreen() {
           </p>
           <p className="text-sm text-[#9CA3AF]">{t("investments.subtitle")}</p>
         </div>
+        <button
+          type="button"
+          onClick={() => setFilterOpen(true)}
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-[#1E232E] bg-[#121621] text-[#9AA3B2]"
+          aria-label={t("investments.filterButton")}
+          title={t("investments.filterButton")}
+        >
+          <AppIcon name="filter" size={16} />
+        </button>
       </div>
 
+      {investmentFilter.enabled && assetsAboveLimit.length ? (
+        <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3">
+          <p className="text-sm font-semibold text-red-300">
+            {t("investments.warningAboveTitle")}
+          </p>
+          <p className="mt-1 text-xs text-red-200">
+            {t("investments.warningAbovePrefix")}{" "}
+            {assetsAboveLimit.map((asset) => asset.name || asset.symbol.toUpperCase()).slice(0, 4).join(", ")}
+            {assetsAboveLimit.length > 4 ? "..." : ""}.
+          </p>
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-        {assets.map((asset) => {
-          const key =
-            asset.type === "b3"
-              ? normalizeB3Symbol(asset.symbol)
-              : normalizeCryptoId(asset.symbol);
+        {filteredAssets.length === 0 ? (
+          <div className="col-span-2 rounded-2xl border border-dashed border-[#2A3445] bg-[#121621] p-6 text-sm text-[#8B94A6] sm:col-span-3">
+            {investmentFilter.enabled && investmentFilter.showOnlyAbove
+              ? t("investments.filterEmptyAbove")
+              : t("investments.empty")}
+          </div>
+        ) : filteredAssets.map((asset) => {
+          const key = getAssetQuoteKey(asset);
           const quote = quotes[key];
           const history = priceHistory[asset.id] ?? [];
           const current = quote?.price ?? getLatestPrice(history);
           const value = current != null ? current * asset.quantity : null;
           const summary = buildChartSummary(history);
+          const exceededMetrics = exceededMetricsByAssetId[asset.id] ?? [];
+          const hasExceededMetrics = investmentFilter.enabled && exceededMetrics.length > 0;
+          const exceededLabelText = exceededMetrics
+            .map((metricKey) => metricLabelByKey[metricKey])
+            .join(", ");
           const exchangeLabel =
             asset.type === "b3"
-              ? `BVMF â€¢ ${normalizeB3Symbol(asset.symbol)}`
-              : `CRYPTO â€¢ ${normalizeCryptoId(asset.symbol).toUpperCase()}`;
+              ? `BVMF - ${normalizeB3Symbol(asset.symbol)}`
+              : `CRYPTO - ${normalizeCryptoId(asset.symbol).toUpperCase()}`;
           return (
             <button
               key={asset.id}
@@ -1011,6 +1480,14 @@ export function InvestmentsScreen() {
                 <p className="text-sm font-semibold text-[#E4E7EC]">
                   {asset.name || asset.symbol.toUpperCase()}
                 </p>
+                {hasExceededMetrics ? (
+                  <div className="mt-1 space-y-1">
+                    <span className="inline-flex rounded-full border border-red-500/50 px-2 py-0.5 text-[10px] font-semibold text-red-300">
+                      {t("investments.aboveLimitTag")}
+                    </span>
+                    <p className="text-[10px] text-red-200">{exceededLabelText}</p>
+                  </div>
+                ) : null}
                 <div className="flex items-baseline gap-2">
                   <span className="text-xl font-semibold text-[#E5E8EF]">
                     {summary.current != null
@@ -1027,6 +1504,46 @@ export function InvestmentsScreen() {
                       {language === "pt" ? "(1 ano)" : "(1 year)"}
                     </span>
                   ) : null}
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-1.5">
+                  {metricConfig.map((metric) => {
+                    const metricValue = getMetricValue(quote, metric.key);
+                    const isExceeded = exceededMetrics.includes(metric.key);
+                    let display = "--";
+                    if (metricValue != null) {
+                      if (metric.isPercent) {
+                        display = formatPlainPercent(metricValue, language);
+                      } else if (metric.key === "bookValue") {
+                        display = formatCurrency(metricValue, language);
+                      } else if (metric.key === "sharesOutstanding") {
+                        display = formatCompactNumber(metricValue, language);
+                      } else {
+                        display = new Intl.NumberFormat(
+                          language === "pt" ? "pt-BR" : "en-US",
+                          { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+                        ).format(metricValue);
+                      }
+                    }
+                    return (
+                      <div
+                        key={`${asset.id}-${metric.key}`}
+                        className={`rounded-md border px-2 py-1 ${
+                          isExceeded
+                            ? "border-red-500/40 bg-red-500/10"
+                            : "border-[#232D3F] bg-[#0F121A]"
+                        }`}
+                      >
+                        <p className="text-[10px] text-[#8B94A6]">{metric.label}</p>
+                        <p
+                          className={`text-[11px] font-semibold ${
+                            isExceeded ? "text-red-300" : "text-[#D8DEE9]"
+                          }`}
+                        >
+                          {display}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               <div className="h-40 min-w-0">
@@ -1105,6 +1622,95 @@ export function InvestmentsScreen() {
       </div>
 
       {quoteError ? <p className="text-xs text-red-400">{quoteError}</p> : null}
+
+      {filterOpen ? (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-6"
+          onClick={() => setFilterOpen(false)}
+        >
+          <div
+            className="w-full max-w-2xl rounded-3xl border border-[#1E232E] bg-[#0F121A] p-5"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-[#E5E8EF]">
+                  {t("investments.filterModalTitle")}
+                </p>
+                <p className="text-xs text-[#8B94A6]">
+                  {t("investments.filterModalSubtitle")}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFilterOpen(false)}
+                className="text-xs text-[#8B94A6]"
+              >
+                {t("common.cancel")}
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setInvestmentFilter((current) => ({
+                      ...current,
+                      enabled: !current.enabled,
+                    }))
+                  }
+                  className={`rounded-full border px-3 py-1 text-xs ${
+                    investmentFilter.enabled
+                      ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300"
+                      : "border-[#2A3344] bg-[#0F121A] text-[#8B94A6]"
+                  }`}
+                >
+                  {investmentFilter.enabled
+                    ? t("investments.filterEnabled")
+                    : t("investments.filterDisabled")}
+                </button>
+                <label className="flex items-center gap-2 text-xs text-[#8B94A6]">
+                  <input
+                    type="checkbox"
+                    checked={investmentFilter.showOnlyAbove}
+                    onChange={(event) =>
+                      setInvestmentFilter((current) => ({
+                        ...current,
+                        showOnlyAbove: event.target.checked,
+                      }))
+                    }
+                    className="h-4 w-4 rounded border-[#2A3344] bg-[#0F121A]"
+                  />
+                  {t("investments.filterShowOnlyAbove")}
+                </label>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                {metricConfig.map((metric) => (
+                  <div key={`filter-${metric.key}`} className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
+                    <p className="text-[11px] text-[#8B94A6]">{metric.label}</p>
+                    <input
+                      value={investmentFilter.limits[metric.key]}
+                      onChange={(event) =>
+                        setInvestmentFilter((current) => ({
+                          ...current,
+                          limits: {
+                            ...current.limits,
+                            [metric.key]: event.target.value,
+                          },
+                        }))
+                      }
+                      placeholder={t("investments.metricLimitPlaceholder")}
+                      className="mt-2 w-full rounded-xl border border-[#1E232E] bg-[#0F121A] px-3 py-2 text-sm text-[#E4E7EC]"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showModal ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-6">

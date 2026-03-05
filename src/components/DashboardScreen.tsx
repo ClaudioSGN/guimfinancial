@@ -334,6 +334,7 @@ export function DashboardScreen({
                 <ResponsiveContainer
                   width="100%"
                   height={categoryChartHeight}
+                  minWidth={1}
                   minHeight={220}
                 >
                   <BarChart

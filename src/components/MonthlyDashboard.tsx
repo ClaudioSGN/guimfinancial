@@ -189,8 +189,8 @@ export function MonthlyDashboard({ months }: { months: MonthSummary[] }) {
 
         <div className="flex flex-col gap-4 md:flex-row md:items-center">
           {/* Donut deluxe minimalista */}
-          <div className="mx-auto h-40 w-full max-w-xs md:h-52">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="mx-auto h-40 w-full max-w-xs min-w-0 md:h-52">
+            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={120}>
               <PieChart>
                 <defs>
                   <filter

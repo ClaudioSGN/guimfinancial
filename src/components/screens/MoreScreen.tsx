@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/lib/language";
 import { useAuth } from "@/lib/auth";
-import { loadProfileSettings, saveProfileSettings } from "@/lib/profile";
 import { supabase } from "@/lib/supabaseClient";
 import { CheckForUpdatesCard } from "@/components/CheckForUpdatesCard";
 
@@ -29,11 +28,6 @@ export function MoreScreen() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [profileName, setProfileName] = useState("");
-  const [profileAvatar, setProfileAvatar] = useState<string | null>(null);
-  const [profileSaving, setProfileSaving] = useState(false);
-  const [profileSaved, setProfileSaved] = useState(false);
-  const [profileErrorMsg, setProfileErrorMsg] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [resettingData, setResettingData] = useState(false);
@@ -51,17 +45,7 @@ export function MoreScreen() {
         setMinute(m);
       }
     }
-
-    const profile = loadProfileSettings();
-    if (profile.avatarUrl) setProfileAvatar(profile.avatarUrl);
   }, []);
-
-  useEffect(() => {
-    const username = user?.user_metadata?.username;
-    if (typeof username === "string") {
-      setProfileName(username);
-    }
-  }, [user]);
 
   const timeLabel = useMemo(() => `${pad2(hour)}:${pad2(minute)}`, [hour, minute]);
 
@@ -108,62 +92,6 @@ export function MoreScreen() {
     setTimeout(() => setSaved(false), 2500);
   }
 
-  function handleProfileFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setProfileErrorMsg(null);
-    if (!file.type.startsWith("image/")) {
-      setProfileErrorMsg(
-        language === "pt" ? "Envie uma imagem valida." : "Upload a valid image.",
-      );
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        setProfileAvatar(reader.result);
-      }
-    };
-    reader.readAsDataURL(file);
-  }
-
-  function handleProfileSave() {
-    setProfileErrorMsg(null);
-    setProfileSaving(true);
-    if (!user) {
-      setProfileErrorMsg(
-        language === "pt" ? "Entre para salvar seu perfil." : "Sign in to save your profile.",
-      );
-      setProfileSaving(false);
-      return;
-    }
-    const nextUsername = profileName.trim();
-    if (!nextUsername) {
-      setProfileErrorMsg(
-        language === "pt" ? "Informe um nome de usuario." : "Enter a username.",
-      );
-      setProfileSaving(false);
-      return;
-    }
-    supabase.auth
-      .updateUser({ data: { username: nextUsername } })
-      .then(({ error }) => {
-        if (error) {
-          setProfileErrorMsg(error.message);
-          setProfileSaving(false);
-          return;
-        }
-        saveProfileSettings({
-          avatarUrl: profileAvatar || undefined,
-        });
-        window.dispatchEvent(new Event("profile-updated"));
-        setProfileSaving(false);
-        setProfileSaved(true);
-        setTimeout(() => setProfileSaved(false), 2500);
-      });
-  }
-
   async function handleSignOut() {
     setSignOutError(null);
     setSigningOut(true);
@@ -197,6 +125,11 @@ export function MoreScreen() {
     setResettingData(true);
 
     const tables = [
+      "gamification_user_missions",
+      "gamification_user_medals",
+      "gamification_wallet_monthly",
+      "gamification_friendships",
+      "gamification_profiles",
       "investment_purchases",
       "investments",
       "transactions",
@@ -251,74 +184,6 @@ export function MoreScreen() {
         </p>
         <p className="text-2xl font-semibold text-[#E5E8EF]">{t("more.title")}</p>
         <p className="text-sm text-[#9CA3AF]">{t("more.subtitle")}</p>
-      </div>
-
-      <div id="profile" className="space-y-3">
-        <p className="text-sm font-semibold text-[#C7CEDA]">{t("more.profileTitle")}</p>
-        <div className="rounded-2xl border border-[#1E232E] bg-[#121621] p-5">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-[#E4E7EC]">{t("more.profilePhoto")}</p>
-              <p className="text-xs text-[#8A93A3]">{t("more.profilePhotoHint")}</p>
-            </div>
-            <label className="flex cursor-pointer items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-[#263043] bg-[#0F141E] text-xs font-semibold text-[#E2E6ED]">
-                {profileAvatar ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={profileAvatar}
-                    alt="Profile avatar preview"
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  "GF"
-                )}
-              </div>
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleProfileFileChange}
-              />
-              <span className="rounded-full border border-[#2A3140] bg-[#151A27] px-4 py-2 text-xs text-[#E6EDF3]">
-                {t("more.profileChoose")}
-              </span>
-            </label>
-          </div>
-
-          <div className="mt-4 flex flex-col gap-2">
-            <label className="text-xs uppercase tracking-[0.18em] text-[#8A93A3]">
-              {t("more.profileName")}
-            </label>
-            <input
-              type="text"
-              value={profileName}
-              onChange={(event) => setProfileName(event.target.value)}
-              placeholder={t("more.profileNamePlaceholder")}
-              className="rounded-xl border border-[#2A3140] bg-[#151A27] px-4 py-2 text-sm text-[#E6EDF3]"
-            />
-            {user?.email ? (
-              <p className="text-xs text-[#8A93A3]">Email: {user.email}</p>
-            ) : null}
-          </div>
-
-          <div className="mt-4 space-y-2 text-xs">
-            {profileErrorMsg ? (
-              <p className="text-red-400">{profileErrorMsg}</p>
-            ) : null}
-            {profileSaved ? (
-              <p className="text-[#5DD6C7]">{t("more.profileSaved")}</p>
-            ) : null}
-            <button
-              type="button"
-              onClick={handleProfileSave}
-              disabled={profileSaving}
-              className="w-full rounded-xl bg-[#E6EDF3] py-2 text-sm font-semibold text-[#0C1018] disabled:opacity-60"
-            >
-              {profileSaving ? t("common.saving") : t("common.save")}
-            </button>
-          </div>
-        </div>
       </div>
 
       <div className="space-y-3">
