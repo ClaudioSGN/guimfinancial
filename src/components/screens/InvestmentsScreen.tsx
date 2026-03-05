@@ -892,6 +892,29 @@ function parseFilterThreshold(value: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function getErrorText(error: unknown) {
+  if (!error || typeof error !== "object") return "";
+  const asAny = error as { code?: unknown; message?: unknown; details?: unknown };
+  const code = typeof asAny.code === "string" ? asAny.code : "";
+  const message = typeof asAny.message === "string" ? asAny.message : "";
+  const details = typeof asAny.details === "string" ? asAny.details : "";
+  return `${code} ${message} ${details}`.trim().toLowerCase();
+}
+
+function isFixedIncomeSchemaError(error: unknown) {
+  const text = getErrorText(error);
+  if (!text) return false;
+  return (
+    text.includes("42703") ||
+    text.includes("23514") ||
+    text.includes("investments_type_check") ||
+    text.includes("fixed_income") ||
+    text.includes("cdi_rate_pct") ||
+    text.includes("cdi_multiplier_pct") ||
+    text.includes("fixed_started_at")
+  );
+}
+
 function getMetricValue(
   quote: Quote | null | undefined,
   key: InvestmentMetricKey,
@@ -1903,14 +1926,17 @@ export function InvestmentsScreen() {
         })
         .eq("id", existing.id);
       if (error) {
-        console.error(error);
+        const message = getErrorText(error);
+        if (message) {
+          console.warn("[investments] failed to update asset:", message);
+        } else {
+          console.warn("[investments] failed to update asset.");
+        }
         setSaving(false);
-        const missingSchema =
-          error.code === "42703" ||
-          String(error.message ?? "").toLowerCase().includes("cdi_") ||
-          String(error.message ?? "").toLowerCase().includes("fixed_started_at");
         setErrorMsg(
-          missingSchema ? t("investments.schemaUpdateRequired") : t("investments.saveError"),
+          isFixedIncomeSchemaError(error)
+            ? t("investments.schemaUpdateRequired")
+            : t("investments.saveError"),
         );
         return;
       }
@@ -1936,14 +1962,19 @@ export function InvestmentsScreen() {
         .select("id")
         .maybeSingle();
       if (error || !data) {
-        console.error(error);
+        if (error) {
+          const message = getErrorText(error);
+          if (message) {
+            console.warn("[investments] failed to create asset:", message);
+          } else {
+            console.warn("[investments] failed to create asset.");
+          }
+        }
         setSaving(false);
-        const missingSchema =
-          error?.code === "42703" ||
-          String(error?.message ?? "").toLowerCase().includes("cdi_") ||
-          String(error?.message ?? "").toLowerCase().includes("fixed_started_at");
         setErrorMsg(
-          missingSchema ? t("investments.schemaUpdateRequired") : t("investments.saveError"),
+          isFixedIncomeSchemaError(error)
+            ? t("investments.schemaUpdateRequired")
+            : t("investments.saveError"),
         );
         return;
       }
@@ -1967,7 +1998,12 @@ export function InvestmentsScreen() {
       ]);
 
     if (purchaseError) {
-      console.error(purchaseError);
+      const message = getErrorText(purchaseError);
+      if (message) {
+        console.warn("[investments] failed to save purchase:", message);
+      } else {
+        console.warn("[investments] failed to save purchase.");
+      }
       setSaving(false);
       setErrorMsg(t("investments.saveError"));
       return;
