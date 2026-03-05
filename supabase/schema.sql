@@ -230,11 +230,22 @@ create table if not exists gamification_wallet_monthly (
   unique (user_id, month_ref)
 );
 
+create table if not exists gamification_avatar_inventory (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  item_code text not null,
+  equipped boolean not null default false,
+  purchased_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  unique (user_id, item_code)
+);
+
 create index if not exists gamification_friendships_user_idx on gamification_friendships (user_id);
 create index if not exists gamification_friendships_friend_idx on gamification_friendships (friend_user_id);
 create index if not exists gamification_user_medals_user_idx on gamification_user_medals (user_id);
 create index if not exists gamification_user_missions_user_week_idx on gamification_user_missions (user_id, week_start);
 create index if not exists gamification_wallet_monthly_user_month_idx on gamification_wallet_monthly (user_id, month_ref);
+create index if not exists gamification_avatar_inventory_user_idx on gamification_avatar_inventory (user_id);
 
 update gamification_profiles
 set friend_code = upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8))
@@ -374,6 +385,7 @@ alter table gamification_user_medals enable row level security;
 alter table gamification_weekly_missions enable row level security;
 alter table gamification_user_missions enable row level security;
 alter table gamification_wallet_monthly enable row level security;
+alter table gamification_avatar_inventory enable row level security;
 
 drop policy if exists "gamification_profiles_select" on gamification_profiles;
 create policy "gamification_profiles_select" on gamification_profiles for select using (auth.uid() is not null);
@@ -473,6 +485,23 @@ create policy "gamification_wallet_monthly_update" on gamification_wallet_monthl
 );
 drop policy if exists "gamification_wallet_monthly_delete" on gamification_wallet_monthly;
 create policy "gamification_wallet_monthly_delete" on gamification_wallet_monthly for delete using (
+  auth.uid() = user_id
+);
+
+drop policy if exists "gamification_avatar_inventory_select" on gamification_avatar_inventory;
+create policy "gamification_avatar_inventory_select" on gamification_avatar_inventory for select using (
+  auth.uid() = user_id
+);
+drop policy if exists "gamification_avatar_inventory_insert" on gamification_avatar_inventory;
+create policy "gamification_avatar_inventory_insert" on gamification_avatar_inventory for insert with check (
+  auth.uid() = user_id
+);
+drop policy if exists "gamification_avatar_inventory_update" on gamification_avatar_inventory;
+create policy "gamification_avatar_inventory_update" on gamification_avatar_inventory for update using (
+  auth.uid() = user_id
+);
+drop policy if exists "gamification_avatar_inventory_delete" on gamification_avatar_inventory;
+create policy "gamification_avatar_inventory_delete" on gamification_avatar_inventory for delete using (
   auth.uid() = user_id
 );
 

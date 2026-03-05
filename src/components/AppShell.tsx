@@ -7,7 +7,13 @@ import Link from "next/link";
 import { useLanguage } from "@/lib/language";
 import { AppIcon } from "@/components/AppIcon";
 
-type TabKey = "home" | "transactions" | "investments" | "gamification" | "more" | "profile";
+type TabKey =
+  | "home"
+  | "transactions"
+  | "investments"
+  | "gamification"
+  | "more"
+  | "profile";
 
 type Props = {
   activeTab: TabKey;
@@ -135,7 +141,9 @@ export function AppShell({ activeTab, children }: Props) {
       <div className="fixed bottom-0 left-0 right-0 z-30 flex justify-center lg:hidden">
         <div className="relative w-full max-w-[980px] px-5">
           <div className="h-[84px] w-full rounded-t-3xl border-t border-[#1B2230] bg-[#0D1016] px-2 pb-[calc(0.55rem+env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-10px_30px_rgba(0,0,0,0.4)]">
-            <div className="grid h-full grid-cols-[1fr_1fr_auto_1fr_1fr_1fr] items-center gap-0.5 text-[10px] max-[380px]:text-[9px]">
+            <div
+              className="grid h-full grid-cols-[1fr_1fr_auto_1fr_1fr_1fr] items-center gap-0.5 text-[10px] max-[380px]:text-[9px]"
+            >
               <Link
                 href="/"
                 className={`flex min-w-0 flex-col items-center gap-0.5 px-0.5 ${
