@@ -134,67 +134,67 @@ export function AppShell({ activeTab, children }: Props) {
 
       <div className="fixed bottom-0 left-0 right-0 z-30 flex justify-center lg:hidden">
         <div className="relative w-full max-w-[980px] px-5">
-          <div className="h-[74px] w-full rounded-t-3xl border-t border-[#1B2230] bg-[#0D1016] px-4 pb-3 pt-2 shadow-[0_-10px_30px_rgba(0,0,0,0.4)]">
-            <div className="grid h-full grid-cols-6 items-center text-xs">
+          <div className="h-[84px] w-full rounded-t-3xl border-t border-[#1B2230] bg-[#0D1016] px-2 pb-[calc(0.55rem+env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-10px_30px_rgba(0,0,0,0.4)]">
+            <div className="grid h-full grid-cols-[1fr_1fr_auto_1fr_1fr_1fr] items-center gap-0.5 text-[10px] max-[380px]:text-[9px]">
               <Link
                 href="/"
-                className={`flex flex-col items-center gap-1 ${
+                className={`flex min-w-0 flex-col items-center gap-0.5 px-0.5 ${
                   activeTab === "home" ? "text-[#5DD6C7]" : "text-[#8B94A6]"
                 }`}
               >
-                <AppIcon name="house" size={22} />
-                <span>{t("tabs.home")}</span>
+                <AppIcon name="house" size={20} />
+                <span className="w-full text-center leading-tight">{t("tabs.home")}</span>
               </Link>
               <Link
                 href="/transactions"
-                className={`flex flex-col items-center gap-1 ${
+                className={`flex min-w-0 flex-col items-center gap-0.5 px-0.5 ${
                   activeTab === "transactions" ? "text-[#5DD6C7]" : "text-[#8B94A6]"
                 }`}
               >
-                <AppIcon name="list" size={22} />
-                <span>{t("tabs.transactions")}</span>
+                <AppIcon name="list" size={20} />
+                <span className="w-full text-center leading-tight">{t("tabs.transactions")}</span>
               </Link>
               <button
                 type="button"
                 onClick={() => setMenuOpen((value) => !value)}
-                className="mx-auto flex h-[58px] w-[58px] items-center justify-center rounded-full border border-[#20293A] bg-[#101520]"
+                className="mx-auto flex h-[54px] w-[54px] items-center justify-center rounded-full border border-[#20293A] bg-[#101520]"
               >
-                <div className="flex h-[44px] w-[44px] items-center justify-center rounded-full bg-[#E5EDF4] text-[#0B0E13]">
+                <div className="flex h-[40px] w-[40px] items-center justify-center rounded-full bg-[#E5EDF4] text-[#0B0E13]">
                   <div
                     className={`transition-transform duration-200 ${
                       menuOpen ? "rotate-45" : "rotate-0"
                     }`}
                   >
-                    <AppIcon name="plus" size={22} color={menuOpen ? "#F8FAFC" : "#0B0E13"} />
+                    <AppIcon name="plus" size={20} color={menuOpen ? "#F8FAFC" : "#0B0E13"} />
                   </div>
                 </div>
               </button>
               <Link
                 href="/investments"
-                className={`flex flex-col items-center gap-1 ${
+                className={`flex min-w-0 flex-col items-center gap-0.5 px-0.5 ${
                   activeTab === "investments" ? "text-[#5DD6C7]" : "text-[#8B94A6]"
                 }`}
               >
-                <AppIcon name="calendar" size={22} />
-                <span>{t("tabs.investments")}</span>
+                <AppIcon name="calendar" size={20} />
+                <span className="w-full text-center leading-tight">{t("tabs.investments")}</span>
               </Link>
               <Link
                 href="/gamification"
-                className={`flex flex-col items-center gap-1 ${
+                className={`flex min-w-0 flex-col items-center gap-0.5 px-0.5 ${
                   activeTab === "gamification" ? "text-[#5DD6C7]" : "text-[#8B94A6]"
                 }`}
               >
-                <AppIcon name="trophy" size={22} />
-                <span>{t("tabs.gamification")}</span>
+                <AppIcon name="trophy" size={20} />
+                <span className="w-full text-center leading-tight">{t("tabs.gamification")}</span>
               </Link>
               <Link
                 href="/more"
-                className={`flex flex-col items-center gap-1 ${
+                className={`flex min-w-0 flex-col items-center gap-0.5 px-0.5 ${
                   activeTab === "more" ? "text-[#5DD6C7]" : "text-[#8B94A6]"
                 }`}
               >
-                <AppIcon name="more" size={22} />
-                <span>{t("tabs.more")}</span>
+                <AppIcon name="more" size={20} />
+                <span className="w-full text-center leading-tight">{t("tabs.more")}</span>
               </Link>
             </div>
           </div>
