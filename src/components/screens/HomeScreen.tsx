@@ -133,6 +133,18 @@ function formatShortDate(date: Date, language: "pt" | "en") {
   }).format(date);
 }
 
+function parseLocalDate(value: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [y, m, d] = value.split("-").map(Number);
+    if (y && m && d) {
+      return new Date(y, m - 1, d);
+    }
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
 function getMonthOverMonthChange(current: number, previous: number) {
   if (previous === 0) {
     return current === 0 ? 0 : null;
@@ -208,14 +220,26 @@ const CATEGORY_CHART_COLORS = [
   "#14B8A6",
   "#A78BFA",
   "#EAB308",
+  "#F97316",
+  "#06B6D4",
+  "#10B981",
+  "#EF4444",
+  "#84CC16",
+  "#EC4899",
+  "#6366F1",
+  "#2DD4BF",
+  "#F43F5E",
+  "#8B5CF6",
+  "#0EA5E9",
+  "#FB7185",
 ];
 
 function getCategoryColor(index: number) {
   if (index < CATEGORY_CHART_COLORS.length) {
     return CATEGORY_CHART_COLORS[index];
   }
-  // Spread extra categories across the hue wheel to avoid repeating colors too soon.
-  const hue = (index * 37) % 360;
+  // Golden-angle spread to keep fallback colors visually distant.
+  const hue = (index * 137.508 + 23) % 360;
   return `hsl(${hue} 72% 56%)`;
 }
 
@@ -233,14 +257,8 @@ function buildFlowSeries(transactions: DisplayTransaction[], monthDate: Date) {
   }));
 
   transactions.forEach((tx) => {
-    const txDate = /^\d{4}-\d{2}-\d{2}$/.test(tx.displayDate)
-      ? new Date(
-          Number(tx.displayDate.slice(0, 4)),
-          Number(tx.displayDate.slice(5, 7)) - 1,
-          Number(tx.displayDate.slice(8, 10)),
-        )
-      : new Date(tx.displayDate);
-    if (Number.isNaN(txDate.getTime())) return;
+    const txDate = parseLocalDate(tx.displayDate);
+    if (!txDate || Number.isNaN(txDate.getTime())) return;
     if (txDate.getFullYear() !== year || txDate.getMonth() !== month) return;
     const dayIndex = txDate.getDate() - 1;
     const amount = tx.displayAmount;
@@ -266,12 +284,12 @@ function buildMonthTransactions(
   const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0, 23, 59, 59, 999);
 
   return transactions.flatMap((tx) => {
-    const txDate = new Date(tx.date);
-    if (Number.isNaN(txDate.getTime())) return [];
+    const txDate = parseLocalDate(tx.date);
+    if (!txDate || Number.isNaN(txDate.getTime())) return [];
 
     const amount = Number(tx.amount) || 0;
-    const isInstallment = !!tx.is_installment && (tx.installment_total ?? 0) > 0;
-    const totalInstallments = tx.installment_total ?? 0;
+    const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
+    const isInstallment = totalInstallments > 0;
 
     if (isInstallment && totalInstallments > 0) {
       const perInstallment = amount / totalInstallments;
@@ -295,7 +313,7 @@ function buildMonthTransactions(
       {
         ...tx,
         displayId: tx.id,
-        displayDate: tx.date,
+        displayDate: toDateString(txDate),
         displayAmount: amount,
       },
     ];
@@ -430,15 +448,15 @@ export function HomeScreen() {
         const amount = Number(tx.amount) || 0;
         if (amount <= 0) return sum;
 
-        const isInstallment = !!tx.is_installment && (tx.installment_total ?? 0) > 0;
+        const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
+        const isInstallment = totalInstallments > 0;
         if (isInstallment) {
-          const totalInstallments = Math.max(1, tx.installment_total ?? 1);
           const monthOffset = getInstallmentMonthOffset(tx.date, selectedMonth);
           if (monthOffset == null || monthOffset < 0 || monthOffset >= totalInstallments) {
             return sum;
           }
           const paidInstallments = Math.min(
-            Math.max(tx.installments_paid ?? 0, 0),
+            Math.max(Number(tx.installments_paid) || 0, 0),
             totalInstallments,
           );
           // Deduct only the installment for the selected month when it is actually marked as paid.
@@ -446,8 +464,8 @@ export function HomeScreen() {
         }
 
         if (!tx.is_paid) return sum;
-        const txDate = new Date(tx.date);
-        if (Number.isNaN(txDate.getTime())) return sum;
+        const txDate = parseLocalDate(tx.date);
+        if (!txDate || Number.isNaN(txDate.getTime())) return sum;
         const sameMonth =
           txDate.getFullYear() === selectedMonth.getFullYear() &&
           txDate.getMonth() === selectedMonth.getMonth();
@@ -618,13 +636,21 @@ export function HomeScreen() {
     });
     const sortedCategories = Object.entries(totals).sort((a, b) => b[1] - a[1]);
     const total = sortedCategories.reduce((sum, [, value]) => sum + value, 0);
+    const divisor = total > 0 ? total : 1;
     return sortedCategories.map(([name, value], index) => ({
       name,
       value,
-      percent: total > 0 ? (value / total) * 100 : 0,
+      percent: (value / divisor) * 100,
       color: getCategoryColor(index),
     }));
   }, [monthTransactions, language]);
+
+  const categoryPaddingAngle = useMemo(() => {
+    if (categoryChartData.length <= 4) return 1.8;
+    if (categoryChartData.length <= 8) return 1.2;
+    if (categoryChartData.length <= 14) return 0.8;
+    return 0.4;
+  }, [categoryChartData.length]);
 
   const totalCategoryAmount = useMemo(
     () => categoryChartData.reduce((sum, category) => sum + category.value, 0),
@@ -1252,9 +1278,11 @@ export function HomeScreen() {
                         <p className="truncate text-sm font-semibold text-[#E7ECF2]">
                           {index + 1}. {category.name}
                         </p>
-                        <p className="text-[11px] text-[#9AA3B2]">
-                          {formatPercent(category.percent, language)}
-                        </p>
+                        <div className="flex items-center gap-2 text-[11px] text-[#9AA3B2]">
+                          <span>{formatPercent(category.percent, language)}</span>
+                          <span className="text-[#7F8A9B]">·</span>
+                          <span>{formatCurrency(category.value, language)}</span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1273,7 +1301,7 @@ export function HomeScreen() {
                         endAngle={-270}
                         innerRadius="58%"
                         outerRadius="84%"
-                        paddingAngle={1.8}
+                        paddingAngle={categoryPaddingAngle}
                         stroke="none"
                         onMouseEnter={(_, index) => setActiveCategoryIndex(index)}
                         onMouseLeave={() => setActiveCategoryIndex(null)}
@@ -1570,9 +1598,9 @@ export function HomeScreen() {
             <div className="divide-y divide-[#1C2332]">
               {monthTransactions.map((tx) => {
                 const isIncome = tx.type === "income";
-                const isInstallment = !!tx.is_installment && (tx.installment_total ?? 0) > 0;
-                const totalInstallments = tx.installment_total ?? 0;
-                const paidInstallments = tx.installments_paid ?? 0;
+                const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
+                const isInstallment = totalInstallments > 0;
+                const paidInstallments = Math.max(0, Number(tx.installments_paid) || 0);
                 return (
                   <div key={tx.displayId} className="flex items-center justify-between py-3">
                     <div>
