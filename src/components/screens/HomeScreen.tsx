@@ -21,6 +21,9 @@ import {
   Bar,
   Line,
   Area,
+  PieChart,
+  Pie,
+  Cell,
   type TooltipContentProps,
 } from "recharts";
 
@@ -29,6 +32,7 @@ type Transaction = {
   type: "income" | "expense" | "card_expense";
   amount: number | string;
   date: string;
+  account_id: string | null;
   card_id: string | null;
   description: string | null;
   category: string | null;
@@ -129,9 +133,60 @@ function formatShortDate(date: Date, language: "pt" | "en") {
   }).format(date);
 }
 
+function getMonthOverMonthChange(current: number, previous: number) {
+  if (previous === 0) {
+    return current === 0 ? 0 : null;
+  }
+  return ((current - previous) / previous) * 100;
+}
+
+function formatChangePercent(value: number, language: "pt" | "en") {
+  const digits = Math.abs(value) < 1 ? 2 : 1;
+  const rounded = Number(value.toFixed(digits));
+  const safeRounded = Object.is(rounded, -0) ? 0 : rounded;
+  const formatter = new Intl.NumberFormat(language === "pt" ? "pt-BR" : "en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+  const absText = formatter.format(Math.abs(safeRounded));
+  if (safeRounded === 0) return `${absText}%`;
+  return `${safeRounded > 0 ? "+" : "-"}${absText}%`;
+}
+
+function getChangeDirection(value: number | null) {
+  if (value == null) return "neutral" as const;
+  if (Math.abs(value) < 0.005) return "neutral" as const;
+  return value > 0 ? ("up" as const) : ("down" as const);
+}
+
+function formatPercent(value: number, language: "pt" | "en") {
+  const formatter = new Intl.NumberFormat(language === "pt" ? "pt-BR" : "en-US", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+  return `${formatter.format(value)}%`;
+}
+
+function formatSignedCurrency(value: number, language: "pt" | "en") {
+  return `${value >= 0 ? "+" : "-"}${formatCurrency(Math.abs(value), language)}`;
+}
+
 function getSafeDayInMonth(year: number, month: number, day: number) {
   const maxDay = new Date(year, month + 1, 0).getDate();
   return Math.min(Math.max(day, 1), maxDay);
+}
+
+function getInstallmentMonthOffset(startDate: string, targetMonth: Date) {
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(startDate)
+    ? new Date(
+        Number(startDate.slice(0, 4)),
+        Number(startDate.slice(5, 7)) - 1,
+        Number(startDate.slice(8, 10)),
+      )
+    : new Date(startDate);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return (targetMonth.getFullYear() - parsed.getFullYear()) * 12 +
+    (targetMonth.getMonth() - parsed.getMonth());
 }
 
 function getDayWord(days: number, language: "pt" | "en") {
@@ -144,6 +199,24 @@ function getInitials(name?: string) {
   const parts = name.trim().split(" ").filter(Boolean);
   const initials = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "");
   return initials.join("") || "GF";
+}
+
+const CATEGORY_CHART_COLORS = [
+  "#F59E0B",
+  "#3B82F6",
+  "#22C55E",
+  "#14B8A6",
+  "#A78BFA",
+  "#EAB308",
+];
+
+function getCategoryColor(index: number) {
+  if (index < CATEGORY_CHART_COLORS.length) {
+    return CATEGORY_CHART_COLORS[index];
+  }
+  // Spread extra categories across the hue wheel to avoid repeating colors too soon.
+  const hue = (index * 37) % 360;
+  return `hsl(${hue} 72% 56%)`;
 }
 
 function buildFlowSeries(transactions: DisplayTransaction[], monthDate: Date) {
@@ -248,6 +321,7 @@ export function HomeScreen() {
   const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileSettings>({});
+  const [activeCategoryIndex, setActiveCategoryIndex] = useState<number | null>(null);
 
   useEffect(() => {
     setProfile(loadProfileSettings());
@@ -289,7 +363,7 @@ export function HomeScreen() {
           .order("name", { ascending: true }),
         supabase
           .from("transactions")
-          .select("id,type,amount,date,card_id,description,category,is_installment,installment_total,installments_paid,is_paid")
+          .select("id,type,amount,date,account_id,card_id,description,category,is_installment,installment_total,installments_paid,is_paid")
           .eq("user_id", user.id)
           .lte("date", end)
           .order("date", { ascending: false }),
@@ -348,6 +422,37 @@ export function HomeScreen() {
         (sum, account) => sum + (Number(account.balance) || 0),
         0,
       );
+      const paidCardAdjustments = transactions.reduce((sum, tx) => {
+        if (tx.type !== "card_expense") return sum;
+        // If card expense is linked to an account, balance updates are already applied elsewhere.
+        if (tx.account_id) return sum;
+
+        const amount = Number(tx.amount) || 0;
+        if (amount <= 0) return sum;
+
+        const isInstallment = !!tx.is_installment && (tx.installment_total ?? 0) > 0;
+        if (isInstallment) {
+          const totalInstallments = Math.max(1, tx.installment_total ?? 1);
+          const monthOffset = getInstallmentMonthOffset(tx.date, selectedMonth);
+          if (monthOffset == null || monthOffset < 0 || monthOffset >= totalInstallments) {
+            return sum;
+          }
+          const paidInstallments = Math.min(
+            Math.max(tx.installments_paid ?? 0, 0),
+            totalInstallments,
+          );
+          // Deduct only the installment for the selected month when it is actually marked as paid.
+          return paidInstallments > monthOffset ? sum + amount / totalInstallments : sum;
+        }
+
+        if (!tx.is_paid) return sum;
+        const txDate = new Date(tx.date);
+        if (Number.isNaN(txDate.getTime())) return sum;
+        const sameMonth =
+          txDate.getFullYear() === selectedMonth.getFullYear() &&
+          txDate.getMonth() === selectedMonth.getMonth();
+        return sameMonth ? sum + amount : sum;
+      }, 0);
       const monthTx = buildMonthTransactions(transactions, selectedMonth);
       const monthIncome = monthTx.reduce((sum, tx) => {
         return tx.type === "income" ? sum + tx.displayAmount : sum;
@@ -358,7 +463,10 @@ export function HomeScreen() {
           : sum;
       }, 0);
 
-      setTotalBalance(total || monthIncome - monthExpenses);
+      const hasAccounts = nextAccounts.length > 0;
+      setTotalBalance(
+        hasAccounts ? total - paidCardAdjustments : monthIncome - monthExpenses,
+      );
       setIncome(monthIncome);
       setExpenses(monthExpenses);
       setAccounts(nextAccounts);
@@ -436,21 +544,157 @@ export function HomeScreen() {
     };
   }, [flowSeries, selectedMonth, language]);
 
-  const categoryTotals = useMemo(() => {
+  const monthOverMonth = useMemo(() => {
+    const previousMonth = new Date(
+      selectedMonth.getFullYear(),
+      selectedMonth.getMonth() - 1,
+      1,
+    );
+    const previousMonthTransactions = buildMonthTransactions(transactions, previousMonth);
+    const previousIncome = previousMonthTransactions.reduce((sum, tx) => {
+      return tx.type === "income" ? sum + tx.displayAmount : sum;
+    }, 0);
+    const previousExpenses = previousMonthTransactions.reduce((sum, tx) => {
+      return tx.type === "expense" || tx.type === "card_expense"
+        ? sum + tx.displayAmount
+        : sum;
+    }, 0);
+
+    return {
+      incomePct: getMonthOverMonthChange(income, previousIncome),
+      expensesPct: getMonthOverMonthChange(expenses, previousExpenses),
+    };
+  }, [expenses, income, selectedMonth, transactions]);
+  const incomeDirection = getChangeDirection(monthOverMonth.incomePct);
+  const expensesDirection = getChangeDirection(monthOverMonth.expensesPct);
+
+  const monthProgress = useMemo(() => {
+    const year = selectedMonth.getFullYear();
+    const month = selectedMonth.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const now = new Date();
+    const currentMonthKey = now.getFullYear() * 12 + now.getMonth();
+    const selectedMonthKey = year * 12 + month;
+
+    if (selectedMonthKey < currentMonthKey) {
+      return { daysInMonth, elapsedDays: daysInMonth };
+    }
+    if (selectedMonthKey > currentMonthKey) {
+      return { daysInMonth, elapsedDays: 0 };
+    }
+    return { daysInMonth, elapsedDays: now.getDate() };
+  }, [selectedMonth]);
+
+  const monthProjection = useMemo(() => {
+    if (monthProgress.elapsedDays <= 0) return null;
+    const projectedIncome = (income / monthProgress.elapsedDays) * monthProgress.daysInMonth;
+    const projectedExpense = (expenses / monthProgress.elapsedDays) * monthProgress.daysInMonth;
+    return {
+      income: projectedIncome,
+      expense: projectedExpense,
+      net: projectedIncome - projectedExpense,
+    };
+  }, [expenses, income, monthProgress]);
+
+  const monthNet = income - expenses;
+  const savingsRate = income > 0 ? (monthNet / income) * 100 : null;
+  const expensePressure = income > 0 ? (expenses / income) * 100 : null;
+  const expensePressureWidth = expensePressure == null ? 0 : Math.min(100, expensePressure);
+  const expensePressureTone =
+    expensePressure == null
+      ? "bg-[#5DA7FF]"
+      : expensePressure <= 70
+        ? "bg-emerald-400"
+        : expensePressure <= 100
+          ? "bg-amber-400"
+          : "bg-rose-400";
+
+  const categoryChartData = useMemo(() => {
     const totals: Record<string, number> = {};
     monthTransactions.forEach((tx) => {
       if (tx.type === "income") return;
       const key = tx.category?.trim() || (language === "pt" ? "Sem categoria" : "No category");
       totals[key] = (totals[key] ?? 0) + tx.displayAmount;
     });
-    return Object.entries(totals)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 4);
+    const sortedCategories = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+    const total = sortedCategories.reduce((sum, [, value]) => sum + value, 0);
+    return sortedCategories.map(([name, value], index) => ({
+      name,
+      value,
+      percent: total > 0 ? (value / total) * 100 : 0,
+      color: getCategoryColor(index),
+    }));
   }, [monthTransactions, language]);
 
-  const categoryMax = useMemo(() => {
-    return Math.max(1, ...categoryTotals.map(([, value]) => value));
-  }, [categoryTotals]);
+  const totalCategoryAmount = useMemo(
+    () => categoryChartData.reduce((sum, category) => sum + category.value, 0),
+    [categoryChartData],
+  );
+
+  const highlightedCategory = useMemo(() => {
+    if (categoryChartData.length === 0) return null;
+    if (activeCategoryIndex == null) return categoryChartData[0];
+    return categoryChartData[activeCategoryIndex] ?? categoryChartData[0];
+  }, [activeCategoryIndex, categoryChartData]);
+
+  useEffect(() => {
+    if (activeCategoryIndex == null) return;
+    if (activeCategoryIndex >= categoryChartData.length) {
+      setActiveCategoryIndex(null);
+    }
+  }, [activeCategoryIndex, categoryChartData.length]);
+
+  const cardPendingDueById = useMemo(() => {
+    const pendingByCard: Record<string, number> = {};
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const parseTxDate = (value: string) => {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return new Date(
+          Number(value.slice(0, 4)),
+          Number(value.slice(5, 7)) - 1,
+          Number(value.slice(8, 10)),
+        );
+      }
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    };
+
+    transactions.forEach((tx) => {
+      if (tx.type !== "card_expense" || !tx.card_id) return;
+
+      const amount = Number(tx.amount) || 0;
+      if (amount <= 0) return;
+
+      let pendingAmount = 0;
+      const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
+      const isInstallment = totalInstallments > 0;
+
+      if (isInstallment) {
+        const paidInstallments = Math.min(
+          Math.max(Number(tx.installments_paid) || 0, 0),
+          totalInstallments,
+        );
+        const monthOffset = getInstallmentMonthOffset(tx.date, today);
+        const dueInstallments =
+          monthOffset == null
+            ? 0
+            : Math.min(Math.max(monthOffset + 1, 0), totalInstallments);
+        const pendingInstallments = Math.max(dueInstallments - paidInstallments, 0);
+        pendingAmount = (amount / totalInstallments) * pendingInstallments;
+      } else {
+        const txDate = parseTxDate(tx.date);
+        const isDueNow = txDate ? txDate.getTime() <= today.getTime() : true;
+        pendingAmount = isDueNow && !tx.is_paid ? amount : 0;
+      }
+
+      if (pendingAmount <= 0) return;
+      pendingByCard[tx.card_id] = (pendingByCard[tx.card_id] ?? 0) + pendingAmount;
+    });
+
+    return pendingByCard;
+  }, [transactions]);
 
   const cardReminders = useMemo<CardReminder[]>(() => {
     const now = new Date();
@@ -462,13 +706,15 @@ export function HomeScreen() {
       .map((card) => {
         const closingDay = Number(card.closing_day);
         const dueDay = Number(card.due_day);
+        const pendingDue = cardPendingDueById[card.id] ?? 0;
         if (
           !Number.isFinite(closingDay) ||
           !Number.isFinite(dueDay) ||
           closingDay < 1 ||
           closingDay > 31 ||
           dueDay < 1 ||
-          dueDay > 31
+          dueDay > 31 ||
+          pendingDue <= 0
         ) {
           return null;
         }
@@ -517,7 +763,7 @@ export function HomeScreen() {
         if (a.days !== b.days) return b.days - a.days;
         return a.name.localeCompare(b.name);
       }) as CardReminder[];
-  }, [cards]);
+  }, [cards, cardPendingDueById]);
 
   const cardUsedById = useMemo(() => {
     const usage: Record<string, number> = {};
@@ -529,13 +775,12 @@ export function HomeScreen() {
       if (amount <= 0) return;
 
       let outstanding = amount;
-      const isInstallment = !!tx.is_installment && (tx.installment_total ?? 0) > 0;
+      const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
+      const isInstallment = totalInstallments > 0;
 
       if (isInstallment) {
-        const totalInstallments = tx.installment_total ?? 0;
-        if (totalInstallments <= 0) return;
         const paidInstallments = Math.min(
-          Math.max(tx.installments_paid ?? 0, 0),
+          Math.max(Number(tx.installments_paid) || 0, 0),
           totalInstallments,
         );
         const paidAmount = (amount / totalInstallments) * paidInstallments;
@@ -549,6 +794,13 @@ export function HomeScreen() {
 
     return usage;
   }, [transactions]);
+
+  const cardUsedTotal = useMemo(
+    () => Object.values(cardUsedById).reduce((sum, value) => sum + value, 0),
+    [cardUsedById],
+  );
+  const netWorth = totalBalance + investedTotal;
+  const investedShare = netWorth > 0 ? (investedTotal / netWorth) * 100 : 0;
 
   const displayName =
     (user?.user_metadata?.username as string | undefined) ||
@@ -646,6 +898,21 @@ export function HomeScreen() {
     );
   };
 
+  const CategoryTooltip = ({ active, payload }: TooltipContentProps<number, string>) => {
+    if (!active || !payload?.length) return null;
+    const item = payload[0]?.payload as
+      | { name: string; value: number; percent: number }
+      | undefined;
+    if (!item) return null;
+    return (
+      <div className="rounded-xl border border-[#1C2332] bg-[#0F141E] p-3 text-xs text-[#E4E7EC] shadow-lg">
+        <p className="font-semibold text-[#E7ECF2]">{item.name}</p>
+        <p className="mt-1 text-[#9AA3B2]">{formatCurrency(item.value, language)}</p>
+        <p className="text-[#9AA3B2]">{formatPercent(item.percent, language)}</p>
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-start justify-between gap-4">
@@ -737,38 +1004,208 @@ export function HomeScreen() {
           <p className="mt-3 text-xs text-[#8D96A6]">
             {t("home.total")} {loading ? "..." : formatCurrency(totalBalance, language)}
           </p>
-        </div>
-
-        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5 lg:col-span-3">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#48C59F]">
-              <AppIcon name="plus" size={14} color="#0C1018" />
+          <div className="mt-4 rounded-xl border border-[#1E2636] bg-[#0F141E] p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-[#8D96A6]">
+                {language === "pt" ? "Patrimonio total" : "Net worth"}
+              </p>
+              <p className="text-xs font-semibold text-[#E7ECF2]">
+                {loading ? "..." : formatCurrency(netWorth, language)}
+              </p>
             </div>
-            <div>
-              <p className="text-xs text-[#8D96A6]">{t("home.income")}</p>
-              <p className="text-lg font-semibold text-[#E3E9F1]">
-                {loading ? "..." : formatCurrency(income, language)}
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#111827]">
+              <div
+                className="h-1.5 rounded-full bg-[#5DD6C7]"
+                style={{ width: `${Math.max(0, Math.min(investedShare, 100))}%` }}
+              />
+            </div>
+            <p className="mt-2 text-[11px] text-[#8D96A6]">
+              {language === "pt" ? "Investido" : "Invested"}:{" "}
+              {loading ? "..." : formatCurrency(investedTotal, language)}
+            </p>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="rounded-lg border border-[#1E2636] bg-[#0F141E] p-2">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-[#8D96A6]">
+                {language === "pt" ? "Contas ativas" : "Active accounts"}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-[#E7ECF2]">{accounts.length}</p>
+            </div>
+            <div className="rounded-lg border border-[#1E2636] bg-[#0F141E] p-2">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-[#8D96A6]">
+                {language === "pt" ? "Em cartoes" : "Card usage"}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-[#E7ECF2]">
+                {loading ? "..." : formatCurrency(cardUsedTotal, language)}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5 lg:col-span-3">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#E46E6E]">
-              <AppIcon name="chevron-down" size={14} color="#0C1018" />
+        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5 lg:col-span-6">
+          <div className="mb-4 flex items-center justify-between">
+            <p className="text-sm font-semibold text-[#E3E9F1]">{t("home.inflowVsOutflow")}</p>
+            <span className="text-[11px] text-[#8D96A6]">{t("home.vsLastMonth")}</span>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-[#1E2636] bg-[#0F141E] p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#48C59F]">
+                    <AppIcon name="plus" size={14} color="#0C1018" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-[#8D96A6]">{t("home.income")}</p>
+                    <p className="text-lg font-semibold text-[#E3E9F1]">
+                      {loading ? "..." : formatCurrency(income, language)}
+                    </p>
+                  </div>
+                </div>
+                <div
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold ${
+                    monthOverMonth.incomePct == null || incomeDirection === "neutral"
+                      ? "bg-[#172031] text-[#9AA3B2]"
+                      : incomeDirection === "up"
+                        ? "bg-emerald-500/15 text-emerald-300"
+                        : "bg-rose-500/15 text-rose-300"
+                  }`}
+                >
+                  <AppIcon
+                    name={
+                      monthOverMonth.incomePct == null || incomeDirection === "neutral"
+                        ? "arrow-right"
+                        : incomeDirection === "up"
+                          ? "arrow-up"
+                          : "arrow-down"
+                    }
+                    size={12}
+                    color="currentColor"
+                  />
+                  {loading
+                    ? "..."
+                    : monthOverMonth.incomePct == null
+                      ? "--"
+                      : formatChangePercent(monthOverMonth.incomePct, language)}
+                </div>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-[#8D96A6]">{t("home.expenses")}</p>
-              <p className="text-lg font-semibold text-[#E3E9F1]">
-                {loading ? "..." : formatCurrency(expenses, language)}
+
+            <div className="rounded-xl border border-[#1E2636] bg-[#0F141E] p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#E46E6E]">
+                    <AppIcon name="arrow-down" size={14} color="#0C1018" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-[#8D96A6]">{t("home.expenses")}</p>
+                    <p className="text-lg font-semibold text-[#E3E9F1]">
+                      {loading ? "..." : formatCurrency(expenses, language)}
+                    </p>
+                  </div>
+                </div>
+                <div
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold ${
+                    monthOverMonth.expensesPct == null || expensesDirection === "neutral"
+                      ? "bg-[#172031] text-[#9AA3B2]"
+                      : expensesDirection === "down"
+                        ? "bg-emerald-500/15 text-emerald-300"
+                        : "bg-rose-500/15 text-rose-300"
+                  }`}
+                >
+                  <AppIcon
+                    name={
+                      monthOverMonth.expensesPct == null || expensesDirection === "neutral"
+                        ? "arrow-right"
+                        : expensesDirection === "up"
+                          ? "arrow-up"
+                          : "arrow-down"
+                    }
+                    size={12}
+                    color="currentColor"
+                  />
+                  {loading
+                    ? "..."
+                    : monthOverMonth.expensesPct == null
+                      ? "--"
+                      : formatChangePercent(monthOverMonth.expensesPct, language)}
+                </div>
+              </div>
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-[#8D96A6]">
+            {t("home.balanceAfterExpenses")}:{" "}
+            {loading ? "..." : formatCurrency(totalBalance - expenses, language)}
+          </p>
+          <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+            <div className="rounded-lg border border-[#1E2636] bg-[#0F141E] p-2">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-[#8D96A6]">
+                {language === "pt" ? "Resultado do mes" : "Month result"}
               </p>
-              <p className="mt-1 text-xs text-[#8D96A6]">
-                Saldo apos despesas:{" "}
+              <p
+                className={`mt-1 text-sm font-semibold ${
+                  monthNet >= 0 ? "text-emerald-300" : "text-rose-300"
+                }`}
+              >
+                {loading ? "..." : formatSignedCurrency(monthNet, language)}
+              </p>
+            </div>
+            <div className="rounded-lg border border-[#1E2636] bg-[#0F141E] p-2">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-[#8D96A6]">
+                {language === "pt" ? "Taxa de poupanca" : "Savings rate"}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-[#E7ECF2]">
                 {loading
                   ? "..."
-                  : formatCurrency(totalBalance - expenses, language)}
+                  : savingsRate == null
+                    ? "--"
+                    : formatPercent(savingsRate, language)}
               </p>
+            </div>
+            <div className="rounded-lg border border-[#1E2636] bg-[#0F141E] p-2">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-[#8D96A6]">
+                {language === "pt" ? "Media desp./dia" : "Avg exp./day"}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-[#E7ECF2]">
+                {loading
+                  ? "..."
+                  : monthProgress.elapsedDays > 0
+                    ? formatCurrency(expenses / monthProgress.elapsedDays, language)
+                    : "--"}
+              </p>
+            </div>
+            <div className="rounded-lg border border-[#1E2636] bg-[#0F141E] p-2">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-[#8D96A6]">
+                {language === "pt" ? "Projecao do mes" : "Month projection"}
+              </p>
+              <p
+                className={`mt-1 text-sm font-semibold ${
+                  (monthProjection?.net ?? 0) >= 0 ? "text-emerald-300" : "text-rose-300"
+                }`}
+              >
+                {loading
+                  ? "..."
+                  : monthProjection
+                    ? formatSignedCurrency(monthProjection.net, language)
+                    : "--"}
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 rounded-xl border border-[#1E2636] bg-[#0F141E] p-3">
+            <div className="flex items-center justify-between gap-3 text-[11px] text-[#8D96A6]">
+              <span>{language === "pt" ? "Pressao de despesas" : "Expense pressure"}</span>
+              <span>
+                {loading
+                  ? "..."
+                  : expensePressure == null
+                    ? "--"
+                    : formatPercent(expensePressure, language)}
+              </span>
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#111827]">
+              <div
+                className={`h-2 rounded-full ${expensePressureTone}`}
+                style={{ width: `${expensePressureWidth}%` }}
+              />
             </div>
           </div>
         </div>
@@ -780,24 +1217,91 @@ export function HomeScreen() {
               {t("transactions.monthSummary")}
             </span>
           </div>
-          {categoryTotals.length === 0 ? (
+          {categoryChartData.length === 0 ? (
             <p className="text-xs text-[#8B94A6]">{t("transactions.empty")}</p>
           ) : (
-            <div className="space-y-2">
-              {categoryTotals.map(([name, value]) => (
-                <div key={name} className="space-y-1">
-                  <div className="flex items-center justify-between text-xs text-[#9AA3B2]">
-                    <span className="truncate">{name}</span>
-                    <span>{formatCurrency(value, language)}</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-[#0F141E]">
+            <div className="rounded-xl border border-[#1E2636] bg-[#0F141E] p-3">
+              <p className="text-xs font-semibold text-[#D7DDEA]">
+                {language === "pt"
+                  ? "Principais categorias de despesas"
+                  : "Top expense categories"}
+              </p>
+              <p className="mt-1 text-[11px] text-[#8B94A6]">
+                {language === "pt" ? "Resumo do mes" : "Month summary"}:{" "}
+                {formatCurrency(totalCategoryAmount, language)}
+              </p>
+
+              <div className="relative mt-3 grid grid-cols-[1fr_126px] items-center gap-1 overflow-hidden">
+                <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
+                  {categoryChartData.map((category, index) => (
                     <div
-                      className="h-1.5 rounded-full bg-[#5DD6C7]"
-                      style={{ width: `${(value / categoryMax) * 100}%` }}
-                    />
-                  </div>
+                      key={category.name}
+                      className={`flex items-center gap-2 rounded-lg px-1 py-1 transition-colors ${
+                        activeCategoryIndex === index
+                          ? "bg-[#171E2B]"
+                          : "hover:bg-[#141B27]"
+                      }`}
+                      onMouseEnter={() => setActiveCategoryIndex(index)}
+                      onMouseLeave={() => setActiveCategoryIndex(null)}
+                    >
+                      <span
+                        className="h-9 w-1.5 rounded-full"
+                        style={{ backgroundColor: category.color }}
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-[#E7ECF2]">
+                          {index + 1}. {category.name}
+                        </p>
+                        <p className="text-[11px] text-[#9AA3B2]">
+                          {formatPercent(category.percent, language)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+
+                <div className="h-40 w-[176px] -mr-12 overflow-hidden">
+                  <ResponsiveContainer width="100%" height="100%" minHeight={120}>
+                    <PieChart>
+                      <Pie
+                        data={categoryChartData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="62%"
+                        cy="50%"
+                        startAngle={90}
+                        endAngle={-270}
+                        innerRadius="58%"
+                        outerRadius="84%"
+                        paddingAngle={1.8}
+                        stroke="none"
+                        onMouseEnter={(_, index) => setActiveCategoryIndex(index)}
+                        onMouseLeave={() => setActiveCategoryIndex(null)}
+                        isAnimationActive
+                        animationDuration={850}
+                        animationEasing="ease-out"
+                      >
+                        {categoryChartData.map((category, index) => (
+                          <Cell
+                            key={`${category.name}-${index}`}
+                            fill={category.color}
+                            fillOpacity={
+                              activeCategoryIndex == null || activeCategoryIndex === index
+                                ? 1
+                                : 0.28
+                            }
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        content={CategoryTooltip}
+                        cursor={false}
+                        wrapperStyle={{ outline: "none" }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
             </div>
           )}
         </div>

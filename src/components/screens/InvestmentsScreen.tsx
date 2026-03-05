@@ -36,6 +36,8 @@ type Investment = {
 type Quote = {
   price: number;
   changePct?: number | null;
+  logoUrl?: string | null;
+  assetName?: string | null;
   dyPct?: number | null;
   pVp?: number | null;
   sharesOutstanding?: number | null;
@@ -46,6 +48,28 @@ type Quote = {
 type PricePoint = {
   time: number;
   price: number;
+};
+
+type CryptoSearchItem = {
+  id: string;
+  symbol: string;
+  name: string;
+  thumb: string | null;
+  rank: number | null;
+};
+
+type CryptoMarketSnapshot = {
+  id: string;
+  symbol: string;
+  name: string;
+  image: string | null;
+  rank: number | null;
+  price: number;
+  changePct24h: number | null;
+  marketCap: number | null;
+  volume24h: number | null;
+  high24h: number | null;
+  low24h: number | null;
 };
 
 type Purchase = {
@@ -71,8 +95,23 @@ type InvestmentFilterSettings = {
   limits: Record<InvestmentMetricKey, string>;
 };
 
+type InvestmentOrganizer = "alphabetical" | "category";
+type InvestmentCategory = "fii" | "etf" | "stock" | "bdr" | "crypto" | "other";
+
 const BRAPI_KEY = process.env.NEXT_PUBLIC_BRAPI_KEY;
 const B3_SUFFIX = ".SA";
+const FEATURED_CRYPTO_IDS = [
+  "bitcoin",
+  "ethereum",
+  "tether",
+  "binancecoin",
+  "solana",
+  "ripple",
+  "usd-coin",
+  "cardano",
+  "dogecoin",
+  "tron",
+];
 const INVESTMENT_FILTER_STORAGE_PREFIX = "guimfinancial:investments:dy-filter";
 const DEFAULT_INVESTMENT_FILTER: InvestmentFilterSettings = {
   enabled: true,
@@ -428,6 +467,20 @@ async function fetchSingleB3Quote(
         item.regularMarketChangePercent != null
           ? Number(item.regularMarketChangePercent)
           : null,
+      logoUrl:
+        typeof item?.logourl === "string"
+          ? item.logourl
+          : typeof item?.logoUrl === "string"
+            ? item.logoUrl
+            : typeof item?.logo === "string"
+              ? item.logo
+              : null,
+      assetName:
+        typeof item?.longName === "string"
+          ? item.longName
+          : typeof item?.shortName === "string"
+            ? item.shortName
+            : null,
       dyPct: normalizePercentValue(rawDy),
       pVp: parseNumberish(rawPvp),
       sharesOutstanding: parseNumberish(rawSharesOutstanding),
@@ -609,6 +662,111 @@ function normalizeCryptoId(value: string) {
   return value.toLowerCase().trim().replace(/\s+/g, "");
 }
 
+async function fetchCryptoMarketSnapshot(id: string): Promise<CryptoMarketSnapshot | null> {
+  try {
+    const res = await fetch(
+      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=brl&ids=${encodeURIComponent(
+        id,
+      )}&price_change_percentage=24h`,
+      { cache: "no-store" },
+    );
+    if (!res.ok) return null;
+    const json = await res.json();
+    const first = Array.isArray(json) ? json[0] : null;
+    if (!first || first.current_price == null) return null;
+    return {
+      id: String(first.id ?? id),
+      symbol: String(first.symbol ?? ""),
+      name: String(first.name ?? id),
+      image: typeof first.image === "string" ? first.image : null,
+      rank:
+        first.market_cap_rank != null && Number.isFinite(Number(first.market_cap_rank))
+          ? Number(first.market_cap_rank)
+          : null,
+      price: Number(first.current_price) || 0,
+      changePct24h:
+        first.price_change_percentage_24h != null
+          ? Number(first.price_change_percentage_24h)
+          : null,
+      marketCap:
+        first.market_cap != null && Number.isFinite(Number(first.market_cap))
+          ? Number(first.market_cap)
+          : null,
+      volume24h:
+        first.total_volume != null && Number.isFinite(Number(first.total_volume))
+          ? Number(first.total_volume)
+          : null,
+      high24h:
+        first.high_24h != null && Number.isFinite(Number(first.high_24h))
+          ? Number(first.high_24h)
+          : null,
+      low24h:
+        first.low_24h != null && Number.isFinite(Number(first.low_24h))
+          ? Number(first.low_24h)
+          : null,
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+async function fetchFeaturedCryptoOptions(ids = FEATURED_CRYPTO_IDS) {
+  const normalizedIds = ids.map((id) => normalizeCryptoId(id)).filter(Boolean);
+  if (!normalizedIds.length) return [];
+  try {
+    const res = await fetch(
+      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=brl&ids=${encodeURIComponent(
+        normalizedIds.join(","),
+      )}&price_change_percentage=24h`,
+      { cache: "no-store" },
+    );
+    if (!res.ok) return [];
+    const json = await res.json();
+    const entries = (Array.isArray(json) ? json : [])
+      .map((item: any) => {
+        if (!item || item.current_price == null || !item.id) return null;
+        return {
+          id: String(item.id),
+          symbol: String(item.symbol ?? ""),
+          name: String(item.name ?? item.id),
+          image: typeof item.image === "string" ? item.image : null,
+          rank:
+            item.market_cap_rank != null && Number.isFinite(Number(item.market_cap_rank))
+              ? Number(item.market_cap_rank)
+              : null,
+          price: Number(item.current_price) || 0,
+          changePct24h:
+            item.price_change_percentage_24h != null
+              ? Number(item.price_change_percentage_24h)
+              : null,
+          marketCap:
+            item.market_cap != null && Number.isFinite(Number(item.market_cap))
+              ? Number(item.market_cap)
+              : null,
+          volume24h:
+            item.total_volume != null && Number.isFinite(Number(item.total_volume))
+              ? Number(item.total_volume)
+              : null,
+          high24h:
+            item.high_24h != null && Number.isFinite(Number(item.high_24h))
+              ? Number(item.high_24h)
+              : null,
+          low24h:
+            item.low_24h != null && Number.isFinite(Number(item.low_24h))
+              ? Number(item.low_24h)
+              : null,
+        } satisfies CryptoMarketSnapshot;
+      })
+      .filter((entry): entry is CryptoMarketSnapshot => entry != null);
+    const byId = new Map(entries.map((entry) => [entry.id, entry]));
+    return normalizedIds
+      .map((id) => byId.get(id))
+      .filter((entry): entry is CryptoMarketSnapshot => Boolean(entry));
+  } catch (error) {
+    return [];
+  }
+}
+
 function normalizeSymbol(type: "b3" | "crypto", value: string) {
   return type === "b3" ? normalizeB3Symbol(value) : normalizeCryptoId(value);
 }
@@ -621,6 +779,39 @@ function getAssetQuoteKey(asset: Investment) {
 
 function getQuantityDecimals(type: "b3" | "crypto") {
   return type === "crypto" ? 8 : 0;
+}
+
+function normalizeCategoryText(value: string | null | undefined) {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function getAssetDisplayName(asset: Investment) {
+  return (asset.name?.trim() || asset.symbol || "").toUpperCase();
+}
+
+function getInvestmentCategory(asset: Investment): InvestmentCategory {
+  if (asset.type === "crypto") return "crypto";
+
+  const symbol = normalizeB3Symbol(asset.symbol);
+  const normalizedName = normalizeCategoryText(asset.name);
+  const isBdrByName = normalizedName.includes("bdr");
+  const isEtfByName =
+    normalizedName.includes("etf") ||
+    normalizedName.includes("fundo de indice") ||
+    normalizedName.includes("fundo indice") ||
+    normalizedName.includes("index fund");
+  const isFiiByName =
+    normalizedName.includes("fii") || normalizedName.includes("fundo imobili");
+
+  if (isBdrByName || /34$/.test(symbol)) return "bdr";
+  if (isEtfByName) return "etf";
+  if (isFiiByName || /11$/.test(symbol)) return "fii";
+  if (/^[A-Z]{4}\d{1,2}$/.test(symbol)) return "stock";
+  return "other";
 }
 
 function formatCurrency(value: number, language: "pt" | "en") {
@@ -793,12 +984,20 @@ export function InvestmentsScreen() {
   const [previewQuote, setPreviewQuote] = useState<Quote | null>(null);
   const previewFetchRef = useRef<number>(0);
   const previewKeyRef = useRef<string>("");
+  const previewRequestRef = useRef(0);
+  const [selectedCrypto, setSelectedCrypto] = useState<CryptoSearchItem | null>(null);
+  const [cryptoMarket, setCryptoMarket] = useState<CryptoMarketSnapshot | null>(null);
+  const [featuredCryptoOptions, setFeaturedCryptoOptions] = useState<CryptoMarketSnapshot[]>([]);
+  const [featuredCryptoLoading, setFeaturedCryptoLoading] = useState(false);
+  const [cryptoPickerOpen, setCryptoPickerOpen] = useState(false);
+  const featuredCryptoOptionsRef = useRef<CryptoMarketSnapshot[]>([]);
 
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [editSymbol, setEditSymbol] = useState("");
   const [editName, setEditName] = useState("");
   const [editSaving, setEditSaving] = useState(false);
+  const [organizeBy, setOrganizeBy] = useState<InvestmentOrganizer>("alphabetical");
   const [investmentFilter, setInvestmentFilter] = useState<InvestmentFilterSettings>(
     DEFAULT_INVESTMENT_FILTER,
   );
@@ -1089,6 +1288,8 @@ export function InvestmentsScreen() {
     const trimmedSymbol = symbol.trim();
     if (!trimmedSymbol || trimmedSymbol.length < 2) {
       setPreviewQuote(null);
+      setSelectedCrypto(null);
+      setCryptoMarket(null);
       previewKeyRef.current = "";
       return;
     }
@@ -1097,50 +1298,126 @@ export function InvestmentsScreen() {
       previewKeyRef.current = previewKey;
       previewFetchRef.current = 0;
       setPreviewQuote(null);
+      if (type === "crypto") {
+        setCryptoMarket(null);
+      }
     }
     const now = Date.now();
-    if (now - previewFetchRef.current < 3000) return;
+    if (now - previewFetchRef.current < 1200) return;
     previewFetchRef.current = now;
+    const requestId = previewRequestRef.current + 1;
+    previewRequestRef.current = requestId;
 
     async function fetchPreview() {
       try {
         if (type === "b3") {
+          setSelectedCrypto(null);
+          setCryptoMarket(null);
           const sym = normalizeB3Symbol(trimmedSymbol);
           const quote = await fetchSingleB3Quote(sym, {
             includeFundamentalsFallback: false,
           });
+          if (previewRequestRef.current !== requestId) return;
           setPreviewQuote(quote);
+          if (quote?.assetName) {
+            setName((current) => (current.trim() ? current : quote.assetName ?? current));
+          }
           return;
         }
+
         const id = normalizeCryptoId(trimmedSymbol);
-        if (!isLikelyCryptoId(id)) {
+        if (!id) {
+          setSelectedCrypto(null);
+          setCryptoMarket(null);
           setPreviewQuote(null);
           return;
         }
-        const res = await fetch(
-          `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=brl&include_24hr_change=true`,
-          { cache: "no-store" },
-        );
-        if (!res.ok) {
-          setPreviewQuote(null);
-          return;
-        }
-        const json = await res.json();
-        if (json?.[id]?.brl != null) {
-          setPreviewQuote({
-            price: Number(json[id].brl) || 0,
-            changePct: json[id].brl_24h_change ?? null,
+        const cachedFeatured = featuredCryptoOptionsRef.current.find((item) => item.id === id);
+        if (cachedFeatured) {
+          setSelectedCrypto({
+            id: cachedFeatured.id,
+            symbol: cachedFeatured.symbol,
+            name: cachedFeatured.name,
+            thumb: cachedFeatured.image,
+            rank: cachedFeatured.rank,
           });
-        } else {
-          setPreviewQuote(null);
+          setCryptoMarket(cachedFeatured);
+          setPreviewQuote({
+            price: cachedFeatured.price,
+            changePct: cachedFeatured.changePct24h,
+          });
+          setName((current) => (current.trim() ? current : cachedFeatured.name));
+          return;
         }
+        const snapshot = await fetchCryptoMarketSnapshot(id);
+        if (previewRequestRef.current !== requestId) return;
+        if (!snapshot) {
+          setCryptoMarket(null);
+          setPreviewQuote(null);
+          return;
+        }
+        setSelectedCrypto({
+          id: snapshot.id,
+          symbol: snapshot.symbol,
+          name: snapshot.name,
+          thumb: snapshot.image,
+          rank: snapshot.rank,
+        });
+        setCryptoMarket(snapshot);
+        setPreviewQuote({
+          price: snapshot.price,
+          changePct: snapshot.changePct24h,
+        });
+        setName((current) => (current.trim() ? current : snapshot.name));
       } catch {
         setPreviewQuote(null);
+        if (type === "crypto") {
+          setCryptoMarket(null);
+        }
       }
     }
 
     void fetchPreview();
   }, [showModal, isCreate, symbol, type]);
+
+  useEffect(() => {
+    featuredCryptoOptionsRef.current = featuredCryptoOptions;
+  }, [featuredCryptoOptions]);
+
+  useEffect(() => {
+    if (!showModal || !isCreate || type !== "crypto" || featuredCryptoOptions.length) return;
+    let cancelled = false;
+    async function loadFeaturedCryptos() {
+      setFeaturedCryptoLoading(true);
+      const options = await fetchFeaturedCryptoOptions();
+      if (cancelled) return;
+      setFeaturedCryptoOptions(options);
+      setFeaturedCryptoLoading(false);
+      if (!options.length) return;
+
+      const normalizedSymbol = normalizeCryptoId(symbol);
+      const currentOption =
+        options.find((item) => item.id === normalizedSymbol) ?? options[0];
+      setSymbol(currentOption.id);
+      setSelectedCrypto({
+        id: currentOption.id,
+        symbol: currentOption.symbol,
+        name: currentOption.name,
+        thumb: currentOption.image,
+        rank: currentOption.rank,
+      });
+      setCryptoMarket(currentOption);
+      setPreviewQuote({
+        price: currentOption.price,
+        changePct: currentOption.changePct24h,
+      });
+      setName((current) => (current.trim() ? current : currentOption.name));
+    }
+    void loadFeaturedCryptos();
+    return () => {
+      cancelled = true;
+    };
+  }, [showModal, isCreate, type, symbol, featuredCryptoOptions.length]);
 
   async function handleRemove(id: string) {
     if (!user) return;
@@ -1199,6 +1476,11 @@ export function InvestmentsScreen() {
     setManualPrice("");
     setDate(toDateString(new Date()));
     setPreviewQuote(null);
+    setSelectedCrypto(null);
+    setCryptoMarket(null);
+    setFeaturedCryptoOptions([]);
+    setFeaturedCryptoLoading(false);
+    setCryptoPickerOpen(false);
     setErrorMsg(null);
   }, []);
 
@@ -1257,7 +1539,13 @@ export function InvestmentsScreen() {
     if (!user) return;
     setErrorMsg(null);
     if (!symbol.trim()) {
-      setErrorMsg(t("investments.addError"));
+      setErrorMsg(
+        type === "crypto"
+          ? language === "pt"
+            ? "Selecione uma cripto da lista."
+            : "Select a crypto from the list."
+          : t("investments.addError"),
+      );
       return;
     }
     if (!priceBig) {
@@ -1283,7 +1571,39 @@ export function InvestmentsScreen() {
 
     setSaving(true);
 
-    const normalized = normalizeSymbol(type, symbol);
+    let normalized = normalizeSymbol(type, symbol);
+    let persistedName = name.trim() ? name.trim() : null;
+    if (type === "crypto") {
+      const normalizedSymbol = normalizeCryptoId(symbol);
+      let resolved = selectedCrypto;
+      if (!resolved && normalizedSymbol) {
+        const matched = featuredCryptoOptions.find((item) => item.id === normalizedSymbol);
+        if (matched) {
+          resolved = {
+            id: matched.id,
+            symbol: matched.symbol,
+            name: matched.name,
+            thumb: matched.image,
+            rank: matched.rank,
+          };
+        }
+      }
+      if (!resolved) {
+        setSaving(false);
+        setErrorMsg(
+          language === "pt"
+            ? "Selecione uma cripto da lista."
+            : "Select a crypto from the list.",
+        );
+        return;
+      }
+      normalized = normalizeCryptoId(resolved.id);
+      if (!persistedName) {
+        persistedName = resolved.name;
+      }
+      setSelectedCrypto(resolved);
+    }
+
     const existing = assets.find(
       (asset) =>
         asset.type === type &&
@@ -1319,7 +1639,7 @@ export function InvestmentsScreen() {
             user_id: user.id,
             type,
             symbol: normalized,
-            name: name.trim() ? name.trim() : null,
+            name: persistedName,
             quantity: nextQty.toString(),
             average_price: nextAvg.toString(),
             currency: "BRL",
@@ -1382,6 +1702,39 @@ export function InvestmentsScreen() {
     return assetsAboveLimit;
   }, [assets, assetsAboveLimit, investmentFilter.enabled, investmentFilter.showOnlyAbove]);
 
+  const categoryLabelByKey = useMemo<Record<InvestmentCategory, string>>(
+    () => ({
+      fii: t("investments.categoryFii"),
+      etf: t("investments.categoryEtf"),
+      stock: t("investments.categoryStock"),
+      bdr: t("investments.categoryBdr"),
+      crypto: t("investments.categoryCrypto"),
+      other: t("investments.categoryOther"),
+    }),
+    [t],
+  );
+
+  const organizedAssets = useMemo(() => {
+    const collator = new Intl.Collator(language === "pt" ? "pt-BR" : "en-US", {
+      numeric: true,
+      sensitivity: "base",
+    });
+    const next = [...filteredAssets];
+    next.sort((a, b) => {
+      if (organizeBy === "category") {
+        const categoryCompare = collator.compare(
+          categoryLabelByKey[getInvestmentCategory(a)],
+          categoryLabelByKey[getInvestmentCategory(b)],
+        );
+        if (categoryCompare !== 0) return categoryCompare;
+      }
+      const nameCompare = collator.compare(getAssetDisplayName(a), getAssetDisplayName(b));
+      if (nameCompare !== 0) return nameCompare;
+      return collator.compare(a.symbol, b.symbol);
+    });
+    return next;
+  }, [categoryLabelByKey, filteredAssets, language, organizeBy]);
+
   const metricConfig = useMemo(
     () => [
       { key: "dyPct" as const, label: t("investments.metricDy"), isPercent: true },
@@ -1443,19 +1796,46 @@ export function InvestmentsScreen() {
         </div>
       ) : null}
 
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-xs text-[#8B94A6]">{t("investments.organizeByLabel")}</p>
+        <button
+          type="button"
+          onClick={() => setOrganizeBy("alphabetical")}
+          className={`rounded-full border px-3 py-1 text-xs ${
+            organizeBy === "alphabetical"
+              ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
+              : "border-[#2A3344] bg-[#0F121A] text-[#8B94A6]"
+          }`}
+        >
+          {t("investments.organizeAlphabetical")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setOrganizeBy("category")}
+          className={`rounded-full border px-3 py-1 text-xs ${
+            organizeBy === "category"
+              ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
+              : "border-[#2A3344] bg-[#0F121A] text-[#8B94A6]"
+          }`}
+        >
+          {t("investments.organizeCategory")}
+        </button>
+      </div>
+
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-        {filteredAssets.length === 0 ? (
+        {organizedAssets.length === 0 ? (
           <div className="col-span-2 rounded-2xl border border-dashed border-[#2A3445] bg-[#121621] p-6 text-sm text-[#8B94A6] sm:col-span-3">
             {investmentFilter.enabled && investmentFilter.showOnlyAbove
               ? t("investments.filterEmptyAbove")
               : t("investments.empty")}
           </div>
-        ) : filteredAssets.map((asset) => {
+        ) : organizedAssets.map((asset) => {
           const key = getAssetQuoteKey(asset);
           const quote = quotes[key];
           const history = priceHistory[asset.id] ?? [];
           const current = quote?.price ?? getLatestPrice(history);
           const value = current != null ? current * asset.quantity : null;
+          const categoryLabel = categoryLabelByKey[getInvestmentCategory(asset)];
           const summary = buildChartSummary(history);
           const exceededMetrics = exceededMetricsByAssetId[asset.id] ?? [];
           const hasExceededMetrics = investmentFilter.enabled && exceededMetrics.length > 0;
@@ -1477,9 +1857,26 @@ export function InvestmentsScreen() {
                 <p className="text-[11px] uppercase tracking-[0.2em] text-[#8B94A6]">
                   {exchangeLabel}
                 </p>
-                <p className="text-sm font-semibold text-[#E4E7EC]">
-                  {asset.name || asset.symbol.toUpperCase()}
-                </p>
+                <div className="flex items-center gap-2">
+                  {asset.type === "b3" ? (
+                    quote?.logoUrl ? (
+                      <>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={quote.logoUrl}
+                          alt={asset.symbol.toUpperCase()}
+                          className="h-5 w-5 rounded-full object-cover"
+                        />
+                      </>
+                    ) : (
+                      <span className="h-5 w-5 rounded-full border border-[#273244] bg-[#151A27]" />
+                    )
+                  ) : null}
+                  <p className="text-sm font-semibold text-[#E4E7EC]">
+                    {asset.name || asset.symbol.toUpperCase()}
+                  </p>
+                </div>
+                <p className="text-[10px] text-[#8B94A6]">{categoryLabel}</p>
                 {hasExceededMetrics ? (
                   <div className="mt-1 space-y-1">
                     <span className="inline-flex rounded-full border border-red-500/50 px-2 py-0.5 text-[10px] font-semibold text-red-300">
@@ -1734,7 +2131,10 @@ export function InvestmentsScreen() {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => setType("b3")}
+                      onClick={() => {
+                        setType("b3");
+                        setCryptoPickerOpen(false);
+                      }}
                       className={`flex-1 rounded-xl border px-3 py-2 text-xs ${
                         type === "b3"
                           ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
@@ -1745,7 +2145,15 @@ export function InvestmentsScreen() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setType("crypto")}
+                      onClick={() => {
+                        setType("crypto");
+                        setSymbol("");
+                        setSelectedCrypto(null);
+                        setCryptoMarket(null);
+                        setPreviewQuote(null);
+                        setFeaturedCryptoOptions([]);
+                        setCryptoPickerOpen(false);
+                      }}
                       className={`flex-1 rounded-xl border px-3 py-2 text-xs ${
                         type === "crypto"
                           ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
@@ -1756,15 +2164,109 @@ export function InvestmentsScreen() {
                     </button>
                   </div>
                   <div>
-                    <input
-                      value={symbol}
-                      onChange={(event) => setSymbol(event.target.value)}
-                      placeholder={t("investments.symbol")}
-                      className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
-                    />
-                    <p className="mt-1 text-[11px] text-[#8B94A6]">
-                      {t("investments.symbolHint")}
-                    </p>
+                    {type === "crypto" ? (
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => setCryptoPickerOpen((current) => !current)}
+                          className="flex w-full items-center justify-between rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
+                        >
+                          <span className="truncate text-left">
+                            {selectedCrypto
+                              ? `${selectedCrypto.symbol.toUpperCase()} - ${selectedCrypto.name}`
+                              : language === "pt"
+                                ? "Selecionar cripto"
+                                : "Select crypto"}
+                          </span>
+                          <AppIcon name="chevron-down" size={16} color="#8B94A6" />
+                        </button>
+                        <p className="mt-1 text-[11px] text-[#8B94A6]">
+                          {language === "pt"
+                            ? "Selecione uma cripto da lista de destaque."
+                            : "Select a crypto from the featured list."}
+                        </p>
+                        {cryptoPickerOpen ? (
+                          <div className="mt-2 max-h-44 space-y-1 overflow-y-auto rounded-xl border border-[#1E232E] bg-[#0F121A] p-2">
+                            {featuredCryptoLoading ? (
+                              <p className="px-2 py-1 text-[11px] text-[#8B94A6]">
+                                {language === "pt" ? "Carregando criptos..." : "Loading cryptos..."}
+                              </p>
+                            ) : featuredCryptoOptions.length ? (
+                              featuredCryptoOptions.map((item) => (
+                                <button
+                                  key={item.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSymbol(item.id);
+                                    setSelectedCrypto({
+                                      id: item.id,
+                                      symbol: item.symbol,
+                                      name: item.name,
+                                      thumb: item.image,
+                                      rank: item.rank,
+                                    });
+                                    setCryptoMarket(item);
+                                    setPreviewQuote({
+                                      price: item.price,
+                                      changePct: item.changePct24h,
+                                    });
+                                    setName((current) => (current.trim() ? current : item.name));
+                                    setCryptoPickerOpen(false);
+                                  }}
+                                  className={`flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left transition ${
+                                    selectedCrypto?.id === item.id
+                                      ? "bg-[#163137] text-[#DCE3EE]"
+                                      : "hover:bg-[#151A27] text-[#C8D0DC]"
+                                  }`}
+                                >
+                                  <span className="flex min-w-0 items-center gap-2">
+                                    {item.image ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img
+                                        src={item.image}
+                                        alt={item.name}
+                                        className="h-5 w-5 rounded-full object-cover"
+                                      />
+                                    ) : (
+                                      <span className="h-5 w-5 rounded-full bg-[#1E232E]" />
+                                    )}
+                                    <span className="min-w-0">
+                                      <span className="block truncate text-xs font-semibold">
+                                        {item.name}
+                                      </span>
+                                      <span className="block truncate text-[11px] text-[#8B94A6]">
+                                        {item.symbol.toUpperCase()} - {item.id}
+                                      </span>
+                                    </span>
+                                  </span>
+                                  {item.rank ? (
+                                    <span className="text-[10px] text-[#8B94A6]">#{item.rank}</span>
+                                  ) : null}
+                                </button>
+                              ))
+                            ) : (
+                              <p className="px-2 py-1 text-[11px] text-[#8B94A6]">
+                                {language === "pt"
+                                  ? "Sem criptos disponiveis no momento."
+                                  : "No cryptos available right now."}
+                              </p>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div>
+                        <input
+                          value={symbol}
+                          onChange={(event) => setSymbol(event.target.value)}
+                          placeholder={t("investments.symbol")}
+                          className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
+                        />
+                        <p className="mt-1 text-[11px] text-[#8B94A6]">
+                          {t("investments.symbolHint")}
+                        </p>
+                      </div>
+                    )}
                   </div>
                   <input
                     value={name}
@@ -1880,6 +2382,119 @@ export function InvestmentsScreen() {
                     </p>
                   </div>
                 </div>
+
+                {type === "b3" ? (
+                  <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
+                    <p className="text-[11px] text-[#8B94A6]">
+                      {language === "pt" ? "Ativo selecionado" : "Selected asset"}
+                    </p>
+                    <div className="mt-1 flex items-center gap-2">
+                      {preview?.logoUrl ? (
+                        <>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={preview.logoUrl}
+                            alt={symbol.toUpperCase()}
+                            className="h-6 w-6 rounded-full object-cover"
+                          />
+                        </>
+                      ) : (
+                        <span className="h-6 w-6 rounded-full border border-[#273244] bg-[#151A27]" />
+                      )}
+                      <p className="text-sm font-semibold text-[#E5E8EF]">
+                        {name.trim() || symbol.toUpperCase() || "--"}
+                      </p>
+                    </div>
+                    <p className="text-[11px] text-[#8B94A6]">
+                      {symbol ? `B3 - ${normalizeB3Symbol(symbol)}` : "--"}
+                    </p>
+                  </div>
+                ) : null}
+
+                {type === "crypto" ? (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
+                      <p className="text-[11px] text-[#8B94A6]">
+                        {language === "pt" ? "Cripto selecionada" : "Selected crypto"}
+                      </p>
+                      <div className="mt-1 flex items-center gap-2">
+                        {cryptoMarket?.image || selectedCrypto?.thumb ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={cryptoMarket?.image ?? selectedCrypto?.thumb ?? ""}
+                            alt={cryptoMarket?.name ?? selectedCrypto?.name ?? "crypto"}
+                            className="h-6 w-6 rounded-full object-cover"
+                          />
+                        ) : (
+                          <span className="h-6 w-6 rounded-full bg-[#1E232E]" />
+                        )}
+                        <p className="text-sm font-semibold text-[#E5E8EF]">
+                          {cryptoMarket?.name ?? selectedCrypto?.name ?? "--"}
+                        </p>
+                      </div>
+                      <p className="text-[11px] text-[#8B94A6]">
+                        {cryptoMarket?.symbol
+                          ? `${cryptoMarket.symbol.toUpperCase()} - ${cryptoMarket.id}`
+                          : selectedCrypto
+                            ? `${selectedCrypto.symbol.toUpperCase()} - ${selectedCrypto.id}`
+                            : "--"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
+                      <p className="text-[11px] text-[#8B94A6]">
+                        {language === "pt" ? "Ranking de mercado" : "Market rank"}
+                      </p>
+                      <p className="text-sm font-semibold text-[#E5E8EF]">
+                        {cryptoMarket?.rank ? `#${cryptoMarket.rank}` : "--"}
+                      </p>
+                      <p className="text-[11px] text-[#8B94A6]">
+                        {language === "pt" ? "Atualizacao em tempo real" : "Live market update"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
+                      <p className="text-[11px] text-[#8B94A6]">
+                        {language === "pt" ? "Market cap" : "Market cap"}
+                      </p>
+                      <p className="text-sm font-semibold text-[#E5E8EF]">
+                        {cryptoMarket?.marketCap != null
+                          ? formatCurrency(cryptoMarket.marketCap, language)
+                          : "--"}
+                      </p>
+                      <p className="text-[11px] text-[#8B94A6]">
+                        {language === "pt" ? "Volume 24h" : "24h volume"}:{" "}
+                        {cryptoMarket?.volume24h != null
+                          ? formatCompactNumber(cryptoMarket.volume24h, language)
+                          : "--"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
+                      <p className="text-[11px] text-[#8B94A6]">
+                        {language === "pt" ? "Faixa 24h" : "24h range"}
+                      </p>
+                      <p className="text-sm font-semibold text-[#E5E8EF]">
+                        {cryptoMarket?.low24h != null
+                          ? formatCurrency(cryptoMarket.low24h, language)
+                          : "--"}{" "}
+                        -{" "}
+                        {cryptoMarket?.high24h != null
+                          ? formatCurrency(cryptoMarket.high24h, language)
+                          : "--"}
+                      </p>
+                      <p
+                        className={`text-[11px] ${
+                          (cryptoMarket?.changePct24h ?? 0) >= 0
+                            ? "text-emerald-300"
+                            : "text-rose-300"
+                        }`}
+                      >
+                        {language === "pt" ? "Variação 24h" : "24h change"}:{" "}
+                        {cryptoMarket?.changePct24h != null
+                          ? formatPercent(cryptoMarket.changePct24h, language)
+                          : "--"}
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
 
                 {errorMsg ? <p className="text-xs text-red-400">{errorMsg}</p> : null}
 

@@ -15,6 +15,7 @@ type Transaction = {
   category: string | null;
   date: string;
   account_id: string | null;
+  card_id: string | null;
   is_fixed: boolean | null;
   is_installment: boolean | null;
   installment_total: number | null;
@@ -33,6 +34,11 @@ type DisplayTransaction = Transaction & {
 type Account = {
   id: string;
   balance: number | string;
+};
+
+type CreditCard = {
+  id: string;
+  name: string;
 };
 
 function toDateString(date: Date) {
@@ -72,16 +78,26 @@ function formatCurrency(value: number, language: "pt" | "en") {
   }).format(value);
 }
 
-function formatDate(value: string, language: "pt" | "en") {
+function parseLocalDate(value: string) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     const [y, m, d] = value.split("-").map(Number);
     if (y && m && d) {
-      return new Date(y, m - 1, d).toLocaleDateString(
-        language === "pt" ? "pt-BR" : "en-US",
-      );
+      return new Date(y, m - 1, d);
     }
   }
-  const date = new Date(value);
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function toDateInputValue(value: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const parsed = parseLocalDate(value);
+  return parsed ? toDateString(parsed) : "";
+}
+
+function formatDate(value: string, language: "pt" | "en") {
+  const date = parseLocalDate(value) ?? new Date(value);
   return date.toLocaleDateString(language === "pt" ? "pt-BR" : "en-US");
 }
 
@@ -91,6 +107,7 @@ export function TransactionsScreen() {
   const [loading, setLoading] = useState(true);
   const [baseTransactions, setBaseTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [cards, setCards] = useState<CreditCard[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -118,11 +135,11 @@ export function TransactionsScreen() {
     setErrorMsg(null);
     const { end } = getMonthRange(selectedMonth);
     const txColumns =
-      "id,type,amount,description,category,date,account_id,is_fixed,is_installment,installment_total,installments_paid,is_paid";
+      "id,type,amount,description,category,date,account_id,card_id,is_fixed,is_installment,installment_total,installments_paid,is_paid";
     const txColumnsFallback =
-      "id,type,amount,description,category,date,account_id,is_installment,installment_total,installments_paid,is_paid";
+      "id,type,amount,description,category,date,account_id,card_id,is_installment,installment_total,installments_paid,is_paid";
 
-    const [txResultWithFixed, accountsResult] = await Promise.all([
+    const [txResultWithFixed, accountsResult, cardsResult] = await Promise.all([
       supabase
         .from("transactions")
         .select(txColumns)
@@ -130,6 +147,7 @@ export function TransactionsScreen() {
         .lte("date", end)
         .order("date", { ascending: false }),
       supabase.from("accounts").select("id,balance").eq("user_id", user.id),
+      supabase.from("credit_cards").select("id,name").eq("user_id", user.id),
     ]);
 
     let txData = txResultWithFixed.data;
@@ -159,8 +177,15 @@ export function TransactionsScreen() {
       return;
     }
 
+    if (cardsResult.error) {
+      setErrorMsg(t("transactions.loadError"));
+      setLoading(false);
+      return;
+    }
+
     setBaseTransactions((txData ?? []) as Transaction[]);
     setAccounts((accountsResult.data ?? []) as Account[]);
+    setCards((cardsResult.data ?? []) as CreditCard[]);
     setLoading(false);
   }, [t, selectedMonth, user]);
 
@@ -181,6 +206,10 @@ export function TransactionsScreen() {
     () => new Map(baseTransactions.map((tx) => [tx.id, tx])),
     [baseTransactions],
   );
+  const cardNameById = useMemo(
+    () => new Map(cards.map((card) => [card.id, card.name])),
+    [cards],
+  );
 
   function buildMonthTransactions(
     transactions: Transaction[],
@@ -190,12 +219,12 @@ export function TransactionsScreen() {
     const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0, 23, 59, 59, 999);
 
     return transactions.flatMap((tx) => {
-      const txDate = new Date(tx.date);
-      if (Number.isNaN(txDate.getTime())) return [];
+      const txDate = parseLocalDate(tx.date);
+      if (!txDate || Number.isNaN(txDate.getTime())) return [];
 
       const amount = Number(tx.amount) || 0;
-      const isInstallment = !!tx.is_installment && (tx.installment_total ?? 0) > 0;
-      const totalInstallments = tx.installment_total ?? 0;
+      const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
+      const isInstallment = totalInstallments > 0;
 
       if (isInstallment && totalInstallments > 0) {
         const perInstallment = amount / totalInstallments;
@@ -241,10 +270,62 @@ export function TransactionsScreen() {
     );
   }, [filter, monthTransactions]);
 
-  async function handleRemove(id: string) {
+  async function handleRemove(tx: Transaction) {
     if (!user) return;
+    const id = tx.id;
     setErrorMsg(null);
     setDeletingId(id);
+
+    let rollbackApplied = false;
+    let rollbackDelta = 0;
+    let rollbackAccountId: string | null = null;
+
+    const amount = Number(tx.amount) || 0;
+    const fallbackSingleAccountId =
+      !tx.account_id && (tx.type === "income" || tx.type === "expense") && accounts.length === 1
+        ? accounts[0]?.id ?? null
+        : null;
+    const targetAccountId = tx.account_id ?? fallbackSingleAccountId;
+
+    if (targetAccountId && amount > 0) {
+      if (tx.type === "income") {
+        rollbackDelta = -amount;
+      } else if (tx.type === "expense") {
+        rollbackDelta = amount;
+      } else if (tx.type === "card_expense") {
+        const isInstallment = !!tx.is_installment && (tx.installment_total ?? 0) > 0;
+        if (isInstallment) {
+          const totalInstallments = Math.max(1, tx.installment_total ?? 1);
+          const paidInstallments = Math.min(
+            Math.max(tx.installments_paid ?? 0, 0),
+            totalInstallments,
+          );
+          rollbackDelta = (amount / totalInstallments) * paidInstallments;
+        } else if (tx.is_paid) {
+          rollbackDelta = amount;
+        }
+      }
+    }
+
+    if (targetAccountId && rollbackDelta !== 0) {
+      const current = accounts.find((account) => account.id === targetAccountId);
+      if (current) {
+        const nextBalance = (Number(current.balance) || 0) + rollbackDelta;
+        const { error: balanceError } = await supabase
+          .from("accounts")
+          .update({ balance: nextBalance })
+          .eq("id", targetAccountId)
+          .eq("user_id", user.id);
+        if (balanceError) {
+          setDeletingId(null);
+          setErrorMsg(t("transactions.loadError"));
+          return;
+        }
+        rollbackApplied = true;
+        rollbackAccountId = targetAccountId;
+      }
+    }
+
     const { error } = await supabase
       .from("transactions")
       .delete()
@@ -252,6 +333,17 @@ export function TransactionsScreen() {
       .eq("user_id", user.id);
     setDeletingId(null);
     if (error) {
+      if (rollbackApplied && rollbackAccountId && rollbackDelta !== 0) {
+        const current = accounts.find((account) => account.id === rollbackAccountId);
+        if (current) {
+          const revertBalance = (Number(current.balance) || 0) - rollbackDelta;
+          await supabase
+            .from("accounts")
+            .update({ balance: revertBalance })
+            .eq("id", rollbackAccountId)
+            .eq("user_id", user.id);
+        }
+      }
       setErrorMsg(t("transactions.loadError"));
       return;
     }
@@ -261,9 +353,10 @@ export function TransactionsScreen() {
 
   async function handleMarkInstallmentPaid(tx: Transaction) {
     if (!user) return;
-    if (!tx.is_installment || !tx.installment_total) return;
-    const paid = tx.installments_paid ?? 0;
-    if (paid >= tx.installment_total) return;
+    const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
+    if (totalInstallments <= 0) return;
+    const paid = Math.max(0, Number(tx.installments_paid) || 0);
+    if (paid >= totalInstallments) return;
     const offset = getInstallmentMonthOffset(tx.date, selectedMonth);
     if (offset === null || offset !== paid) return;
     if (installmentSavingId) return;
@@ -277,7 +370,7 @@ export function TransactionsScreen() {
 
     setInstallmentSavingId(tx.id);
     const nextPaid = paid + 1;
-    const nextIsPaid = nextPaid >= tx.installment_total;
+    const nextIsPaid = nextPaid >= totalInstallments;
     const { error } = await supabase
       .from("transactions")
       .update({
@@ -295,7 +388,7 @@ export function TransactionsScreen() {
     }
 
     const amount = Number(tx.amount) || 0;
-    const perInstallment = amount / (tx.installment_total || 1);
+    const perInstallment = amount / Math.max(totalInstallments, 1);
     if (tx.account_id && Number.isFinite(perInstallment)) {
       const current = accounts.find((account) => account.id === tx.account_id);
       if (current) {
@@ -318,14 +411,15 @@ export function TransactionsScreen() {
 
   async function handleUndoInstallmentPaid(tx: Transaction) {
     if (!user) return;
-    if (!tx.is_installment || !tx.installment_total) return;
-    const paid = tx.installments_paid ?? 0;
+    const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
+    if (totalInstallments <= 0) return;
+    const paid = Math.max(0, Number(tx.installments_paid) || 0);
     if (paid <= 0) return;
     if (undoSavingId) return;
     if (!window.confirm("Desfazer a ultima parcela registrada?")) return;
     setUndoSavingId(tx.id);
     const nextPaid = Math.max(paid - 1, 0);
-    const nextIsPaid = nextPaid >= tx.installment_total;
+    const nextIsPaid = nextPaid >= totalInstallments;
     const { error } = await supabase
       .from("transactions")
       .update({
@@ -343,7 +437,7 @@ export function TransactionsScreen() {
     }
 
     const amount = Number(tx.amount) || 0;
-    const perInstallment = amount / (tx.installment_total || 1);
+    const perInstallment = amount / Math.max(totalInstallments, 1);
     if (tx.account_id && Number.isFinite(perInstallment)) {
       const current = accounts.find((account) => account.id === tx.account_id);
       if (current) {
@@ -369,7 +463,7 @@ export function TransactionsScreen() {
     setEditDescription(tx.description ?? "");
     setEditAmount(String(Number(tx.amount) || 0));
     setEditCategory(tx.category ?? "");
-    setEditDate(tx.date);
+    setEditDate(toDateInputValue(tx.date));
     setEditError(null);
   }
 
@@ -394,6 +488,9 @@ export function TransactionsScreen() {
     }
 
     setEditSaving(true);
+    const previousAmount = Number(editingTx.amount) || 0;
+    const amountDelta = parsedAmount - previousAmount;
+
     const { error } = await supabase
       .from("transactions")
       .update({
@@ -410,6 +507,24 @@ export function TransactionsScreen() {
       console.error("Error updating transaction:", error);
       setEditError("Erro ao editar transacao.");
       return;
+    }
+
+    if (editingTx.account_id && amountDelta !== 0) {
+      const linkedAccount = accounts.find((account) => account.id === editingTx.account_id);
+      if (linkedAccount) {
+        const currentBalance = Number(linkedAccount.balance) || 0;
+        const signedDelta = editingTx.type === "income" ? amountDelta : -amountDelta;
+        const nextBalance = currentBalance + signedDelta;
+        const { error: accountError } = await supabase
+          .from("accounts")
+          .update({ balance: nextBalance })
+          .eq("id", editingTx.account_id)
+          .eq("user_id", user.id);
+        if (accountError) {
+          setEditError("Erro ao atualizar saldo da conta.");
+          return;
+        }
+      }
     }
 
     setEditingTx(null);
@@ -440,8 +555,8 @@ export function TransactionsScreen() {
   );
 
   function getInstallmentMonthOffset(startDate: string, targetMonth: Date) {
-    const start = new Date(startDate);
-    if (Number.isNaN(start.getTime())) return null;
+    const start = parseLocalDate(startDate);
+    if (!start || Number.isNaN(start.getTime())) return null;
     return (targetMonth.getFullYear() - start.getFullYear()) * 12 +
       (targetMonth.getMonth() - start.getMonth());
   }
@@ -546,9 +661,9 @@ export function TransactionsScreen() {
             const isIncome = item.type === "income";
             const isCard = item.type === "card_expense";
             const isFixedExpense = !isIncome && !!item.is_fixed;
-            const isInstallment = !!item.is_installment && (item.installment_total ?? 0) > 0;
-            const totalInstallments = item.installment_total ?? 0;
-            const paidInstallments = item.installments_paid ?? 0;
+            const totalInstallments = Math.max(0, Number(item.installment_total) || 0);
+            const isInstallment = totalInstallments > 0;
+            const paidInstallments = Math.max(0, Number(item.installments_paid) || 0);
             const installmentOffset = isInstallment
               ? getInstallmentMonthOffset(item.date, selectedMonth)
               : null;
@@ -566,6 +681,7 @@ export function TransactionsScreen() {
                   ? t("newEntry.cardExpense")
                   : t("newEntry.expense"));
             const baseTx = baseTxById.get(item.baseId) ?? null;
+            const cardName = isCard && item.card_id ? cardNameById.get(item.card_id) : null;
             return (
               <div
                 key={item.displayId}
@@ -577,6 +693,11 @@ export function TransactionsScreen() {
                     {formatDate(item.displayDate, language)} ·{" "}
                     {item.category ?? (language === "pt" ? "Sem categoria" : "No category")}
                   </p>
+                  {cardName ? (
+                    <p className="text-[11px] text-[#7EA0D8]">
+                      {language === "pt" ? "Cartao" : "Card"}: {cardName}
+                    </p>
+                  ) : null}
                   {isInstallment ? (
                     <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#8A93A3]">
                       <span>
@@ -641,7 +762,7 @@ export function TransactionsScreen() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleRemove(item.baseId)}
+                      onClick={() => baseTx && handleRemove(baseTx)}
                       disabled={deletingId === item.baseId}
                       className="rounded-full border border-[#2A3140] bg-[#0F141E] px-3 py-1 text-xs text-[#8B94A6] hover:border-red-500/60 hover:text-red-400 disabled:opacity-60"
                     >

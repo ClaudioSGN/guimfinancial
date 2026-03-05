@@ -578,14 +578,27 @@ export function GamificationScreen() {
         if (!mission || mission.mission_type === "manual_savings") continue;
         const computed = mission.mission_type === "add_asset" ? weekInvestmentsCount : noExpenseDays;
         const existing = toNumber(row.progress_value);
-        const completed = computed >= toNumber(mission.target_value);
-        if (existing === computed && completed === Boolean(row.completed_at)) continue;
+        const target = toNumber(mission.target_value);
+        const nowIso = new Date().toISOString();
+
+        let nextProgress = computed;
+        let nextCompletedAt = computed >= target ? row.completed_at ?? nowIso : null;
+
+        // "Add asset" mission should represent actions done in the week, not current holdings.
+        // Keep progress/completion monotonic so deleting an asset does not reopen the mission.
+        if (mission.mission_type === "add_asset") {
+          nextProgress = Math.max(existing, computed);
+          const completed = Boolean(row.completed_at) || nextProgress >= target;
+          nextCompletedAt = completed ? row.completed_at ?? nowIso : null;
+        }
+
+        if (existing === nextProgress && row.completed_at === nextCompletedAt) continue;
         const updateRes = await supabase
           .from("gamification_user_missions")
           .update({
-            progress_value: computed,
-            completed_at: completed ? row.completed_at ?? new Date().toISOString() : null,
-            updated_at: new Date().toISOString(),
+            progress_value: nextProgress,
+            completed_at: nextCompletedAt,
+            updated_at: nowIso,
           })
           .eq("id", row.id)
           .eq("user_id", userId);
@@ -774,8 +787,14 @@ export function GamificationScreen() {
         })
         .eq("id", missionView.progress.id)
         .eq("user_id", userId)
-        .eq("reward_claimed", false);
+        .eq("reward_claimed", false)
+        .select("id")
+        .maybeSingle();
       if (claimRes.error) throw claimRes.error;
+      if (!claimRes.data) {
+        await refreshData();
+        return;
+      }
 
       const reward = toNumber(missionView.mission.coin_reward);
       const coinsUpdateRes = await supabase
@@ -1161,7 +1180,7 @@ export function GamificationScreen() {
                   {view.claimed ? (
                     <span className="text-xs text-emerald-300">{t("gamification.rewardClaimed")}</span>
                   ) : null}
-                  {!view.completed ? (
+                  {!view.completed && !view.claimed ? (
                     <span className="text-xs text-[#8B94A6]">{t("gamification.inProgress")}</span>
                   ) : null}
                 </div>
