@@ -24,13 +24,19 @@ import {
   computeTotal,
 } from "@/lib/investments/math";
 
+type InvestmentType = "b3" | "crypto" | "fixed_income";
+
 type Investment = {
   id: string;
-  type: "b3" | "crypto";
+  type: InvestmentType;
   symbol: string;
   name: string | null;
   quantity: number;
   average_price: number;
+  cdi_rate_pct: number | null;
+  cdi_multiplier_pct: number | null;
+  fixed_started_at: string | null;
+  created_at: string | null;
 };
 
 type Quote = {
@@ -96,7 +102,19 @@ type InvestmentFilterSettings = {
 };
 
 type InvestmentOrganizer = "alphabetical" | "category";
-type InvestmentCategory = "fii" | "etf" | "stock" | "bdr" | "crypto" | "other";
+type InvestmentCategory = "fii" | "etf" | "stock" | "bdr" | "crypto" | "fixed" | "other";
+
+type FixedIncomeSnapshot = {
+  principal: number;
+  annualCdiPct: number;
+  cdiMultiplierPct: number;
+  effectiveAnnualPct: number;
+  startAtMs: number;
+  elapsedDays: number;
+  currentValue: number;
+  profit: number;
+  estimatedDailyProfit: number;
+};
 
 const BRAPI_KEY = process.env.NEXT_PUBLIC_BRAPI_KEY;
 const B3_SUFFIX = ".SA";
@@ -767,17 +785,19 @@ async function fetchFeaturedCryptoOptions(ids = FEATURED_CRYPTO_IDS) {
   }
 }
 
-function normalizeSymbol(type: "b3" | "crypto", value: string) {
-  return type === "b3" ? normalizeB3Symbol(value) : normalizeCryptoId(value);
+function normalizeSymbol(type: InvestmentType, value: string) {
+  if (type === "b3") return normalizeB3Symbol(value);
+  if (type === "crypto") return normalizeCryptoId(value);
+  return "CDI";
 }
 
 function getAssetQuoteKey(asset: Investment) {
-  return asset.type === "b3"
-    ? normalizeB3Symbol(asset.symbol)
-    : normalizeCryptoId(asset.symbol);
+  if (asset.type === "b3") return normalizeB3Symbol(asset.symbol);
+  if (asset.type === "crypto") return normalizeCryptoId(asset.symbol);
+  return `fixed:${asset.id}`;
 }
 
-function getQuantityDecimals(type: "b3" | "crypto") {
+function getQuantityDecimals(type: InvestmentType) {
   return type === "crypto" ? 8 : 0;
 }
 
@@ -795,6 +815,7 @@ function getAssetDisplayName(asset: Investment) {
 
 function getInvestmentCategory(asset: Investment): InvestmentCategory {
   if (asset.type === "crypto") return "crypto";
+  if (asset.type === "fixed_income") return "fixed";
 
   const symbol = normalizeB3Symbol(asset.symbol);
   const normalizedName = normalizeCategoryText(asset.name);
@@ -953,6 +974,87 @@ function toDateString(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function parseLocalDateInputToMs(value: string | null | undefined) {
+  if (!value) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-").map(Number);
+    if (year && month && day) {
+      return new Date(year, month - 1, day, 0, 0, 0, 0).getTime();
+    }
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.getTime();
+}
+
+function computeFixedIncomeSnapshot(params: {
+  principal: number;
+  annualCdiPct: number;
+  cdiMultiplierPct: number;
+  startAtMs: number;
+  nowMs: number;
+}): FixedIncomeSnapshot | null {
+  const principal = Number(params.principal) || 0;
+  if (principal <= 0) return null;
+  const annualCdiPct = Number(params.annualCdiPct) || 0;
+  const cdiMultiplierPct = Number(params.cdiMultiplierPct) || 0;
+  if (annualCdiPct <= 0 || cdiMultiplierPct <= 0) return null;
+  const effectiveAnnualPct = annualCdiPct * (cdiMultiplierPct / 100);
+  const startAtMs = Number.isFinite(params.startAtMs) ? params.startAtMs : params.nowMs;
+  const nowMs = Math.max(params.nowMs, startAtMs);
+  const elapsedMs = Math.max(nowMs - startAtMs, 0);
+  const elapsedDays = elapsedMs / (1000 * 60 * 60 * 24);
+  const elapsedYears = elapsedDays / 365;
+  const annualFactor = 1 + effectiveAnnualPct / 100;
+  const currentValue = principal * Math.pow(Math.max(annualFactor, 0), elapsedYears);
+  const profit = currentValue - principal;
+  const dailyRate = Math.pow(Math.max(annualFactor, 0), 1 / 365) - 1;
+  const estimatedDailyProfit = currentValue * dailyRate;
+  return {
+    principal,
+    annualCdiPct,
+    cdiMultiplierPct,
+    effectiveAnnualPct,
+    startAtMs,
+    elapsedDays,
+    currentValue,
+    profit,
+    estimatedDailyProfit,
+  };
+}
+
+function buildFixedIncomeHistory(
+  snapshot: FixedIncomeSnapshot,
+  nowMs: number,
+  maxPoints = 90,
+): PricePoint[] {
+  const start = snapshot.startAtMs;
+  const end = Math.max(nowMs, start);
+  const spanMs = Math.max(end - start, 0);
+  if (spanMs === 0) {
+    return [{ time: end, price: snapshot.currentValue }];
+  }
+  const dayMs = 24 * 60 * 60 * 1000;
+  const points = Math.min(maxPoints, Math.max(2, Math.ceil(spanMs / dayMs) + 1));
+
+  const history: PricePoint[] = [];
+  for (let index = 0; index < points; index += 1) {
+    const ratio = points === 1 ? 1 : index / (points - 1);
+    const atMs = start + spanMs * ratio;
+    const atSnapshot = computeFixedIncomeSnapshot({
+      principal: snapshot.principal,
+      annualCdiPct: snapshot.annualCdiPct,
+      cdiMultiplierPct: snapshot.cdiMultiplierPct,
+      startAtMs: snapshot.startAtMs,
+      nowMs: atMs,
+    });
+    if (!atSnapshot) continue;
+    history.push({ time: atMs, price: atSnapshot.currentValue });
+  }
+
+  return history;
+}
+
 export function InvestmentsScreen() {
   const { language, t } = useLanguage();
   const { user } = useAuth();
@@ -973,13 +1075,15 @@ export function InvestmentsScreen() {
   const [purchasesLoading, setPurchasesLoading] = useState(false);
   const [purchasesError, setPurchasesError] = useState<string | null>(null);
 
-  const [type, setType] = useState<"b3" | "crypto">("b3");
+  const [type, setType] = useState<InvestmentType>("b3");
   const [symbol, setSymbol] = useState("");
   const [name, setName] = useState("");
   const [mode, setMode] = useState<"quantity" | "value">("quantity");
   const [quantity, setQuantity] = useState("");
   const [investedValue, setInvestedValue] = useState("");
   const [manualPrice, setManualPrice] = useState("");
+  const [fixedCdiRatePct, setFixedCdiRatePct] = useState("10.5");
+  const [fixedCdiMultiplierPct, setFixedCdiMultiplierPct] = useState("100");
   const [date, setDate] = useState(toDateString(new Date()));
   const [previewQuote, setPreviewQuote] = useState<Quote | null>(null);
   const previewFetchRef = useRef<number>(0);
@@ -1002,32 +1106,64 @@ export function InvestmentsScreen() {
     DEFAULT_INVESTMENT_FILTER,
   );
   const [filterOpen, setFilterOpen] = useState(false);
+  const [liveNowMs, setLiveNowMs] = useState(() => Date.now());
   const filterStorageKey = user?.id
     ? `${INVESTMENT_FILTER_STORAGE_PREFIX}:${user.id}`
     : null;
 
   const loadAssets = useCallback(async () => {
     if (!user) return;
+    const fullSelect =
+      "id,type,symbol,name,quantity,average_price,cdi_rate_pct,cdi_multiplier_pct,fixed_started_at,created_at";
+    const baseSelect = "id,type,symbol,name,quantity,average_price,created_at";
+
     const { data, error } = await supabase
       .from("investments")
-      .select("id,type,symbol,name,quantity,average_price")
+      .select(fullSelect)
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error(error);
-      setAssets([]);
-    } else {
-      setAssets((data ?? []) as Investment[]);
+      const missingColumn =
+        error.code === "42703" ||
+        String(error.message ?? "").toLowerCase().includes("column");
+      if (!missingColumn) {
+        console.error(error);
+        setAssets([]);
+        return;
+      }
+
+      const fallback = await supabase
+        .from("investments")
+        .select(baseSelect)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (fallback.error) {
+        console.error(fallback.error);
+        setAssets([]);
+        return;
+      }
+
+      const normalizedFallback = (fallback.data ?? []).map((asset: any) => ({
+        ...asset,
+        cdi_rate_pct: null,
+        cdi_multiplier_pct: null,
+        fixed_started_at: null,
+      })) as Investment[];
+      setAssets(normalizedFallback);
+      return;
     }
+
+    setAssets((data ?? []) as Investment[]);
   }, [user]);
 
   const fetchHistoryForAsset = useCallback(
     async (asset: Investment) => {
       try {
-        return asset.type === "b3"
-          ? await fetchB3History(asset.symbol)
-          : await fetchCryptoHistory(asset.symbol);
+        if (asset.type === "b3") return await fetchB3History(asset.symbol);
+        if (asset.type === "crypto") return await fetchCryptoHistory(asset.symbol);
+        return [];
       } catch (err) {
         console.error(err);
         return [];
@@ -1231,7 +1367,88 @@ export function InvestmentsScreen() {
     };
   }, [assets, fetchHistoryForAsset]);
 
+  const hasFixedIncomeAssets = useMemo(
+    () => assets.some((asset) => asset.type === "fixed_income"),
+    [assets],
+  );
+
+  useEffect(() => {
+    const shouldTick =
+      hasFixedIncomeAssets || (showModal && isCreate && type === "fixed_income");
+    if (!shouldTick) return;
+    const timer = window.setInterval(() => {
+      setLiveNowMs(Date.now());
+    }, 1000);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [hasFixedIncomeAssets, isCreate, showModal, type]);
+
+  const fixedSnapshotByAssetId = useMemo(() => {
+    const map: Record<string, FixedIncomeSnapshot> = {};
+    assets.forEach((asset) => {
+      if (asset.type !== "fixed_income") return;
+      const principal = Number(asset.quantity) || 0;
+      const annualCdiPct = Number(asset.cdi_rate_pct) || 0;
+      const cdiMultiplierPct = Number(asset.cdi_multiplier_pct) || 0;
+      const startAtMs =
+        parseLocalDateInputToMs(asset.fixed_started_at) ??
+        parseLocalDateInputToMs(asset.created_at) ??
+        liveNowMs;
+      const snapshot = computeFixedIncomeSnapshot({
+        principal,
+        annualCdiPct,
+        cdiMultiplierPct,
+        startAtMs,
+        nowMs: liveNowMs,
+      });
+      if (!snapshot) return;
+      map[asset.id] = snapshot;
+    });
+    return map;
+  }, [assets, liveNowMs]);
+
+  const fixedQuoteByKey = useMemo(() => {
+    const next: Record<string, Quote> = {};
+    assets.forEach((asset) => {
+      if (asset.type !== "fixed_income") return;
+      const snapshot = fixedSnapshotByAssetId[asset.id];
+      if (!snapshot) return;
+      next[getAssetQuoteKey(asset)] = {
+        price: snapshot.currentValue,
+        changePct:
+          snapshot.principal > 0 ? (snapshot.profit / snapshot.principal) * 100 : 0,
+      };
+    });
+    return next;
+  }, [assets, fixedSnapshotByAssetId]);
+
+  const fixedHistoryByAssetId = useMemo(() => {
+    const next: Record<string, PricePoint[]> = {};
+    assets.forEach((asset) => {
+      if (asset.type !== "fixed_income") return;
+      const snapshot = fixedSnapshotByAssetId[asset.id];
+      if (!snapshot) {
+        next[asset.id] = [];
+        return;
+      }
+      next[asset.id] = buildFixedIncomeHistory(snapshot, liveNowMs);
+    });
+    return next;
+  }, [assets, fixedSnapshotByAssetId, liveNowMs]);
+
+  const allQuotes = useMemo(
+    () => ({ ...quotes, ...fixedQuoteByKey }),
+    [quotes, fixedQuoteByKey],
+  );
+
+  const allPriceHistory = useMemo(
+    () => ({ ...priceHistory, ...fixedHistoryByAssetId }),
+    [priceHistory, fixedHistoryByAssetId],
+  );
+
   const activeAsset = selectedAsset;
+  const isFixedIncome = type === "fixed_income";
   const currentAvg = activeAsset ? new Big(activeAsset.average_price || 0) : new Big(0);
   const currentQty = activeAsset ? new Big(activeAsset.quantity || 0) : new Big(0);
   const previewPriceBig =
@@ -1242,9 +1459,17 @@ export function InvestmentsScreen() {
   const quantityBig = parseBig(quantity);
   const investedCents = parseCentsInput(investedValue);
   const investedBig = investedCents > 0 ? new Big(investedCents) : null;
+  const fixedAnnualCdiPct = parseFilterThreshold(fixedCdiRatePct);
+  const fixedCdiMultiplier = parseFilterThreshold(fixedCdiMultiplierPct);
   const decimals = getQuantityDecimals(type);
 
   const computed = useMemo(() => {
+    if (isFixedIncome) {
+      if (!investedBig) {
+        return { qty: new Big(0), total: new Big(0), newAvg: currentAvg };
+      }
+      return { qty: investedBig, total: investedBig, newAvg: investedBig };
+    }
     if (!priceBig) {
       return { qty: new Big(0), total: new Big(0), newAvg: currentAvg };
     }
@@ -1276,15 +1501,42 @@ export function InvestmentsScreen() {
       priceBig,
     );
     return { qty, total, newAvg };
-  }, [priceBig, quantityBig, investedBig, mode, currentAvg, currentQty, decimals]);
+  }, [isFixedIncome, priceBig, quantityBig, investedBig, mode, currentAvg, currentQty, decimals]);
 
   const preview = previewQuote;
   const displayPrice = manualPriceBig
     ? Number(manualPriceBig.toString())
     : preview?.price ?? null;
+  const fixedPreviewSnapshot = useMemo(() => {
+    if (!isFixedIncome || !investedBig) return null;
+    if (fixedAnnualCdiPct == null || fixedAnnualCdiPct <= 0) return null;
+    if (fixedCdiMultiplier == null || fixedCdiMultiplier <= 0) return null;
+    const startAtMs = parseLocalDateInputToMs(date) ?? liveNowMs;
+    return computeFixedIncomeSnapshot({
+      principal: Number(investedBig.toString()),
+      annualCdiPct: fixedAnnualCdiPct,
+      cdiMultiplierPct: fixedCdiMultiplier,
+      startAtMs,
+      nowMs: liveNowMs,
+    });
+  }, [
+    date,
+    fixedAnnualCdiPct,
+    fixedCdiMultiplier,
+    investedBig,
+    isFixedIncome,
+    liveNowMs,
+  ]);
 
   useEffect(() => {
     if (!showModal || !isCreate) return;
+    if (type === "fixed_income") {
+      setPreviewQuote(null);
+      setSelectedCrypto(null);
+      setCryptoMarket(null);
+      previewKeyRef.current = "";
+      return;
+    }
     const trimmedSymbol = symbol.trim();
     if (!trimmedSymbol || trimmedSymbol.length < 2) {
       setPreviewQuote(null);
@@ -1474,6 +1726,8 @@ export function InvestmentsScreen() {
     setQuantity("");
     setInvestedValue("");
     setManualPrice("");
+    setFixedCdiRatePct("10.5");
+    setFixedCdiMultiplierPct("100");
     setDate(toDateString(new Date()));
     setPreviewQuote(null);
     setSelectedCrypto(null);
@@ -1538,7 +1792,7 @@ export function InvestmentsScreen() {
   async function handleSave() {
     if (!user) return;
     setErrorMsg(null);
-    if (!symbol.trim()) {
+    if (!isFixedIncome && !symbol.trim()) {
       setErrorMsg(
         type === "crypto"
           ? language === "pt"
@@ -1548,19 +1802,31 @@ export function InvestmentsScreen() {
       );
       return;
     }
-    if (!priceBig) {
-      setErrorMsg(t("investments.priceRequired"));
-      return;
-    }
-    if (mode === "quantity" && !quantityBig) {
-      setErrorMsg(t("investments.quantityRequired"));
-      return;
-    }
-    if (mode === "value" && !investedBig) {
+    if (isFixedIncome && !investedBig) {
       setErrorMsg(t("investments.valueRequired"));
       return;
     }
-    if (mode === "value" && computed.qty.lte(0)) {
+    if (isFixedIncome && (fixedAnnualCdiPct == null || fixedAnnualCdiPct <= 0)) {
+      setErrorMsg(t("investments.fixedRateRequired"));
+      return;
+    }
+    if (isFixedIncome && (fixedCdiMultiplier == null || fixedCdiMultiplier <= 0)) {
+      setErrorMsg(t("investments.fixedMultiplierRequired"));
+      return;
+    }
+    if (!isFixedIncome && !priceBig) {
+      setErrorMsg(t("investments.priceRequired"));
+      return;
+    }
+    if (!isFixedIncome && mode === "quantity" && !quantityBig) {
+      setErrorMsg(t("investments.quantityRequired"));
+      return;
+    }
+    if (!isFixedIncome && mode === "value" && !investedBig) {
+      setErrorMsg(t("investments.valueRequired"));
+      return;
+    }
+    if (!isFixedIncome && mode === "value" && computed.qty.lte(0)) {
       setErrorMsg(t("investments.insufficientValue"));
       return;
     }
@@ -1571,7 +1837,7 @@ export function InvestmentsScreen() {
 
     setSaving(true);
 
-    let normalized = normalizeSymbol(type, symbol);
+    let normalized = isFixedIncome ? "CDI" : normalizeSymbol(type, symbol);
     let persistedName = name.trim() ? name.trim() : null;
     if (type === "crypto") {
       const normalizedSymbol = normalizeCryptoId(symbol);
@@ -1603,14 +1869,20 @@ export function InvestmentsScreen() {
       }
       setSelectedCrypto(resolved);
     }
+    if (isFixedIncome && !persistedName) {
+      const cdiText = fixedCdiMultiplier?.toFixed(0) ?? "100";
+      persistedName = `CDI ${cdiText}%`;
+    }
 
-    const existing = assets.find(
+    const existing = isFixedIncome
+      ? undefined
+      : assets.find(
       (asset) =>
         asset.type === type &&
         normalizeSymbol(asset.type, asset.symbol) === normalized,
     );
 
-    const nextAvg = computed.newAvg;
+    const nextAvg = isFixedIncome ? computed.total : computed.newAvg;
     const nextQty = existing
       ? new Big(existing.quantity).plus(computed.qty)
       : computed.qty;
@@ -1623,12 +1895,23 @@ export function InvestmentsScreen() {
         .update({
           quantity: nextQty.toString(),
           average_price: nextAvg.toString(),
+          cdi_rate_pct: isFixedIncome ? fixedAnnualCdiPct : null,
+          cdi_multiplier_pct: isFixedIncome ? fixedCdiMultiplier : null,
+          fixed_started_at: isFixedIncome
+            ? new Date((parseLocalDateInputToMs(date) ?? Date.now())).toISOString()
+            : null,
         })
         .eq("id", existing.id);
       if (error) {
         console.error(error);
         setSaving(false);
-        setErrorMsg(t("investments.saveError"));
+        const missingSchema =
+          error.code === "42703" ||
+          String(error.message ?? "").toLowerCase().includes("cdi_") ||
+          String(error.message ?? "").toLowerCase().includes("fixed_started_at");
+        setErrorMsg(
+          missingSchema ? t("investments.schemaUpdateRequired") : t("investments.saveError"),
+        );
         return;
       }
     } else {
@@ -1642,6 +1925,11 @@ export function InvestmentsScreen() {
             name: persistedName,
             quantity: nextQty.toString(),
             average_price: nextAvg.toString(),
+            cdi_rate_pct: isFixedIncome ? fixedAnnualCdiPct : null,
+            cdi_multiplier_pct: isFixedIncome ? fixedCdiMultiplier : null,
+            fixed_started_at: isFixedIncome
+              ? new Date((parseLocalDateInputToMs(date) ?? Date.now())).toISOString()
+              : null,
             currency: "BRL",
           },
         ])
@@ -1650,7 +1938,13 @@ export function InvestmentsScreen() {
       if (error || !data) {
         console.error(error);
         setSaving(false);
-        setErrorMsg(t("investments.saveError"));
+        const missingSchema =
+          error?.code === "42703" ||
+          String(error?.message ?? "").toLowerCase().includes("cdi_") ||
+          String(error?.message ?? "").toLowerCase().includes("fixed_started_at");
+        setErrorMsg(
+          missingSchema ? t("investments.schemaUpdateRequired") : t("investments.saveError"),
+        );
         return;
       }
       assetId = data.id;
@@ -1663,11 +1957,12 @@ export function InvestmentsScreen() {
           user_id: user.id,
           asset_id: assetId,
           date,
-          price_per_share: priceBig.toString(),
+          price_per_share: isFixedIncome ? "1" : priceBig?.toString() ?? "0",
           quantity: computed.qty.toString(),
           total_invested: computed.total.toString(),
-          mode_used: mode,
-          input_value: mode === "value" ? investedBig?.toString() : null,
+          mode_used: isFixedIncome ? "value" : mode,
+          input_value:
+            isFixedIncome || mode === "value" ? investedBig?.toString() ?? null : null,
         },
       ]);
 
@@ -1687,10 +1982,10 @@ export function InvestmentsScreen() {
     const next: Record<string, InvestmentMetricKey[]> = {};
     assets.forEach((asset) => {
       const key = getAssetQuoteKey(asset);
-      next[asset.id] = getExceededMetrics(quotes[key], investmentFilter);
+      next[asset.id] = getExceededMetrics(allQuotes[key], investmentFilter);
     });
     return next;
-  }, [assets, quotes, investmentFilter]);
+  }, [assets, allQuotes, investmentFilter]);
 
   const assetsAboveLimit = useMemo(
     () => assets.filter((asset) => (exceededMetricsByAssetId[asset.id] ?? []).length > 0),
@@ -1709,6 +2004,7 @@ export function InvestmentsScreen() {
       stock: t("investments.categoryStock"),
       bdr: t("investments.categoryBdr"),
       crypto: t("investments.categoryCrypto"),
+      fixed: t("investments.categoryFixed"),
       other: t("investments.categoryOther"),
     }),
     [t],
@@ -1831,10 +2127,16 @@ export function InvestmentsScreen() {
           </div>
         ) : organizedAssets.map((asset) => {
           const key = getAssetQuoteKey(asset);
-          const quote = quotes[key];
-          const history = priceHistory[asset.id] ?? [];
+          const quote = allQuotes[key];
+          const history = allPriceHistory[asset.id] ?? [];
+          const fixedSnapshot = fixedSnapshotByAssetId[asset.id];
           const current = quote?.price ?? getLatestPrice(history);
-          const value = current != null ? current * asset.quantity : null;
+          const value =
+            asset.type === "fixed_income"
+              ? fixedSnapshot?.currentValue ?? null
+              : current != null
+                ? current * asset.quantity
+                : null;
           const categoryLabel = categoryLabelByKey[getInvestmentCategory(asset)];
           const summary = buildChartSummary(history);
           const exceededMetrics = exceededMetricsByAssetId[asset.id] ?? [];
@@ -1842,10 +2144,13 @@ export function InvestmentsScreen() {
           const exceededLabelText = exceededMetrics
             .map((metricKey) => metricLabelByKey[metricKey])
             .join(", ");
-          const exchangeLabel =
-            asset.type === "b3"
-              ? `BVMF - ${normalizeB3Symbol(asset.symbol)}`
-              : `CRYPTO - ${normalizeCryptoId(asset.symbol).toUpperCase()}`;
+          const exchangeLabel = asset.type === "b3"
+            ? `BVMF - ${normalizeB3Symbol(asset.symbol)}`
+            : asset.type === "crypto"
+              ? `CRYPTO - ${normalizeCryptoId(asset.symbol).toUpperCase()}`
+              : language === "pt"
+                ? "RENDA FIXA - CDI"
+                : "FIXED INCOME - CDI";
           return (
             <button
               key={asset.id}
@@ -1898,50 +2203,101 @@ export function InvestmentsScreen() {
                       }`}
                     >
                       {formatPercent(summary.changePct, language)}{" "}
-                      {language === "pt" ? "(1 ano)" : "(1 year)"}
+                      {asset.type === "fixed_income"
+                        ? language === "pt"
+                          ? "(desde o inicio)"
+                          : "(since start)"
+                        : language === "pt"
+                          ? "(1 ano)"
+                          : "(1 year)"}
                     </span>
                   ) : null}
                 </div>
-                <div className="mt-2 grid grid-cols-2 gap-1.5">
-                  {metricConfig.map((metric) => {
-                    const metricValue = getMetricValue(quote, metric.key);
-                    const isExceeded = exceededMetrics.includes(metric.key);
-                    let display = "--";
-                    if (metricValue != null) {
-                      if (metric.isPercent) {
-                        display = formatPlainPercent(metricValue, language);
-                      } else if (metric.key === "bookValue") {
-                        display = formatCurrency(metricValue, language);
-                      } else if (metric.key === "sharesOutstanding") {
-                        display = formatCompactNumber(metricValue, language);
-                      } else {
-                        display = new Intl.NumberFormat(
-                          language === "pt" ? "pt-BR" : "en-US",
-                          { minimumFractionDigits: 2, maximumFractionDigits: 2 },
-                        ).format(metricValue);
+                {asset.type === "fixed_income" ? (
+                  <div className="mt-2 grid grid-cols-2 gap-1.5">
+                    <div className="rounded-md border border-[#232D3F] bg-[#0F121A] px-2 py-1">
+                      <p className="text-[10px] text-[#8B94A6]">
+                        {language === "pt" ? "CDI anual" : "Annual CDI"}
+                      </p>
+                      <p className="text-[11px] font-semibold text-[#D8DEE9]">
+                        {fixedSnapshot
+                          ? formatPlainPercent(fixedSnapshot.annualCdiPct, language)
+                          : "--"}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-[#232D3F] bg-[#0F121A] px-2 py-1">
+                      <p className="text-[10px] text-[#8B94A6]">
+                        {language === "pt" ? "% do CDI" : "% of CDI"}
+                      </p>
+                      <p className="text-[11px] font-semibold text-[#D8DEE9]">
+                        {fixedSnapshot
+                          ? formatPlainPercent(fixedSnapshot.cdiMultiplierPct, language)
+                          : "--"}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-[#232D3F] bg-[#0F121A] px-2 py-1">
+                      <p className="text-[10px] text-[#8B94A6]">
+                        {language === "pt" ? "Taxa efetiva" : "Effective rate"}
+                      </p>
+                      <p className="text-[11px] font-semibold text-[#D8DEE9]">
+                        {fixedSnapshot
+                          ? formatPlainPercent(fixedSnapshot.effectiveAnnualPct, language)
+                          : "--"}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-[#232D3F] bg-[#0F121A] px-2 py-1">
+                      <p className="text-[10px] text-[#8B94A6]">
+                        {language === "pt" ? "Rendimento" : "Profit"}
+                      </p>
+                      <p className="text-[11px] font-semibold text-emerald-300">
+                        {fixedSnapshot
+                          ? formatCurrency(fixedSnapshot.profit, language)
+                          : "--"}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-2 grid grid-cols-2 gap-1.5">
+                    {metricConfig.map((metric) => {
+                      const metricValue = getMetricValue(quote, metric.key);
+                      const isExceeded = exceededMetrics.includes(metric.key);
+                      let display = "--";
+                      if (metricValue != null) {
+                        if (metric.isPercent) {
+                          display = formatPlainPercent(metricValue, language);
+                        } else if (metric.key === "bookValue") {
+                          display = formatCurrency(metricValue, language);
+                        } else if (metric.key === "sharesOutstanding") {
+                          display = formatCompactNumber(metricValue, language);
+                        } else {
+                          display = new Intl.NumberFormat(
+                            language === "pt" ? "pt-BR" : "en-US",
+                            { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+                          ).format(metricValue);
+                        }
                       }
-                    }
-                    return (
-                      <div
-                        key={`${asset.id}-${metric.key}`}
-                        className={`rounded-md border px-2 py-1 ${
-                          isExceeded
-                            ? "border-red-500/40 bg-red-500/10"
-                            : "border-[#232D3F] bg-[#0F121A]"
-                        }`}
-                      >
-                        <p className="text-[10px] text-[#8B94A6]">{metric.label}</p>
-                        <p
-                          className={`text-[11px] font-semibold ${
-                            isExceeded ? "text-red-300" : "text-[#D8DEE9]"
+                      return (
+                        <div
+                          key={`${asset.id}-${metric.key}`}
+                          className={`rounded-md border px-2 py-1 ${
+                            isExceeded
+                              ? "border-red-500/40 bg-red-500/10"
+                              : "border-[#232D3F] bg-[#0F121A]"
                           }`}
                         >
-                          {display}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
+                          <p className="text-[10px] text-[#8B94A6]">{metric.label}</p>
+                          <p
+                            className={`text-[11px] font-semibold ${
+                              isExceeded ? "text-red-300" : "text-[#D8DEE9]"
+                            }`}
+                          >
+                            {display}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
               <div className="h-40 min-w-0">
                 {history.length ? (
@@ -2133,6 +2489,9 @@ export function InvestmentsScreen() {
                       type="button"
                       onClick={() => {
                         setType("b3");
+                        setMode("quantity");
+                        setSymbol("");
+                        setPreviewQuote(null);
                         setCryptoPickerOpen(false);
                       }}
                       className={`flex-1 rounded-xl border px-3 py-2 text-xs ${
@@ -2147,6 +2506,7 @@ export function InvestmentsScreen() {
                       type="button"
                       onClick={() => {
                         setType("crypto");
+                        setMode("quantity");
                         setSymbol("");
                         setSelectedCrypto(null);
                         setCryptoMarket(null);
@@ -2161,6 +2521,26 @@ export function InvestmentsScreen() {
                       }`}
                     >
                       {t("investments.crypto")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setType("fixed_income");
+                        setMode("value");
+                        setSymbol("CDI");
+                        setSelectedCrypto(null);
+                        setCryptoMarket(null);
+                        setPreviewQuote(null);
+                        setFeaturedCryptoOptions([]);
+                        setCryptoPickerOpen(false);
+                      }}
+                      className={`flex-1 rounded-xl border px-3 py-2 text-xs ${
+                        type === "fixed_income"
+                          ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
+                          : "border-[#1C2332] bg-[#0F121A] text-[#DCE3EE]"
+                      }`}
+                    >
+                      {t("investments.fixedIncome")}
                     </button>
                   </div>
                   <div>
@@ -2254,6 +2634,16 @@ export function InvestmentsScreen() {
                           </div>
                         ) : null}
                       </div>
+                    ) : type === "fixed_income" ? (
+                      <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
+                        <p className="text-sm font-semibold text-[#E4E7EC]">
+                          {t("investments.fixedIncome")}
+                        </p>
+                        <p className="mt-1 text-[11px] text-[#8B94A6]">
+                          {t("investments.fixedIncomeHint")}
+                        </p>
+                        <p className="mt-1 text-[11px] text-[#8B94A6]">CDI</p>
+                      </div>
                     ) : (
                       <div>
                         <input
@@ -2282,62 +2672,103 @@ export function InvestmentsScreen() {
                   />
                 </div>
 
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setMode("quantity")}
-                    className={`flex-1 rounded-xl border px-3 py-2 text-xs ${
-                      mode === "quantity"
-                        ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
-                        : "border-[#1C2332] bg-[#0F121A] text-[#DCE3EE]"
-                    }`}
-                  >
-                    {t("investments.modeQuantity")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMode("value")}
-                    className={`flex-1 rounded-xl border px-3 py-2 text-xs ${
-                      mode === "value"
-                        ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
-                        : "border-[#1C2332] bg-[#0F121A] text-[#DCE3EE]"
-                    }`}
-                  >
-                    {t("investments.modeValue")}
-                  </button>
-                </div>
+                {type !== "fixed_income" ? (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setMode("quantity")}
+                      className={`flex-1 rounded-xl border px-3 py-2 text-xs ${
+                        mode === "quantity"
+                          ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
+                          : "border-[#1C2332] bg-[#0F121A] text-[#DCE3EE]"
+                      }`}
+                    >
+                      {t("investments.modeQuantity")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMode("value")}
+                      className={`flex-1 rounded-xl border px-3 py-2 text-xs ${
+                        mode === "value"
+                          ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
+                          : "border-[#1C2332] bg-[#0F121A] text-[#DCE3EE]"
+                      }`}
+                    >
+                      {t("investments.modeValue")}
+                    </button>
+                  </div>
+                ) : null}
 
                 <div className="grid gap-3 md:grid-cols-2">
-                  {mode === "quantity" ? (
-                    <input
-                      value={quantity}
-                      onChange={(event) => setQuantity(event.target.value)}
-                      placeholder={t("investments.quantity")}
-                      className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
-                    />
+                  {type === "fixed_income" ? (
+                    <>
+                      <input
+                        value={investedValue}
+                        onChange={(event) => setInvestedValue(formatCentsInput(event.target.value))}
+                        placeholder={t("investments.investedValue")}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
+                      />
+                      <input
+                        value={fixedCdiRatePct}
+                        onChange={(event) => setFixedCdiRatePct(event.target.value)}
+                        placeholder={t("investments.fixedCdiRate")}
+                        inputMode="decimal"
+                        className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
+                      />
+                      <input
+                        value={fixedCdiMultiplierPct}
+                        onChange={(event) => setFixedCdiMultiplierPct(event.target.value)}
+                        placeholder={t("investments.fixedCdiMultiplier")}
+                        inputMode="decimal"
+                        className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
+                      />
+                      <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
+                        <p className="text-[11px] text-[#8B94A6]">
+                          {t("investments.fixedEffectiveRate")}
+                        </p>
+                        <p className="text-sm font-semibold text-[#E5E8EF]">
+                          {fixedPreviewSnapshot
+                            ? formatPlainPercent(fixedPreviewSnapshot.effectiveAnnualPct, language)
+                            : "--"}
+                        </p>
+                      </div>
+                    </>
                   ) : (
-                    <input
-                      value={investedValue}
-                      onChange={(event) => setInvestedValue(formatCentsInput(event.target.value))}
-                      placeholder={t("investments.investedValue")}
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
-                    />
+                    <>
+                      {mode === "quantity" ? (
+                        <input
+                          value={quantity}
+                          onChange={(event) => setQuantity(event.target.value)}
+                          placeholder={t("investments.quantity")}
+                          className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
+                        />
+                      ) : (
+                        <input
+                          value={investedValue}
+                          onChange={(event) => setInvestedValue(formatCentsInput(event.target.value))}
+                          placeholder={t("investments.investedValue")}
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
+                        />
+                      )}
+                      <div>
+                        <input
+                          value={manualPrice}
+                          onChange={(event) => setManualPrice(formatCentsInput(event.target.value))}
+                          placeholder={t("investments.manualPrice")}
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
+                        />
+                        <p className="mt-1 text-[11px] text-[#8B94A6]">
+                          {t("investments.manualPriceHint")}
+                        </p>
+                      </div>
+                    </>
                   )}
-                  <div>
-                    <input
-                      value={manualPrice}
-                      onChange={(event) => setManualPrice(formatCentsInput(event.target.value))}
-                      placeholder={t("investments.manualPrice")}
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
-                    />
-                    <p className="mt-1 text-[11px] text-[#8B94A6]">
-                      {t("investments.manualPriceHint")}
-                    </p>
-                  </div>
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-2">
@@ -2346,41 +2777,78 @@ export function InvestmentsScreen() {
                       {t("investments.total")}
                     </p>
                     <p className="text-sm font-semibold text-[#E5E8EF]">
-                      {priceBig && computed.qty.gt(0)
+                      {(type === "fixed_income" || priceBig) && computed.qty.gt(0)
                         ? formatCurrency(Number(computed.total.toString()), language)
                         : "--"}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
-                    <p className="text-[11px] text-[#8B94A6]">
-                      {t("investments.currentPrice")}
-                    </p>
-                    <p className="text-sm font-semibold text-[#E5E8EF]">
-                      {displayPrice != null
-                        ? formatCurrency(displayPrice, language)
-                        : "--"}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
-                    <p className="text-[11px] text-[#8B94A6]">
-                      {t("investments.currentAvg")}
-                    </p>
-                    <p className="text-sm font-semibold text-[#E5E8EF]">
-                      {currentAvg.gt(0)
-                        ? formatCurrency(Number(currentAvg.toString()), language)
-                        : "--"}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
-                    <p className="text-[11px] text-[#8B94A6]">
-                      {t("investments.newAvg")}
-                    </p>
-                    <p className="text-sm font-semibold text-[#E5E8EF]">
-                      {computed.newAvg.gt(0)
-                        ? formatCurrency(Number(computed.newAvg.toString()), language)
-                        : "--"}
-                    </p>
-                  </div>
+                  {type === "fixed_income" ? (
+                    <>
+                      <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
+                        <p className="text-[11px] text-[#8B94A6]">
+                          {t("investments.fixedLiveValue")}
+                        </p>
+                        <p className="text-sm font-semibold text-[#E5E8EF]">
+                          {fixedPreviewSnapshot
+                            ? formatCurrency(fixedPreviewSnapshot.currentValue, language)
+                            : "--"}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
+                        <p className="text-[11px] text-[#8B94A6]">
+                          {t("investments.fixedProfit")}
+                        </p>
+                        <p className="text-sm font-semibold text-emerald-300">
+                          {fixedPreviewSnapshot
+                            ? formatCurrency(fixedPreviewSnapshot.profit, language)
+                            : "--"}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
+                        <p className="text-[11px] text-[#8B94A6]">
+                          {t("investments.fixedDailyEstimate")}
+                        </p>
+                        <p className="text-sm font-semibold text-[#E5E8EF]">
+                          {fixedPreviewSnapshot
+                            ? formatCurrency(fixedPreviewSnapshot.estimatedDailyProfit, language)
+                            : "--"}
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
+                        <p className="text-[11px] text-[#8B94A6]">
+                          {t("investments.currentPrice")}
+                        </p>
+                        <p className="text-sm font-semibold text-[#E5E8EF]">
+                          {displayPrice != null
+                            ? formatCurrency(displayPrice, language)
+                            : "--"}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
+                        <p className="text-[11px] text-[#8B94A6]">
+                          {t("investments.currentAvg")}
+                        </p>
+                        <p className="text-sm font-semibold text-[#E5E8EF]">
+                          {currentAvg.gt(0)
+                            ? formatCurrency(Number(currentAvg.toString()), language)
+                            : "--"}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
+                        <p className="text-[11px] text-[#8B94A6]">
+                          {t("investments.newAvg")}
+                        </p>
+                        <p className="text-sm font-semibold text-[#E5E8EF]">
+                          {computed.newAvg.gt(0)
+                            ? formatCurrency(Number(computed.newAvg.toString()), language)
+                            : "--"}
+                        </p>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {type === "b3" ? (
@@ -2496,6 +2964,24 @@ export function InvestmentsScreen() {
                   </div>
                 ) : null}
 
+                {type === "fixed_income" ? (
+                  <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
+                    <p className="text-[11px] text-[#8B94A6]">
+                      {t("investments.fixedRealtimeNote")}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-[#E5E8EF]">
+                      {fixedPreviewSnapshot
+                        ? `${formatCurrency(fixedPreviewSnapshot.currentValue, language)} · ${formatPlainPercent(fixedPreviewSnapshot.effectiveAnnualPct, language)}`
+                        : "--"}
+                    </p>
+                    <p className="mt-1 text-[11px] text-[#8B94A6]">
+                      {fixedPreviewSnapshot
+                        ? `${language === "pt" ? "Dias corridos" : "Elapsed days"}: ${Math.floor(fixedPreviewSnapshot.elapsedDays)}`
+                        : "--"}
+                    </p>
+                  </div>
+                ) : null}
+
                 {errorMsg ? <p className="text-xs text-red-400">{errorMsg}</p> : null}
 
                 <button
@@ -2515,7 +3001,13 @@ export function InvestmentsScreen() {
                       {activeAsset.name || activeAsset.symbol.toUpperCase()}
                     </p>
                     <p className="text-xs text-[#8B94A6]">
-                      {activeAsset.type === "b3" ? "B3" : "Cripto"} -{" "}
+                      {activeAsset.type === "b3"
+                        ? "B3"
+                        : activeAsset.type === "crypto"
+                          ? "Cripto"
+                          : language === "pt"
+                            ? "Renda fixa"
+                            : "Fixed income"} -{" "}
                       {activeAsset.symbol}
                     </p>
                   </div>

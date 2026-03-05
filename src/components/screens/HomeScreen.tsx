@@ -67,7 +67,7 @@ type CardReminder = {
 
 type Investment = {
   id: string;
-  type: "b3" | "crypto";
+  type: "b3" | "crypto" | "fixed_income";
   symbol: string;
   name: string | null;
   quantity: number | string;
@@ -1487,7 +1487,13 @@ export function HomeScreen() {
                       {(investment.name || investment.symbol).toUpperCase()}
                     </p>
                     <p className="text-xs text-[#8B94A6]">
-                      {investment.type === "b3" ? "B3" : "Cripto"} ·{" "}
+                      {investment.type === "b3"
+                        ? "B3"
+                        : investment.type === "crypto"
+                          ? "Cripto"
+                          : language === "pt"
+                            ? "Renda fixa"
+                            : "Fixed income"} ·{" "}
                       {t("investments.quantity")} {investment.quantity}
                     </p>
                   </div>

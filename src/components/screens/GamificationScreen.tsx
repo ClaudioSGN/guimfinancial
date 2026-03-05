@@ -35,7 +35,7 @@ type FriendshipRow = {
 type InvestmentRow = {
   id: string;
   user_id: string;
-  type: "b3" | "crypto";
+  type: "b3" | "crypto" | "fixed_income";
   symbol: string;
   name: string | null;
   quantity: number | string;

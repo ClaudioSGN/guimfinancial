@@ -64,11 +64,14 @@ create table if not exists reminder_settings (
 create table if not exists investments (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users (id) on delete cascade,
-  type text not null check (type in ('b3', 'crypto')),
+  type text not null check (type in ('b3', 'crypto', 'fixed_income')),
   symbol text not null,
   name text,
   quantity numeric not null default 0,
   average_price numeric not null default 0,
+  cdi_rate_pct numeric,
+  cdi_multiplier_pct numeric,
+  fixed_started_at timestamptz,
   currency text not null default 'BRL',
   created_at timestamptz not null default now()
 );
@@ -93,6 +96,11 @@ alter table transfers add column if not exists user_id uuid references auth.user
 alter table reminder_settings add column if not exists user_id uuid references auth.users (id) on delete cascade;
 alter table investments add column if not exists user_id uuid references auth.users (id) on delete cascade;
 alter table investment_purchases add column if not exists user_id uuid references auth.users (id) on delete cascade;
+alter table investments add column if not exists cdi_rate_pct numeric;
+alter table investments add column if not exists cdi_multiplier_pct numeric;
+alter table investments add column if not exists fixed_started_at timestamptz;
+alter table investments drop constraint if exists investments_type_check;
+alter table investments add constraint investments_type_check check (type in ('b3', 'crypto', 'fixed_income'));
 
 alter table accounts alter column user_id set default auth.uid();
 alter table credit_cards alter column user_id set default auth.uid();
