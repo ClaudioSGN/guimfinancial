@@ -22,6 +22,19 @@ The production build uses static export (`out/`) and bundles an MSI via Tauri:
 npm run tauri:build
 ```
 
+## Auth Redirects (Password Recovery)
+
+Password recovery links should point to a public URL, not localhost.
+
+Set one of these env vars:
+
+- `NEXT_PUBLIC_AUTH_REDIRECT_URL=https://your-public-domain.com`
+- or `NEXT_PUBLIC_APP_URL=https://your-public-domain.com`
+
+The app will use `<your-url>/reset-password` as the recovery redirect target.
+If neither is set and the app runs on localhost/Tauri, Supabase falls back to your
+project Auth Site URL and configured Redirect URLs.
+
 ## Updater (Signing)
 
 To generate updater artifacts (`bundle.createUpdaterArtifacts: true`), set:

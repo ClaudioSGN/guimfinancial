@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useLanguage } from "@/lib/language";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabaseClient";
+import { getErrorMessage } from "@/lib/errorUtils";
 import { CheckForUpdatesCard } from "@/components/CheckForUpdatesCard";
 
 const STORAGE_KEYS = {
@@ -17,6 +18,12 @@ const REMINDER_SETTINGS_ID = "00000000-0000-0000-0000-000000000001";
 function pad2(value: number) {
   return String(value).padStart(2, "0");
 }
+
+type TotpSetupState = {
+  factorId: string;
+  qrCode: string;
+  secret: string;
+};
 
 export function MoreScreen() {
   const { language, setLanguage, t } = useLanguage();
@@ -33,6 +40,14 @@ export function MoreScreen() {
   const [resettingData, setResettingData] = useState(false);
   const [resetDataError, setResetDataError] = useState<string | null>(null);
   const [resetDataSuccess, setResetDataSuccess] = useState(false);
+  const [mfaLoading, setMfaLoading] = useState(false);
+  const [mfaSaving, setMfaSaving] = useState(false);
+  const [mfaError, setMfaError] = useState<string | null>(null);
+  const [mfaSuccess, setMfaSuccess] = useState<string | null>(null);
+  const [verifiedTotpFactorId, setVerifiedTotpFactorId] = useState<string | null>(null);
+  const [totpSetup, setTotpSetup] = useState<TotpSetupState | null>(null);
+  const [totpCode, setTotpCode] = useState("");
+  const [disableTotpCode, setDisableTotpCode] = useState("");
 
   useEffect(() => {
     const storedEnabled = window.localStorage.getItem(STORAGE_KEYS.enabled);
@@ -46,6 +61,28 @@ export function MoreScreen() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    async function loadMfaState() {
+      if (!user) {
+        setVerifiedTotpFactorId(null);
+        setTotpSetup(null);
+        return;
+      }
+
+      setMfaLoading(true);
+      setMfaError(null);
+      const { data, error } = await supabase.auth.mfa.listFactors();
+      setMfaLoading(false);
+      if (error) {
+        setMfaError(getErrorMessage(error));
+        return;
+      }
+      setVerifiedTotpFactorId(data.totp[0]?.id ?? null);
+    }
+
+    loadMfaState();
+  }, [user]);
 
   const timeLabel = useMemo(() => `${pad2(hour)}:${pad2(minute)}`, [hour, minute]);
 
@@ -176,6 +213,127 @@ export function MoreScreen() {
     setTimeout(() => setResetDataSuccess(false), 3000);
   }
 
+  async function refreshMfaState() {
+    if (!user) {
+      setVerifiedTotpFactorId(null);
+      setTotpSetup(null);
+      return;
+    }
+    const { data, error } = await supabase.auth.mfa.listFactors();
+    if (error) {
+      setMfaError(getErrorMessage(error));
+      return;
+    }
+    setVerifiedTotpFactorId(data.totp[0]?.id ?? null);
+  }
+
+  async function handleStart2FA() {
+    if (!user) return;
+    setMfaError(null);
+    setMfaSuccess(null);
+    setMfaSaving(true);
+    const { data, error } = await supabase.auth.mfa.enroll({
+      factorType: "totp",
+      friendlyName: "Google Authenticator",
+      issuer: "GuimFinancial",
+    });
+    setMfaSaving(false);
+
+    if (error || !data) {
+      setMfaError(getErrorMessage(error ?? "Falha ao iniciar 2FA."));
+      return;
+    }
+
+    setTotpSetup({
+      factorId: data.id,
+      qrCode: data.totp.qr_code,
+      secret: data.totp.secret,
+    });
+    setTotpCode("");
+  }
+
+  async function handleCancel2FASetup() {
+    if (!totpSetup) return;
+    setMfaSaving(true);
+    await supabase.auth.mfa.unenroll({ factorId: totpSetup.factorId });
+    setMfaSaving(false);
+    setTotpSetup(null);
+    setTotpCode("");
+  }
+
+  async function handleConfirm2FASetup() {
+    if (!totpSetup) return;
+    const code = totpCode.trim();
+    if (!code) {
+      setMfaError(
+        language === "pt"
+          ? "Digite o codigo de 6 digitos do autenticador."
+          : "Enter the 6-digit authenticator code.",
+      );
+      return;
+    }
+
+    setMfaError(null);
+    setMfaSuccess(null);
+    setMfaSaving(true);
+    const { error } = await supabase.auth.mfa.challengeAndVerify({
+      factorId: totpSetup.factorId,
+      code,
+    });
+    setMfaSaving(false);
+
+    if (error) {
+      setMfaError(getErrorMessage(error));
+      return;
+    }
+
+    setTotpSetup(null);
+    setTotpCode("");
+    setMfaSuccess(language === "pt" ? "2FA ativado com sucesso." : "2FA enabled.");
+    await refreshMfaState();
+  }
+
+  async function handleDisable2FA() {
+    if (!verifiedTotpFactorId) return;
+    const code = disableTotpCode.trim();
+    if (!code) {
+      setMfaError(
+        language === "pt"
+          ? "Digite o codigo atual para desativar."
+          : "Enter your current code to disable.",
+      );
+      return;
+    }
+
+    setMfaError(null);
+    setMfaSuccess(null);
+    setMfaSaving(true);
+
+    const verifyRes = await supabase.auth.mfa.challengeAndVerify({
+      factorId: verifiedTotpFactorId,
+      code,
+    });
+    if (verifyRes.error) {
+      setMfaSaving(false);
+      setMfaError(getErrorMessage(verifyRes.error));
+      return;
+    }
+
+    const { error } = await supabase.auth.mfa.unenroll({
+      factorId: verifiedTotpFactorId,
+    });
+    setMfaSaving(false);
+
+    if (error) {
+      setMfaError(getErrorMessage(error));
+      return;
+    }
+
+    setDisableTotpCode("");
+    setMfaSuccess(language === "pt" ? "2FA desativado." : "2FA disabled.");
+    await refreshMfaState();
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="space-y-1">
@@ -258,6 +416,160 @@ export function MoreScreen() {
           </div>
         </div>
       </div>
+
+      {user ? (
+        <div className="space-y-3">
+          <p className="text-sm font-semibold text-[#C7CEDA]">
+            {language === "pt"
+              ? "2FA (Google Authenticator)"
+              : "2FA (Google Authenticator)"}
+          </p>
+          <div className="rounded-2xl border border-[#1E232E] bg-[#121621] p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-[#E4E7EC]">
+                  {language === "pt" ? "Protecao da conta" : "Account protection"}
+                </p>
+                <p className="text-xs text-[#8A93A3]">
+                  {language === "pt"
+                    ? "Exige codigo do app autenticador ao entrar."
+                    : "Requires an authenticator app code on login."}
+                </p>
+              </div>
+              <span
+                className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${
+                  verifiedTotpFactorId
+                    ? "border-[#1E5B42] bg-[#113328] text-[#6CF1C2]"
+                    : "border-[#2A3140] bg-[#151A27] text-[#A7AFBF]"
+                }`}
+              >
+                {verifiedTotpFactorId
+                  ? language === "pt"
+                    ? "Ativo"
+                    : "Enabled"
+                  : language === "pt"
+                    ? "Inativo"
+                    : "Disabled"}
+              </span>
+            </div>
+
+            {mfaLoading ? (
+              <p className="mt-3 text-xs text-[#8A93A3]">
+                {language === "pt" ? "Carregando estado do 2FA..." : "Loading 2FA state..."}
+              </p>
+            ) : null}
+
+            {totpSetup ? (
+              <div className="mt-4 space-y-3">
+                <p className="text-xs text-[#8A93A3]">
+                  {language === "pt"
+                    ? "Escaneie o QR code no Google Authenticator e confirme com o codigo de 6 digitos."
+                    : "Scan the QR code in Google Authenticator and confirm using the 6-digit code."}
+                </p>
+                <div className="flex flex-wrap gap-4">
+                  <div className="rounded-xl border border-[#243042] bg-[#0D131F] p-2">
+                    <img
+                      src={`data:image/svg+xml;utf-8,${encodeURIComponent(totpSetup.qrCode)}`}
+                      alt="QR code 2FA"
+                      className="h-40 w-40 rounded-lg"
+                    />
+                  </div>
+                  <div className="min-w-[220px] flex-1 space-y-2">
+                    <p className="text-xs text-[#8A93A3]">
+                      {language === "pt" ? "Chave manual:" : "Manual key:"}
+                    </p>
+                    <code className="block overflow-x-auto rounded-lg border border-[#243042] bg-[#0D131F] px-3 py-2 text-[11px] text-[#C7CEDA]">
+                      {totpSetup.secret}
+                    </code>
+                    <input
+                      value={totpCode}
+                      onChange={(event) => setTotpCode(event.target.value)}
+                      placeholder={language === "pt" ? "Codigo de 6 digitos" : "6-digit code"}
+                      inputMode="numeric"
+                      className="w-full rounded-xl border border-[#2A3140] bg-[#151A27] px-4 py-2 text-sm text-[#E6EDF3]"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleConfirm2FASetup}
+                        disabled={mfaSaving}
+                        className="flex-1 rounded-xl bg-[#E6EDF3] py-2 text-sm font-semibold text-[#0C1018] disabled:opacity-60"
+                      >
+                        {mfaSaving
+                          ? language === "pt"
+                            ? "Verificando..."
+                            : "Verifying..."
+                          : language === "pt"
+                            ? "Confirmar 2FA"
+                            : "Confirm 2FA"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancel2FASetup}
+                        disabled={mfaSaving}
+                        className="rounded-xl border border-[#2A3140] bg-[#151A27] px-3 py-2 text-sm font-semibold text-[#DCE3EE] disabled:opacity-60"
+                      >
+                        {language === "pt" ? "Cancelar" : "Cancel"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : verifiedTotpFactorId ? (
+              <div className="mt-4 space-y-2">
+                <p className="text-xs text-[#8A93A3]">
+                  {language === "pt"
+                    ? "Para desativar, confirme com um codigo atual do autenticador."
+                    : "To disable, confirm with a current authenticator code."}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    value={disableTotpCode}
+                    onChange={(event) => setDisableTotpCode(event.target.value)}
+                    placeholder={language === "pt" ? "Codigo de 6 digitos" : "6-digit code"}
+                    inputMode="numeric"
+                    className="min-w-[220px] flex-1 rounded-xl border border-[#2A3140] bg-[#151A27] px-4 py-2 text-sm text-[#E6EDF3]"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleDisable2FA}
+                    disabled={mfaSaving}
+                    className="rounded-xl border border-[#5A2D2D] bg-[#241416] px-4 py-2 text-sm font-semibold text-[#F4C4C4] disabled:opacity-60"
+                  >
+                    {mfaSaving
+                      ? language === "pt"
+                        ? "Desativando..."
+                        : "Disabling..."
+                      : language === "pt"
+                        ? "Desativar 2FA"
+                        : "Disable 2FA"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={handleStart2FA}
+                  disabled={mfaSaving}
+                  className="rounded-xl bg-[#E6EDF3] px-4 py-2 text-sm font-semibold text-[#0C1018] disabled:opacity-60"
+                >
+                  {mfaSaving
+                    ? language === "pt"
+                      ? "Preparando..."
+                      : "Preparing..."
+                    : language === "pt"
+                      ? "Ativar 2FA"
+                      : "Enable 2FA"}
+                </button>
+              </div>
+            )}
+
+            {mfaError ? <p className="mt-3 text-xs text-red-400">{mfaError}</p> : null}
+            {mfaSuccess ? <p className="mt-3 text-xs text-[#5DD6C7]">{mfaSuccess}</p> : null}
+          </div>
+        </div>
+      ) : null}
 
       <div className="space-y-3">
         <p className="text-sm font-semibold text-[#C7CEDA]">{t("more.moreOptions")}</p>

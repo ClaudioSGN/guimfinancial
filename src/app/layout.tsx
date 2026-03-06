@@ -16,8 +16,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="pt-BR">
-      <body className="min-h-screen bg-[#0D0F14] text-slate-50">
+    <html lang="pt-BR" suppressHydrationWarning>
+      <body className="min-h-screen bg-[#0D0F14] text-slate-50" suppressHydrationWarning>
         <LanguageProvider>
           <AuthProvider>
             <DailyReminderWatcher />

@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 
-const PUBLIC_ROUTES = new Set(["/login"]);
+const PUBLIC_ROUTES = new Set(["/login", "/reset-password"]);
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -18,7 +18,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       router.replace("/login");
       return;
     }
-    if (user && isPublic) {
+    if (user && pathname === "/login") {
       router.replace("/");
     }
   }, [loading, user, pathname, router]);
