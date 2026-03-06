@@ -1706,6 +1706,8 @@ export function InvestmentsScreen() {
       setErrorMsg(t("investments.removeError"));
       return;
     }
+    setSelectedAsset(null);
+    setShowModal(false);
     await loadAssets();
   }
 
@@ -2415,7 +2417,6 @@ export function InvestmentsScreen() {
       {filterOpen ? (
         <div
           className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-6"
-          onClick={() => setFilterOpen(false)}
         >
           <div
             className="w-full max-w-2xl rounded-3xl border border-[#1E232E] bg-[#0F121A] p-5"

@@ -8,6 +8,13 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabaseClient";
 import { loadProfileSettings, saveProfileSettings } from "@/lib/profile";
 import {
+  DEFAULT_PROFILE_BIO_CODE,
+  getNextLockedProfileBio,
+  getProfileBioLabel,
+  getUnlockedProfileBios,
+  normalizeProfileBioCode,
+} from "@/lib/profileBios";
+import {
   isGamificationSchemaMissingCached,
   isGamificationSchemaMissingError,
   markGamificationSchemaAvailable,
@@ -21,6 +28,8 @@ type LeagueProfileRow = {
   avatar_url: string | null;
   coins: number | string | null;
   serasa_negative: boolean | null;
+  bio_code: string | null;
+  missions_completed: number | string | null;
   friend_code: string | null;
   created_at: string | null;
   updated_at: string | null;
@@ -55,6 +64,7 @@ type FriendListRow = {
   avatar_url: string | null;
   email: string | null;
   is_mutual: boolean | null;
+  serasa_negative: boolean | null;
 };
 
 type MedalRarity = "common" | "rare" | "epic" | "legendary";
@@ -70,8 +80,27 @@ function getErrorMessage(error: unknown) {
 
 function getMissingColumn(error: unknown) {
   const message = getErrorMessage(error);
-  const match = message.match(/column ["']?([a-zA-Z0-9_]+)["']? does not exist/i);
-  return match?.[1] ?? null;
+  const patterns = [
+    /column ["']?([a-zA-Z0-9_]+)["']? does not exist/i,
+    /could not find (?:the )?["']?([a-zA-Z0-9_]+)["']? column/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (match?.[1]) return match[1];
+  }
+
+  if (error && typeof error === "object") {
+    const details = (error as { details?: unknown }).details;
+    if (typeof details === "string") {
+      for (const pattern of patterns) {
+        const match = details.match(pattern);
+        if (match?.[1]) return match[1];
+      }
+    }
+  }
+
+  return null;
 }
 
 function readTextField(source: unknown, key: string) {
@@ -256,6 +285,7 @@ export function ProfileScreen() {
   const [profileAvatar, setProfileAvatar] = useState<string | null>(null);
   const [leagueDisplayName, setLeagueDisplayName] = useState("");
   const [leagueSerasaNegative, setLeagueSerasaNegative] = useState(false);
+  const [selectedBioCode, setSelectedBioCode] = useState(DEFAULT_PROFILE_BIO_CODE);
   const [activeTab, setActiveTab] = useState<"overview" | "friends">("overview");
   const [profileRow, setProfileRow] = useState<LeagueProfileRow | null>(null);
   const [medals, setMedals] = useState<MedalRow[]>([]);
@@ -265,8 +295,17 @@ export function ProfileScreen() {
   const [loadingData, setLoadingData] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [infoMsg, setInfoMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [schemaMissing, setSchemaMissing] = useState(false);
+  const [isBasicProfileModalOpen, setIsBasicProfileModalOpen] = useState(false);
+  const [basicProfileSnapshot, setBasicProfileSnapshot] = useState<{
+    username: string;
+    leagueName: string;
+    serasaNegative: boolean;
+    bioCode: string;
+    avatarUrl: string;
+  } | null>(null);
 
   const targetUserFromQuery = (searchParams.get("user") ?? "").trim();
   const targetUserId = targetUserFromQuery || user?.id || null;
@@ -281,6 +320,17 @@ export function ProfileScreen() {
       typeof user?.email === "string" ? user.email.split("@")[0].trim() : "";
     return (username || emailFallback || "").trim();
   }, [user]);
+
+  useEffect(() => {
+    if (!isBasicProfileModalOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsBasicProfileModalOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isBasicProfileModalOpen]);
 
   useEffect(() => {
     const localProfile = loadProfileSettings();
@@ -355,6 +405,9 @@ export function ProfileScreen() {
           setProfileAvatar((current) => current || avatarUrl || null);
         }
         setLeagueSerasaNegative(readBooleanField(row, "serasa_negative"));
+        setSelectedBioCode(
+          normalizeProfileBioCode(readTextField(row, "bio_code")),
+        );
       }
 
       const [medalsRes, userMedalsRes] = await Promise.all([
@@ -384,7 +437,48 @@ export function ProfileScreen() {
       if (cancelled) return;
 
       if (!rpcRes.error) {
-        setFriendList((rpcRes.data ?? []) as FriendListRow[]);
+        const rpcRows = (rpcRes.data ?? []) as FriendListRow[];
+        const needsSerasaFill = rpcRows.some(
+          (entry) => typeof entry.serasa_negative !== "boolean",
+        );
+        if (needsSerasaFill && rpcRows.length) {
+          const serasaRes = await supabase
+            .from("gamification_profiles")
+            .select("user_id,serasa_negative")
+            .in(
+              "user_id",
+              rpcRows.map((entry) => entry.friend_user_id),
+            );
+          if (cancelled) return;
+          if (!serasaRes.error) {
+            const serasaById = new Map(
+              ((serasaRes.data ?? []) as Array<{
+                user_id: string;
+                serasa_negative: boolean | null;
+              }>).map((entry) => [entry.user_id, entry.serasa_negative]),
+            );
+            setFriendList(
+              rpcRows.map((entry) => ({
+                ...entry,
+                serasa_negative: serasaById.get(entry.friend_user_id) ?? null,
+              })),
+            );
+          } else {
+            setFriendList(
+              rpcRows.map((entry) => ({
+                ...entry,
+                serasa_negative: entry.serasa_negative ?? null,
+              })),
+            );
+          }
+        } else {
+          setFriendList(
+            rpcRows.map((entry) => ({
+              ...entry,
+              serasa_negative: entry.serasa_negative ?? null,
+            })),
+          );
+        }
       } else {
         const rpcMissing = isFunctionMissingError(rpcRes.error, "profile_friends_view");
         if (rpcMissing) {
@@ -435,7 +529,7 @@ export function ProfileScreen() {
           } else {
             const friendProfilesRes = await supabase
               .from("gamification_profiles")
-              .select("user_id,display_name,email,avatar_url")
+              .select("user_id,display_name,email,avatar_url,serasa_negative")
               .in("user_id", friendIds);
 
             if (friendProfilesRes.error) {
@@ -444,14 +538,15 @@ export function ProfileScreen() {
                 getErrorMessage(friendProfilesRes.error),
               );
               setFriendList(
-                friendIds.map((friendId) => ({
-                  friend_user_id: friendId,
-                  display_name: null,
-                  avatar_url: null,
-                  email: null,
-                  is_mutual: user.id !== targetUserId && viewerFriendIds.has(friendId),
-                })),
-              );
+                  friendIds.map((friendId) => ({
+                    friend_user_id: friendId,
+                    display_name: null,
+                    avatar_url: null,
+                    email: null,
+                    is_mutual: user.id !== targetUserId && viewerFriendIds.has(friendId),
+                    serasa_negative: null,
+                  })),
+                );
             } else {
               const profileById = new Map(
                 ((friendProfilesRes.data ?? []) as Array<{
@@ -459,6 +554,7 @@ export function ProfileScreen() {
                   display_name: string | null;
                   email: string | null;
                   avatar_url: string | null;
+                  serasa_negative: boolean | null;
                 }>).map((entry) => [entry.user_id, entry]),
               );
 
@@ -472,6 +568,7 @@ export function ProfileScreen() {
                       avatar_url: profile?.avatar_url ?? null,
                       email: profile?.email ?? null,
                       is_mutual: user.id !== targetUserId && viewerFriendIds.has(friendId),
+                      serasa_negative: profile?.serasa_negative ?? null,
                     };
                   })
                   .sort((a, b) =>
@@ -497,6 +594,7 @@ export function ProfileScreen() {
   function handleProfileFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+    setInfoMsg(null);
     setErrorMsg(null);
     if (!file.type.startsWith("image/")) {
       setErrorMsg(
@@ -514,9 +612,38 @@ export function ProfileScreen() {
     reader.readAsDataURL(file);
   }
 
+  function handleHeaderAvatarClick() {
+    if (!isOwnProfile) return;
+    setSaved(false);
+    setInfoMsg(null);
+    setErrorMsg(null);
+    const completedMissions = Math.max(
+      0,
+      Math.floor(toNumber(profileRow?.missions_completed ?? 0)),
+    );
+    const unlockedBioCodes = new Set(
+      getUnlockedProfileBios(completedMissions).map((entry) => entry.code),
+    );
+    const requestedBioCode = normalizeProfileBioCode(selectedBioCode);
+    const nextBioCode = unlockedBioCodes.has(requestedBioCode)
+      ? requestedBioCode
+      : DEFAULT_PROFILE_BIO_CODE;
+    const nextUsername = profileName.trim();
+    const nextLeagueName = (leagueDisplayName.trim() || nextUsername).trim();
+    setBasicProfileSnapshot({
+      username: nextUsername,
+      leagueName: nextLeagueName,
+      serasaNegative: leagueSerasaNegative,
+      bioCode: nextBioCode,
+      avatarUrl: profileAvatar || "",
+    });
+    setIsBasicProfileModalOpen(true);
+  }
+
   async function handleSave() {
     if (!user || !isOwnProfile) return;
     setErrorMsg(null);
+    setInfoMsg(null);
     setSaved(false);
 
     const nextUsername = profileName.trim();
@@ -527,6 +654,35 @@ export function ProfileScreen() {
       return;
     }
     const nextLeagueName = (leagueDisplayName.trim() || nextUsername).trim();
+    const completedMissions = Math.max(
+      0,
+      Math.floor(toNumber(profileRow?.missions_completed ?? 0)),
+    );
+    const unlockedBioCodes = new Set(
+      getUnlockedProfileBios(completedMissions).map((entry) => entry.code),
+    );
+    const requestedBioCode = normalizeProfileBioCode(selectedBioCode);
+    const nextBioCode = unlockedBioCodes.has(requestedBioCode)
+      ? requestedBioCode
+      : DEFAULT_PROFILE_BIO_CODE;
+    const currentSnapshot = {
+      username: nextUsername,
+      leagueName: nextLeagueName,
+      serasaNegative: leagueSerasaNegative,
+      bioCode: nextBioCode,
+      avatarUrl: profileAvatar || "",
+    };
+    if (
+      basicProfileSnapshot &&
+      basicProfileSnapshot.username === currentSnapshot.username &&
+      basicProfileSnapshot.leagueName === currentSnapshot.leagueName &&
+      basicProfileSnapshot.serasaNegative === currentSnapshot.serasaNegative &&
+      basicProfileSnapshot.bioCode === currentSnapshot.bioCode &&
+      basicProfileSnapshot.avatarUrl === currentSnapshot.avatarUrl
+    ) {
+      setInfoMsg(t("profile.noChanges"));
+      return;
+    }
     const emailAddress = typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
 
     setSaving(true);
@@ -595,6 +751,7 @@ export function ProfileScreen() {
           const optionalUpdate: Record<string, unknown> = {
             avatar_url: profileAvatar || null,
             email: emailAddress || null,
+            bio_code: nextBioCode,
           };
           while (Object.keys(optionalUpdate).length > 0) {
             const optionalRes = await supabase
@@ -618,6 +775,7 @@ export function ProfileScreen() {
 
       window.dispatchEvent(new Event("data-refresh"));
       setLeagueDisplayName(nextLeagueName);
+      setSelectedBioCode(nextBioCode);
       setProfileRow((current) => ({
         user_id: user.id,
         display_name: nextLeagueName,
@@ -625,11 +783,15 @@ export function ProfileScreen() {
         avatar_url: profileAvatar || current?.avatar_url || null,
         coins: current?.coins ?? 0,
         serasa_negative: leagueSerasaNegative,
+        bio_code: nextBioCode,
+        missions_completed: current?.missions_completed ?? 0,
         friend_code: current?.friend_code ?? null,
         created_at: current?.created_at ?? null,
         updated_at: new Date().toISOString(),
       }));
       setSaved(true);
+      setIsBasicProfileModalOpen(false);
+      setBasicProfileSnapshot(null);
       setTimeout(() => setSaved(false), 2500);
     } catch (error) {
       console.warn("[profile] handleSave:", getErrorMessage(error));
@@ -722,7 +884,40 @@ export function ProfileScreen() {
 
   const headerCoins = toNumber(profileRow?.coins ?? 0);
   const levelData = buildLevelData(headerCoins);
+  const missionsCompleted = Math.max(
+    0,
+    Math.floor(toNumber(profileRow?.missions_completed ?? 0)),
+  );
+  const unlockedBios = useMemo(
+    () => getUnlockedProfileBios(missionsCompleted),
+    [missionsCompleted],
+  );
+  const unlockedBioCodes = useMemo(
+    () => new Set(unlockedBios.map((entry) => entry.code)),
+    [unlockedBios],
+  );
+  const effectiveSelectedBioCode = useMemo(() => {
+    const normalized = normalizeProfileBioCode(selectedBioCode);
+    if (unlockedBioCodes.has(normalized)) return normalized;
+    return unlockedBios[0]?.code ?? DEFAULT_PROFILE_BIO_CODE;
+  }, [selectedBioCode, unlockedBioCodes, unlockedBios]);
+  const headerBioCode = isOwnProfile
+    ? effectiveSelectedBioCode
+    : normalizeProfileBioCode(readTextField(profileRow, "bio_code"));
+  const headerBio = getProfileBioLabel(headerBioCode, language);
+  const headerSerasaNegative = isOwnProfile
+    ? leagueSerasaNegative
+    : readBooleanField(profileRow, "serasa_negative");
+  const nextLockedBio = getNextLockedProfileBio(missionsCompleted);
   const mutualCount = friendList.filter((entry) => Boolean(entry.is_mutual)).length;
+
+  useEffect(() => {
+    setSelectedBioCode((current) => {
+      const normalized = normalizeProfileBioCode(current);
+      if (unlockedBioCodes.has(normalized)) return normalized;
+      return unlockedBios[0]?.code ?? DEFAULT_PROFILE_BIO_CODE;
+    });
+  }, [unlockedBioCodes, unlockedBios]);
 
   return (
     <div className="mx-auto flex w-full max-w-[980px] flex-col gap-6">
@@ -732,18 +927,45 @@ export function ProfileScreen() {
 
         <div className="relative z-10 flex flex-wrap items-start justify-between gap-5">
           <div className="flex min-w-0 items-center gap-4">
-            <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border border-[#33435F] bg-[#0F141E] text-xl font-semibold text-[#EAF3FF]">
-              {headerAvatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={headerAvatar}
-                  alt={headerName}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                getInitials(headerName)
-              )}
-            </div>
+            {isOwnProfile ? (
+              <button
+                type="button"
+                onClick={handleHeaderAvatarClick}
+                className={`flex h-20 w-20 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-[#33435F] bg-[#0F141E] text-xl font-semibold text-[#EAF3FF] transition hover:border-[#6FA8FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6FA8FF]/70 ${
+                  headerSerasaNegative ? "avatar-negative-border" : ""
+                }`}
+                title={t("profile.sectionBasic")}
+                aria-label={t("profile.sectionBasic")}
+              >
+                {headerAvatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={headerAvatar}
+                    alt={headerName}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  getInitials(headerName)
+                )}
+              </button>
+            ) : (
+              <div
+                className={`flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border border-[#33435F] bg-[#0F141E] text-xl font-semibold text-[#EAF3FF] ${
+                  headerSerasaNegative ? "avatar-negative-border" : ""
+                }`}
+              >
+                {headerAvatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={headerAvatar}
+                    alt={headerName}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  getInitials(headerName)
+                )}
+              </div>
+            )}
             <div className="min-w-0">
               <p className="text-[11px] uppercase tracking-[0.2em] text-[#8FA2C9]">
                 {isOwnProfile ? t("profile.yourProfile") : t("profile.playerProfile")}
@@ -752,6 +974,9 @@ export function ProfileScreen() {
               <p className="truncate text-sm text-[#9BB0D8]">
                 {profileEmail || (isOwnProfile ? user?.email || "--" : "--")}
               </p>
+              <div className="mt-2 inline-flex items-center rounded-full border border-[#33435F] bg-[#0D1422]/90 px-3 py-1 text-[11px] font-semibold text-[#CDE4FF]">
+                {headerBio}
+              </div>
             </div>
           </div>
 
@@ -923,100 +1148,14 @@ export function ProfileScreen() {
             </div>
           </section>
 
-          {isOwnProfile ? (
+          {!isOwnProfile ? (
             <section className="rounded-2xl border border-[#1E232E] bg-[#121621] p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-[#E4E7EC]">{t("profile.sectionBasic")}</p>
-                  <p className="mt-1 text-xs text-[#8A93A3]">{t("profile.subtitle")}</p>
-                </div>
-                <label className="flex cursor-pointer items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-[#263043] bg-[#0F141E] text-xs font-semibold text-[#E2E6ED]">
-                    {profileAvatar ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={profileAvatar}
-                        alt="Profile avatar preview"
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      getInitials(profileName || headerName)
-                    )}
-                  </div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleProfileFileChange}
-                  />
-                  <span className="rounded-full border border-[#2A3140] bg-[#151A27] px-4 py-2 text-xs text-[#E6EDF3]">
-                    {t("more.profileChoose")}
-                  </span>
-                </label>
-              </div>
-
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs uppercase tracking-[0.18em] text-[#8A93A3]">
-                    {t("more.profileName")}
-                  </label>
-                  <input
-                    type="text"
-                    value={profileName}
-                    onChange={(event) => setProfileName(event.target.value)}
-                    placeholder={t("more.profileNamePlaceholder")}
-                    className="rounded-xl border border-[#2A3140] bg-[#151A27] px-4 py-2 text-sm text-[#E6EDF3]"
-                  />
-                  <p className="text-xs text-[#8A93A3]">
-                    {t("gamification.accountEmail")}: {user?.email || "--"}
-                  </p>
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs uppercase tracking-[0.18em] text-[#8A93A3]">
-                    {t("more.leagueDisplayName")}
-                  </label>
-                  <input
-                    type="text"
-                    value={leagueDisplayName}
-                    onChange={(event) => setLeagueDisplayName(event.target.value)}
-                    placeholder={t("more.leagueDisplayNamePlaceholder")}
-                    className="rounded-xl border border-[#2A3140] bg-[#151A27] px-4 py-2 text-sm text-[#E6EDF3]"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setLeagueSerasaNegative((current) => !current)}
-                    className={`w-fit rounded-xl border px-3 py-2 text-xs font-semibold ${
-                      leagueSerasaNegative
-                        ? "border-red-500/50 bg-red-500/10 text-red-200"
-                        : "border-[#2A3344] bg-[#151A27] text-[#D6FBF4]"
-                    }`}
-                  >
-                    {leagueSerasaNegative
-                      ? t("gamification.serasaNegative")
-                      : t("gamification.serasaClean")}
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-4 space-y-2">
-                {errorMsg ? <p className="text-xs text-red-400">{errorMsg}</p> : null}
-                {saved ? <p className="text-xs text-[#5DD6C7]">{t("profile.saved")}</p> : null}
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="w-full rounded-xl bg-[#E6EDF3] py-3 text-sm font-semibold text-[#0C1018] disabled:opacity-60"
-                >
-                  {saving ? t("common.saving") : t("common.save")}
-                </button>
-              </div>
-            </section>
-          ) : (
-            <section className="rounded-2xl border border-[#1E232E] bg-[#121621] p-5">
+              <p className="text-sm font-semibold text-[#E4E7EC]">
+                Bio: {headerBio}
+              </p>
               <p className="text-sm text-[#9CA3AF]">{t("profile.readOnlyHint")}</p>
             </section>
-          )}
+          ) : null}
         </>
       ) : null}
 
@@ -1051,7 +1190,11 @@ export function ProfileScreen() {
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[#2A3344] bg-[#121B2C] text-xs font-semibold text-[#DCE7FF]">
+                      <div
+                        className={`flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[#2A3344] bg-[#121B2C] text-xs font-semibold text-[#DCE7FF] ${
+                          entry.serasa_negative ? "avatar-negative-border" : ""
+                        }`}
+                      >
                         {entry.avatar_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -1089,6 +1232,168 @@ export function ProfileScreen() {
             )}
           </div>
         </section>
+      ) : null}
+
+      {isOwnProfile && isBasicProfileModalOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#060B14]/80 px-4 py-6 backdrop-blur-sm"
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("profile.sectionBasic")}
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-[92vh] w-full max-w-[980px] overflow-y-auto rounded-2xl border border-[#1E232E] bg-[#121621] p-5 shadow-[0_30px_80px_rgba(0,0,0,0.55)]"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-[#E4E7EC]">{t("profile.sectionBasic")}</p>
+                <p className="mt-1 text-xs text-[#8A93A3]">{t("profile.subtitle")}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsBasicProfileModalOpen(false);
+                  setBasicProfileSnapshot(null);
+                  setInfoMsg(null);
+                }}
+                className="rounded-full border border-[#2A3140] bg-[#151A27] px-4 py-2 text-xs text-[#E6EDF3]"
+              >
+                {t("common.cancel")}
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
+              <label className="flex cursor-pointer items-center gap-3">
+                <div
+                  className={`flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-[#263043] bg-[#0F141E] text-xs font-semibold text-[#E2E6ED] ${
+                    leagueSerasaNegative ? "avatar-negative-border" : ""
+                  }`}
+                >
+                  {profileAvatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={profileAvatar}
+                      alt="Profile avatar preview"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    getInitials(profileName || headerName)
+                  )}
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleProfileFileChange}
+                />
+                <span className="rounded-full border border-[#2A3140] bg-[#151A27] px-4 py-2 text-xs text-[#E6EDF3]">
+                  {t("more.profileChoose")}
+                </span>
+              </label>
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div className="flex flex-col gap-2">
+                <label className="text-xs uppercase tracking-[0.18em] text-[#8A93A3]">
+                  {t("more.profileName")}
+                </label>
+                <input
+                  type="text"
+                  value={profileName}
+                  onChange={(event) => setProfileName(event.target.value)}
+                  placeholder={t("more.profileNamePlaceholder")}
+                  className="rounded-xl border border-[#2A3140] bg-[#151A27] px-4 py-2 text-sm text-[#E6EDF3]"
+                />
+                <p className="text-xs text-[#8A93A3]">
+                  {t("gamification.accountEmail")}: {user?.email || "--"}
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-xs uppercase tracking-[0.18em] text-[#8A93A3]">
+                  {t("more.leagueDisplayName")}
+                </label>
+                <input
+                  type="text"
+                  value={leagueDisplayName}
+                  onChange={(event) => setLeagueDisplayName(event.target.value)}
+                  placeholder={t("more.leagueDisplayNamePlaceholder")}
+                  className="rounded-xl border border-[#2A3140] bg-[#151A27] px-4 py-2 text-sm text-[#E6EDF3]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setLeagueSerasaNegative((current) => !current)}
+                  className={`w-fit rounded-xl border px-3 py-2 text-xs font-semibold ${
+                    leagueSerasaNegative
+                      ? "border-red-500/50 bg-red-500/10 text-red-200"
+                      : "border-[#2A3344] bg-[#151A27] text-[#D6FBF4]"
+                  }`}
+                >
+                  {leagueSerasaNegative
+                    ? t("gamification.serasaNegative")
+                    : t("gamification.serasaClean")}
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-2 md:col-span-2">
+                <label className="text-xs uppercase tracking-[0.18em] text-[#8A93A3]">
+                  Bio
+                </label>
+                <select
+                  value={effectiveSelectedBioCode}
+                  onChange={(event) => setSelectedBioCode(event.target.value)}
+                  className="rounded-xl border border-[#2A3140] bg-[#151A27] px-4 py-2 text-sm text-[#E6EDF3]"
+                >
+                  {unlockedBios.map((bio) => (
+                    <option key={bio.code} value={bio.code}>
+                      {language === "pt" ? bio.labelPt : bio.labelEn}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-[#8A93A3]">
+                  {language === "pt"
+                    ? `Missoes semanais resgatadas: ${missionsCompleted}`
+                    : `Weekly mission rewards claimed: ${missionsCompleted}`}
+                  {nextLockedBio
+                    ? language === "pt"
+                      ? ` - Proxima bio: ${nextLockedBio.labelPt} (${nextLockedBio.missionClaimsRequired})`
+                      : ` - Next bio: ${nextLockedBio.labelEn} (${nextLockedBio.missionClaimsRequired})`
+                    : language === "pt"
+                      ? " - Todas as bios desbloqueadas."
+                      : " - All bios unlocked."}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {infoMsg ? <p className="text-xs text-[#8A93A3]">{infoMsg}</p> : null}
+              {errorMsg ? <p className="text-xs text-red-400">{errorMsg}</p> : null}
+              {saved ? <p className="text-xs text-[#5DD6C7]">{t("profile.saved")}</p> : null}
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsBasicProfileModalOpen(false);
+                    setBasicProfileSnapshot(null);
+                    setInfoMsg(null);
+                  }}
+                  className="rounded-xl border border-[#2A3140] bg-[#151A27] px-4 py-3 text-sm font-semibold text-[#E6EDF3]"
+                >
+                  {t("common.cancel")}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="rounded-xl bg-[#E6EDF3] px-6 py-3 text-sm font-semibold text-[#0C1018] disabled:opacity-60"
+                >
+                  {saving ? t("common.saving") : t("common.save")}
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
       ) : null}
 
       {!loadingData && errorMsg && !isOwnProfile ? (

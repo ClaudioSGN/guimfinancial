@@ -147,10 +147,6 @@ export function NewAccountButton() {
       {open && (
         <div
           className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4"
-          onClick={() => {
-            setOpen(false);
-            resetForm();
-          }}
         >
           <div
             className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 p-5 shadow-xl"

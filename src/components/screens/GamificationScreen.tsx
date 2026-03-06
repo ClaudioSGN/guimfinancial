@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useLanguage } from "@/lib/language";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabaseClient";
+import { getProfileBioLabel } from "@/lib/profileBios";
 import {
   isGamificationSchemaMissingCached,
   isGamificationSchemaMissingError,
@@ -19,6 +20,8 @@ type GamificationProfile = {
   friend_code: string;
   avatar_url: string | null;
   coins: number | string | null;
+  bio_code: string | null;
+  missions_completed: number | string | null;
   serasa_negative: boolean | null;
   created_at: string;
   updated_at: string;
@@ -148,8 +151,27 @@ function getErrorMessage(error: unknown) {
 
 function getMissingColumn(error: unknown) {
   const message = getErrorMessage(error);
-  const match = message.match(/column ["']?([a-zA-Z0-9_]+)["']? does not exist/i);
-  return match?.[1] ?? null;
+  const patterns = [
+    /column ["']?([a-zA-Z0-9_]+)["']? does not exist/i,
+    /could not find (?:the )?["']?([a-zA-Z0-9_]+)["']? column/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (match?.[1]) return match[1];
+  }
+
+  if (error && typeof error === "object") {
+    const details = (error as { details?: unknown }).details;
+    if (typeof details === "string") {
+      for (const pattern of patterns) {
+        const match = details.match(pattern);
+        if (match?.[1]) return match[1];
+      }
+    }
+  }
+
+  return null;
 }
 
 function getInitials(name?: string | null) {
@@ -316,6 +338,10 @@ export function GamificationScreen() {
   const formatSignedCurrency = useCallback(
     (value: number) => `${value >= 0 ? "+" : "-"} ${formatCurrency(Math.abs(value))}`,
     [formatCurrency],
+  );
+  const getBioTag = useCallback(
+    (bioCode: string | null | undefined) => getProfileBioLabel(bioCode, language),
+    [language],
   );
 
   const refreshData = useCallback(async () => {
@@ -797,14 +823,23 @@ export function GamificationScreen() {
       }
 
       const reward = toNumber(missionView.mission.coin_reward);
-      const coinsUpdateRes = await supabase
-        .from("gamification_profiles")
-        .update({
-          coins: toNumber(myProfile.coins) + reward,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("user_id", userId);
-      if (coinsUpdateRes.error) throw coinsUpdateRes.error;
+      const profileUpdate: Record<string, unknown> = {
+        coins: toNumber(myProfile.coins) + reward,
+        missions_completed: toNumber(myProfile.missions_completed) + 1,
+        updated_at: new Date().toISOString(),
+      };
+      while (Object.keys(profileUpdate).length > 0) {
+        const coinsUpdateRes = await supabase
+          .from("gamification_profiles")
+          .update(profileUpdate)
+          .eq("user_id", userId);
+        if (!coinsUpdateRes.error) break;
+        const missingColumn = getMissingColumn(coinsUpdateRes.error);
+        if (!missingColumn || !(missingColumn in profileUpdate)) {
+          throw coinsUpdateRes.error;
+        }
+        delete profileUpdate[missingColumn];
+      }
 
       const rookieMedal = medals.find((item) => item.code === "mission_rookie");
       if (rookieMedal) {
@@ -907,7 +942,11 @@ export function GamificationScreen() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-[#2A3344] bg-[#121B2C] text-[10px] font-semibold text-[#DCE7FF]">
+                    <div
+                      className={`flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-[#2A3344] bg-[#121B2C] text-[10px] font-semibold text-[#DCE7FF] ${
+                        friend.serasa_negative ? "avatar-negative-border" : ""
+                      }`}
+                    >
                       {friend.avatar_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -919,9 +958,14 @@ export function GamificationScreen() {
                         getInitials(friend.display_name)
                       )}
                     </div>
-                    <p className="truncate text-sm font-semibold text-[#E4E7EC]">
-                      {friend.display_name || t("gamification.player")}
-                    </p>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <p className="truncate text-sm font-semibold text-[#E4E7EC]">
+                        {friend.display_name || t("gamification.player")}
+                      </p>
+                      <span className="rounded-full border border-[#2E3B54] bg-[#131C2A] px-2 py-0.5 text-[10px] text-[#BFD0EB]">
+                        {getBioTag(friend.bio_code)}
+                      </span>
+                    </div>
                   </div>
                   <Link
                     href={`/profile?user=${friend.user_id}`}
@@ -997,7 +1041,11 @@ export function GamificationScreen() {
                     {getMedalLabel(index)}
                   </span>
                   <div className="flex min-w-0 items-center gap-2">
-                    <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-[#2A3344] bg-[#121B2C] text-[10px] font-semibold text-[#DCE7FF]">
+                    <div
+                      className={`flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-[#2A3344] bg-[#121B2C] text-[10px] font-semibold text-[#DCE7FF] ${
+                        row.profile.serasa_negative ? "avatar-negative-border" : ""
+                      }`}
+                    >
                       {row.profile.avatar_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -1010,12 +1058,17 @@ export function GamificationScreen() {
                       )}
                     </div>
                     <div className="min-w-0">
-                    <p className="text-sm font-semibold text-[#E4E7EC]">
-                      {row.profile.display_name || t("gamification.player")}
-                    </p>
-                    <p className="text-[11px] text-[#8B94A6]">
-                      {t("gamification.coins")}: {toNumber(row.profile.coins)}
-                    </p>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <p className="truncate text-sm font-semibold text-[#E4E7EC]">
+                          {row.profile.display_name || t("gamification.player")}
+                        </p>
+                        <span className="rounded-full border border-[#2E3B54] bg-[#131C2A] px-2 py-0.5 text-[10px] text-[#BFD0EB]">
+                          {getBioTag(row.profile.bio_code)}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#8B94A6]">
+                        {t("gamification.coins")}: {toNumber(row.profile.coins)}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1055,7 +1108,11 @@ export function GamificationScreen() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-[#2A3344] bg-[#121B2C] text-[10px] font-semibold text-[#DCE7FF]">
+                      <div
+                        className={`flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-[#2A3344] bg-[#121B2C] text-[10px] font-semibold text-[#DCE7FF] ${
+                          friend.serasa_negative ? "avatar-negative-border" : ""
+                        }`}
+                      >
                         {friend.avatar_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -1063,13 +1120,18 @@ export function GamificationScreen() {
                             alt={friend.display_name || t("gamification.player")}
                             className="h-full w-full object-cover"
                           />
-                        ) : (
-                          getInitials(friend.display_name)
-                        )}
+                      ) : (
+                        getInitials(friend.display_name)
+                      )}
+                    </div>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <p className="truncate text-sm font-semibold text-[#E4E7EC]">
+                          {friend.display_name || t("gamification.player")}
+                        </p>
+                        <span className="rounded-full border border-[#2E3B54] bg-[#131C2A] px-2 py-0.5 text-[10px] text-[#BFD0EB]">
+                          {getBioTag(friend.bio_code)}
+                        </span>
                       </div>
-                      <p className="truncate text-sm font-semibold text-[#E4E7EC]">
-                        {friend.display_name || t("gamification.player")}
-                      </p>
                     </div>
                     <p
                       className={`text-xs font-semibold ${
@@ -1195,7 +1257,6 @@ export function GamificationScreen() {
       {selectedFriendProfile ? (
         <div
           className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-6"
-          onClick={() => setSelectedFriendId(null)}
         >
           <div
             className="w-full max-w-xl rounded-3xl border border-[#1E232E] bg-[#0F121A] p-5"
@@ -1203,7 +1264,11 @@ export function GamificationScreen() {
           >
             <div className="flex items-center justify-between">
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[#2A3344] bg-[#121B2C] text-xs font-semibold text-[#DCE7FF]">
+                <div
+                  className={`flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[#2A3344] bg-[#121B2C] text-xs font-semibold text-[#DCE7FF] ${
+                    selectedFriendProfile.serasa_negative ? "avatar-negative-border" : ""
+                  }`}
+                >
                   {selectedFriendProfile.avatar_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -1216,9 +1281,14 @@ export function GamificationScreen() {
                   )}
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-[#E5E8EF]">
-                    {selectedFriendProfile.display_name || t("gamification.player")}
-                  </p>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <p className="truncate text-sm font-semibold text-[#E5E8EF]">
+                      {selectedFriendProfile.display_name || t("gamification.player")}
+                    </p>
+                    <span className="rounded-full border border-[#2E3B54] bg-[#131C2A] px-2 py-0.5 text-[10px] text-[#BFD0EB]">
+                      {getBioTag(selectedFriendProfile.bio_code)}
+                    </span>
+                  </div>
                   <p className="truncate text-xs text-[#8B94A6]">
                     {selectedFriendProfile.email || "--"}
                   </p>

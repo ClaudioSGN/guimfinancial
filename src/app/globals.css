@@ -35,3 +35,142 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #2a3442;
 }
+
+@keyframes avatar-negative-outlaw-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes avatar-negative-dust-spin {
+  from {
+    transform: rotate(360deg) scale(0.98);
+    opacity: 0.5;
+  }
+  to {
+    transform: rotate(0deg) scale(1.02);
+    opacity: 0.95;
+  }
+}
+
+@keyframes avatar-negative-honor-flicker {
+  0%,
+  100% {
+    opacity: 0.68;
+  }
+  28% {
+    opacity: 0.9;
+  }
+  54% {
+    opacity: 0.76;
+  }
+  79% {
+    opacity: 0.93;
+  }
+}
+
+@keyframes avatar-negative-serasa-run {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@keyframes avatar-negative-wanted-pulse {
+  0%,
+  100% {
+    border-color: rgba(160, 43, 35, 0.85);
+    box-shadow:
+      0 0 0 1px rgba(170, 45, 35, 0.56),
+      0 0 10px rgba(160, 24, 20, 0.34),
+      0 0 24px rgba(100, 16, 14, 0.28);
+  }
+  45% {
+    border-color: rgba(238, 111, 81, 0.92);
+    box-shadow:
+      0 0 0 1px rgba(245, 153, 103, 0.88),
+      0 0 18px rgba(214, 58, 36, 0.58),
+      0 0 30px rgba(150, 29, 20, 0.45);
+  }
+  70% {
+    border-color: rgba(236, 126, 74, 0.9);
+    box-shadow:
+      0 0 0 1px rgba(252, 186, 120, 0.78),
+      0 0 16px rgba(233, 89, 43, 0.48),
+      0 0 28px rgba(154, 36, 24, 0.4);
+  }
+}
+
+.avatar-negative-border {
+  position: relative;
+  isolation: isolate;
+  border-radius: 9999px;
+  overflow: hidden;
+  border-color: rgba(170, 45, 35, 0.85) !important;
+  animation: avatar-negative-wanted-pulse 2.35s ease-in-out infinite;
+}
+
+.avatar-negative-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  padding: 1.5px;
+  background:
+    conic-gradient(
+      from 0deg,
+      rgba(72, 11, 10, 0.98) 0deg 18deg,
+      rgba(221, 67, 49, 0.96) 36deg 68deg,
+      rgba(249, 150, 78, 0.92) 76deg 90deg,
+      rgba(109, 23, 18, 0.98) 122deg 170deg,
+      rgba(230, 80, 54, 0.94) 206deg 246deg,
+      rgba(250, 167, 96, 0.92) 260deg 275deg,
+      rgba(84, 14, 12, 0.98) 312deg 360deg
+    ),
+    repeating-conic-gradient(
+      from 12deg,
+      rgba(255, 203, 126, 0.28) 0deg 2deg,
+      rgba(91, 15, 12, 0) 2deg 7deg
+    );
+  background-blend-mode: screen, normal;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: avatar-negative-outlaw-spin 3.1s linear infinite;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.avatar-negative-border::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background:
+    radial-gradient(circle at center, rgba(0, 0, 0, 0) 62%, rgba(209, 58, 40, 0.22) 70%, rgba(0, 0, 0, 0) 76%),
+    url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgMjAwIj4KICA8ZGVmcz4KICAgIDxwYXRoIGlkPSJzZXJhc2FDaXJjbGUiIGQ9Ik0xMDAsMTAwIG0tNzgsMCBhNzgsNzggMCAxLDEgMTU2LDAgYTc4LDc4IDAgMSwxIC0xNTYsMCIvPgogIDwvZGVmcz4KICA8dGV4dCBmaWxsPSIjZmZkOGIwIiBmb250LXNpemU9IjE2IiBmb250LWZhbWlseT0iU3BhY2UgR3JvdGVzaywgU2Vnb2UgVUksIHNhbnMtc2VyaWYiIGZvbnQtd2VpZ2h0PSI3MDAiIGxldHRlci1zcGFjaW5nPSIzLjIiPgogICAgPHRleHRQYXRoIGhyZWY9IiNzZXJhc2FDaXJjbGUiIHN0YXJ0T2Zmc2V0PSIwJSI+U0VSQVNBIOKAoiBTRVJBU0Eg4oCiIFNFUkFTQSDigKIgU0VSQVNBIOKAoiA8L3RleHRQYXRoPgogIDwvdGV4dD4KPC9zdmc+");
+  background-repeat: no-repeat, no-repeat;
+  background-size: 100% 100%, 100% 100%;
+  background-position: center, center;
+  animation:
+    avatar-negative-serasa-run 8.2s linear infinite,
+    avatar-negative-honor-flicker 2.4s ease-in-out infinite;
+  z-index: 1;
+  filter: drop-shadow(0 0 5px rgba(194, 40, 34, 0.5));
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar-negative-border,
+  .avatar-negative-border::before,
+  .avatar-negative-border::after {
+    animation: none !important;
+  }
+}

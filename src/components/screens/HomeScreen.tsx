@@ -9,6 +9,7 @@ import { useLanguage } from "@/lib/language";
 import { useAuth } from "@/lib/auth";
 import { AppIcon } from "@/components/AppIcon";
 import { loadProfileSettings, type ProfileSettings } from "@/lib/profile";
+import { getProfileBioLabel } from "@/lib/profileBios";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -81,6 +82,11 @@ type FlowRow = {
   expense: number;
   net: number;
   netDay: number;
+};
+
+type LeagueProfileMini = {
+  bio_code: string | null;
+  serasa_negative: boolean | null;
 };
 
 type DisplayTransaction = Transaction & {
@@ -339,6 +345,8 @@ export function HomeScreen() {
   const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileSettings>({});
+  const [profileBioCode, setProfileBioCode] = useState<string | null>(null);
+  const [profileSerasaNegative, setProfileSerasaNegative] = useState(false);
   const [activeCategoryIndex, setActiveCategoryIndex] = useState<number | null>(null);
 
   useEffect(() => {
@@ -357,6 +365,10 @@ export function HomeScreen() {
   const monthTitle = useMemo(
     () => getMonthTitle(selectedMonth, language),
     [selectedMonth, language],
+  );
+  const profileBioLabel = useMemo(
+    () => getProfileBioLabel(profileBioCode, language),
+    [profileBioCode, language],
   );
 
   const loadData = useCallback(async () => {
@@ -426,6 +438,28 @@ export function HomeScreen() {
         }
         setLoading(false);
         return;
+      }
+
+      const profileBioRes = await supabase
+        .from("gamification_profiles")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (!profileBioRes.error) {
+        const row = (profileBioRes.data as LeagueProfileMini | null) ?? null;
+        setProfileBioCode(row?.bio_code ?? null);
+        setProfileSerasaNegative(Boolean(row?.serasa_negative));
+      } else {
+        const rawError =
+          `${profileBioRes.error.code ?? ""} ${profileBioRes.error.message ?? ""}`.toLowerCase();
+        const missingLeagueTable =
+          profileBioRes.error.code === "42P01" && rawError.includes("gamification_profiles");
+        if (!missingLeagueTable) {
+          console.warn("[home] profile bio load failed:", getErrorMessage(profileBioRes.error));
+        }
+        setProfileBioCode(null);
+        setProfileSerasaNegative(false);
       }
 
       const nextAccounts = (accountsResult.data ?? []) as Account[];
@@ -987,7 +1021,11 @@ export function HomeScreen() {
           </div>
         </div>
         <Link href="/profile" className="group flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[#1A2230] bg-[#101620] text-xs font-semibold text-[#E2E6ED] transition group-hover:border-[#2B364B]">
+          <div
+            className={`flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[#1A2230] bg-[#101620] text-xs font-semibold text-[#E2E6ED] transition group-hover:border-[#2B364B] ${
+              profileSerasaNegative ? "avatar-negative-border" : ""
+            }`}
+          >
             {profile.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -1001,7 +1039,7 @@ export function HomeScreen() {
           </div>
           <div className="hidden sm:flex flex-col text-right">
             <span className="text-xs font-semibold text-[#E2E6ED]">{displayName}</span>
-            <span className="text-[10px] text-[#8B94A6]">{t("profile.title")}</span>
+            <span className="text-[10px] text-[#8B94A6]">{profileBioLabel}</span>
           </div>
         </Link>
       </div>

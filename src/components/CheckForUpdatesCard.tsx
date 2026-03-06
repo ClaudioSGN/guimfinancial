@@ -143,10 +143,6 @@ export function CheckForUpdatesCard() {
       {open ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
-          onClick={() => {
-            if (checking || installing) return;
-            setOpen(false);
-          }}
         >
           <div
             className="w-full max-w-md rounded-2xl border border-[#1E232E] bg-[#121621] p-5"

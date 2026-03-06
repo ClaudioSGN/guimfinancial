@@ -90,6 +90,25 @@ function parseLocalDate(value: string) {
   return parsed;
 }
 
+function addMonthsClamped(date: Date, monthsToAdd: number) {
+  const targetMonthStart = new Date(
+    date.getFullYear(),
+    date.getMonth() + monthsToAdd,
+    1,
+  );
+  const lastDayOfTargetMonth = new Date(
+    targetMonthStart.getFullYear(),
+    targetMonthStart.getMonth() + 1,
+    0,
+  ).getDate();
+  const safeDay = Math.min(date.getDate(), lastDayOfTargetMonth);
+  return new Date(
+    targetMonthStart.getFullYear(),
+    targetMonthStart.getMonth(),
+    safeDay,
+  );
+}
+
 function toDateInputValue(value: string) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const parsed = parseLocalDate(value);
@@ -225,13 +244,16 @@ export function TransactionsScreen() {
       const amount = Number(tx.amount) || 0;
       const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
       const isInstallment = totalInstallments > 0;
+      const isFixedExpense =
+        !!tx.is_fixed && (tx.type === "expense" || tx.type === "card_expense");
+      const monthOffset = (monthStart.getFullYear() - txDate.getFullYear()) * 12 +
+        (monthStart.getMonth() - txDate.getMonth());
 
       if (isInstallment && totalInstallments > 0) {
         const perInstallment = amount / totalInstallments;
         const entries: DisplayTransaction[] = [];
         for (let i = 0; i < totalInstallments; i += 1) {
-          const installmentDate = new Date(txDate);
-          installmentDate.setMonth(txDate.getMonth() + i);
+          const installmentDate = addMonthsClamped(txDate, i);
           if (installmentDate < monthStart || installmentDate > monthEnd) continue;
           entries.push({
             ...tx,
@@ -243,6 +265,21 @@ export function TransactionsScreen() {
           });
         }
         return entries;
+      }
+
+      if (isFixedExpense) {
+        if (monthOffset < 0) return [];
+        const recurringDate = addMonthsClamped(txDate, monthOffset);
+        if (recurringDate < monthStart || recurringDate > monthEnd) return [];
+        return [
+          {
+            ...tx,
+            baseId: tx.id,
+            displayId: `${tx.id}-f${monthOffset}`,
+            displayDate: toDateString(recurringDate),
+            displayAmount: amount,
+          },
+        ];
       }
 
       if (txDate < monthStart || txDate > monthEnd) return [];
@@ -781,7 +818,6 @@ export function TransactionsScreen() {
       {editingTx ? (
         <div
           className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4"
-          onClick={closeEdit}
         >
           <div
             className="w-full max-w-md rounded-2xl border border-[#1B2230] bg-[#111723] p-5 text-[#E4E7EC] shadow-xl"
@@ -853,7 +889,7 @@ export function TransactionsScreen() {
       ) : null}
 
       {monthOpen ? (
-        <div className="fixed inset-0 z-40" onClick={() => setMonthOpen(false)}>
+        <div className="fixed inset-0 z-40">
           <div className="absolute inset-0 bg-[#0B0E13]/60" />
           <div
             className="absolute left-1/2 top-24 w-56 -translate-x-1/2 rounded-2xl border border-[#1B2230] bg-[#111723] p-2 text-xs text-[#C7CEDA]"
@@ -884,7 +920,7 @@ export function TransactionsScreen() {
       ) : null}
 
       {filterOpen ? (
-        <div className="fixed inset-0 z-40" onClick={() => setFilterOpen(false)}>
+        <div className="fixed inset-0 z-40">
           <div className="absolute inset-0 bg-[#0B0E13]/60" />
           <div
             className="absolute bottom-0 left-0 right-0 rounded-t-3xl border-t border-[#1E232E] bg-[#121621] p-4"

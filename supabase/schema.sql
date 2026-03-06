@@ -161,6 +161,8 @@ create table if not exists gamification_profiles (
   avatar_url text,
   coins int not null default 0,
   serasa_negative boolean not null default false,
+  bio_code text not null default 'mendigueira',
+  missions_completed int not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -254,6 +256,21 @@ where friend_code is null;
 alter table gamification_profiles alter column friend_code set default upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
 alter table gamification_profiles alter column friend_code set not null;
 alter table gamification_profiles add column if not exists email text;
+alter table gamification_profiles add column if not exists bio_code text;
+alter table gamification_profiles add column if not exists missions_completed int;
+
+update gamification_profiles
+set bio_code = 'mendigueira'
+where bio_code is null or btrim(bio_code) = '';
+
+update gamification_profiles
+set missions_completed = 0
+where missions_completed is null;
+
+alter table gamification_profiles alter column bio_code set default 'mendigueira';
+alter table gamification_profiles alter column bio_code set not null;
+alter table gamification_profiles alter column missions_completed set default 0;
+alter table gamification_profiles alter column missions_completed set not null;
 
 insert into gamification_profiles (user_id, display_name, email)
 select
@@ -272,6 +289,17 @@ set email = lower(u.email)
 from auth.users u
 where gp.user_id = u.id
   and (gp.email is null or btrim(gp.email) = '');
+
+update gamification_profiles gp
+set missions_completed = progress.claimed_total
+from (
+  select user_id, count(*)::int as claimed_total
+  from gamification_user_missions
+  where reward_claimed = true
+  group by user_id
+) as progress
+where gp.user_id = progress.user_id
+  and coalesce(gp.missions_completed, 0) < progress.claimed_total;
 
 create unique index if not exists gamification_profiles_email_unique_idx
   on gamification_profiles (lower(email))

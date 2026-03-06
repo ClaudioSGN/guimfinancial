@@ -7,6 +7,7 @@ import { LanguageProvider } from "@/lib/language";
 import { AuthProvider } from "@/lib/auth";
 import { AuthGate } from "@/components/AuthGate";
 import { UpdateChecker } from "@/components/UpdateChecker";
+import { DesktopWindowFrame } from "@/components/DesktopWindowFrame";
 
 export const metadata: Metadata = {
   title: "Guim Finanças - Dashboard",
@@ -22,7 +23,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <DailyReminderWatcher />
             <PwaRegister />
             <UpdateChecker />
-            <AuthGate>{children}</AuthGate>
+            <DesktopWindowFrame>
+              <AuthGate>{children}</AuthGate>
+            </DesktopWindowFrame>
           </AuthProvider>
         </LanguageProvider>
       </body>

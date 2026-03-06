@@ -271,6 +271,7 @@ const STRINGS: Record<Language, Dictionary> = {
       saveError: 'Falha ao salvar perfil.',
       loadError: 'Falha ao carregar perfil.',
       saved: 'Perfil salvo.',
+      noChanges: 'Nenhuma alteração detectada.',
     },
     accounts: {
       title: 'Contas',
@@ -598,6 +599,7 @@ const STRINGS: Record<Language, Dictionary> = {
       saveError: 'Failed to save profile.',
       loadError: 'Failed to load profile.',
       saved: 'Profile saved.',
+      noChanges: 'No changes detected.',
     },
     accounts: {
       title: 'Accounts',

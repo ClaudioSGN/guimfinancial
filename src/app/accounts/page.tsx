@@ -235,7 +235,6 @@ export default function AccountsPage() {
       {editing ? (
         <div
           className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4"
-          onClick={closeEdit}
         >
           <div
             className="w-full max-w-md rounded-2xl border border-[#1E232E] bg-[#121621] p-5"
