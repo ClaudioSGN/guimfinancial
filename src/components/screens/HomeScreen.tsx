@@ -8,7 +8,11 @@ import { getMonthShortName } from "../../../shared/i18n";
 import { useLanguage } from "@/lib/language";
 import { useAuth } from "@/lib/auth";
 import { AppIcon } from "@/components/AppIcon";
-import { loadProfileSettings, type ProfileSettings } from "@/lib/profile";
+import {
+  loadProfileSettings,
+  saveProfileSettings,
+  type ProfileSettings,
+} from "@/lib/profile";
 import { getProfileBioLabel } from "@/lib/profileBios";
 import {
   ResponsiveContainer,
@@ -85,6 +89,8 @@ type FlowRow = {
 };
 
 type LeagueProfileMini = {
+  display_name: string | null;
+  avatar_url: string | null;
   bio_code: string | null;
   serasa_negative: boolean | null;
 };
@@ -448,8 +454,26 @@ export function HomeScreen() {
 
       if (!profileBioRes.error) {
         const row = (profileBioRes.data as LeagueProfileMini | null) ?? null;
+        const remoteDisplayName = (row?.display_name ?? "").trim();
+        const remoteAvatarUrl = (row?.avatar_url ?? "").trim();
         setProfileBioCode(row?.bio_code ?? null);
         setProfileSerasaNegative(Boolean(row?.serasa_negative));
+        if (remoteDisplayName || remoteAvatarUrl) {
+          setProfile((current) => {
+            const nextProfile: ProfileSettings = {
+              name: remoteDisplayName || current.name,
+              avatarUrl: remoteAvatarUrl || current.avatarUrl,
+            };
+            if (
+              nextProfile.name === current.name &&
+              nextProfile.avatarUrl === current.avatarUrl
+            ) {
+              return current;
+            }
+            saveProfileSettings(nextProfile);
+            return nextProfile;
+          });
+        }
       } else {
         const rawError =
           `${profileBioRes.error.code ?? ""} ${profileBioRes.error.message ?? ""}`.toLowerCase();
