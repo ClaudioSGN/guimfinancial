@@ -181,11 +181,29 @@ function getInitials(name?: string | null) {
   return initials.join("") || "GF";
 }
 
-function getMedalLabel(position: number) {
-  if (position === 0) return "GOLD";
-  if (position === 1) return "SILVER";
-  if (position === 2) return "BRONZE";
-  return `#${position + 1}`;
+const RANK_TIERS_PT = [
+  "Lenda do Patrimônio",
+  "Magnata",
+  "Estratégista Financeiro",
+  "Investidor",
+  "Acumulador",
+  "Controlador de Gastos",
+  "Sobrevivente",
+] as const;
+
+const RANK_TIERS_EN = [
+  "Heritage Legend",
+  "Magnate",
+  "Financial Strategist",
+  "Investor",
+  "Accumulator",
+  "Expense Controller",
+  "Survivor",
+] as const;
+
+function getRankingLabel(position: number, language: "pt" | "en") {
+  const tiers = language === "pt" ? RANK_TIERS_PT : RANK_TIERS_EN;
+  return tiers[position] ?? `#${position + 1}`;
 }
 
 export function GamificationScreen() {
@@ -1038,7 +1056,7 @@ export function GamificationScreen() {
               >
                 <div className="flex items-center gap-3">
                   <span className="w-14 rounded-md border border-[#33435F] px-2 py-1 text-center text-[11px] text-[#C8D4EE]">
-                    {getMedalLabel(index)}
+                    {getRankingLabel(index, language)}
                   </span>
                   <div className="flex min-w-0 items-center gap-2">
                     <div
