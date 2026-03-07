@@ -182,23 +182,23 @@ function getInitials(name?: string | null) {
 }
 
 const RANK_TIERS_PT = [
-  "Lenda do Patrimônio",
   "Magnata",
-  "Estratégista Financeiro",
+  "Estratégista",
   "Investidor",
-  "Acumulador",
-  "Controlador de Gastos",
-  "Sobrevivente",
+  "Economista",
+  "Planejador",
+  "Aprendiz",
+  "Iniciante",
 ] as const;
 
 const RANK_TIERS_EN = [
-  "Heritage Legend",
   "Magnate",
-  "Financial Strategist",
+  "Strategist",
   "Investor",
-  "Accumulator",
-  "Expense Controller",
-  "Survivor",
+  "Economist",
+  "Planner",
+  "Apprentice",
+  "Beginner",
 ] as const;
 
 function getRankingLabel(position: number, language: "pt" | "en") {
