@@ -27,8 +27,10 @@ type DisplayTransaction = Transaction & {
   baseId: string;
   displayId: string;
   displayDate: string;
+  effectiveDate: string;
   displayAmount: number;
   installmentIndex?: number | null;
+  isBudgetCarryover?: boolean;
 };
 
 type Account = {
@@ -78,13 +80,48 @@ function formatCurrency(value: number, language: "pt" | "en") {
   }).format(value);
 }
 
+const SALARY_CARRYOVER_DAY_LIMIT = 10;
+const SALARY_HINT_KEYWORDS = ["salario", "salary", "wage", "payroll", "pagamento"];
+
+function normalizeSearchText(value: string | null | undefined) {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function isSameMonth(date: Date, month: Date) {
+  return (
+    date.getFullYear() === month.getFullYear() &&
+    date.getMonth() === month.getMonth()
+  );
+}
+
+function getTransactionsQueryEnd(date: Date) {
+  return toDateString(
+    new Date(date.getFullYear(), date.getMonth() + 1, SALARY_CARRYOVER_DAY_LIMIT),
+  );
+}
+
+function isSalaryCarryoverCandidate(tx: Transaction, txDate: Date) {
+  if (tx.type !== "income") return false;
+  if (txDate.getDate() > SALARY_CARRYOVER_DAY_LIMIT) return false;
+
+  const haystacks = [tx.description, tx.category].map(normalizeSearchText).filter(Boolean);
+  return haystacks.some((text) =>
+    SALARY_HINT_KEYWORDS.some((keyword) => text.includes(keyword)),
+  );
+}
+
 function parseLocalDate(value: string) {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const [y, m, d] = value.split("-").map(Number);
-    if (y && m && d) {
-      return new Date(y, m - 1, d);
-    }
+  const normalized = value.trim();
+  const datePrefix = normalized.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (datePrefix) {
+    const [, year, month, day] = datePrefix;
+    return new Date(Number(year), Number(month) - 1, Number(day));
   }
+
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed;
@@ -152,7 +189,7 @@ export function TransactionsScreen() {
     if (!user) return;
     setLoading(true);
     setErrorMsg(null);
-    const { end } = getMonthRange(selectedMonth);
+    const queryEnd = getTransactionsQueryEnd(selectedMonth);
     const txColumns =
       "id,type,amount,description,category,date,account_id,card_id,is_fixed,is_installment,installment_total,installments_paid,is_paid";
     const txColumnsFallback =
@@ -163,7 +200,7 @@ export function TransactionsScreen() {
         .from("transactions")
         .select(txColumns)
         .eq("user_id", user.id)
-        .lte("date", end)
+        .lte("date", queryEnd)
         .order("date", { ascending: false }),
       supabase.from("accounts").select("id,balance").eq("user_id", user.id),
       supabase.from("credit_cards").select("id,name").eq("user_id", user.id),
@@ -180,7 +217,7 @@ export function TransactionsScreen() {
         .from("transactions")
         .select(txColumnsFallback)
         .eq("user_id", user.id)
-        .lte("date", end)
+        .lte("date", queryEnd)
         .order("date", { ascending: false });
 
       txError = fallback.error;
@@ -236,6 +273,7 @@ export function TransactionsScreen() {
   ): DisplayTransaction[] {
     const monthStart = new Date(month.getFullYear(), month.getMonth(), 1);
     const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0, 23, 59, 59, 999);
+    const budgetMonthEnd = toDateString(new Date(month.getFullYear(), month.getMonth() + 1, 0));
 
     return transactions.flatMap((tx) => {
       const txDate = parseLocalDate(tx.date);
@@ -260,6 +298,7 @@ export function TransactionsScreen() {
             baseId: tx.id,
             displayId: `${tx.id}-i${i + 1}`,
             displayDate: toDateString(installmentDate),
+            effectiveDate: toDateString(installmentDate),
             displayAmount: perInstallment,
             installmentIndex: i + 1,
           });
@@ -277,7 +316,24 @@ export function TransactionsScreen() {
             baseId: tx.id,
             displayId: `${tx.id}-f${monthOffset}`,
             displayDate: toDateString(recurringDate),
+            effectiveDate: toDateString(recurringDate),
             displayAmount: amount,
+          },
+        ];
+      }
+
+      if (isSalaryCarryoverCandidate(tx, txDate)) {
+        const assignedMonth = new Date(txDate.getFullYear(), txDate.getMonth() - 1, 1);
+        if (!isSameMonth(assignedMonth, month)) return [];
+        return [
+          {
+            ...tx,
+            baseId: tx.id,
+            displayId: `${tx.id}-carry-${assignedMonth.getFullYear()}-${assignedMonth.getMonth() + 1}`,
+            displayDate: toDateString(txDate),
+            effectiveDate: budgetMonthEnd,
+            displayAmount: amount,
+            isBudgetCarryover: true,
           },
         ];
       }
@@ -289,9 +345,17 @@ export function TransactionsScreen() {
           baseId: tx.id,
           displayId: tx.id,
           displayDate: tx.date,
+          effectiveDate: toDateString(txDate),
           displayAmount: amount,
         },
       ];
+    }).sort((a, b) => {
+      const aEffective = parseLocalDate(a.effectiveDate)?.getTime() ?? 0;
+      const bEffective = parseLocalDate(b.effectiveDate)?.getTime() ?? 0;
+      if (aEffective !== bEffective) return bEffective - aEffective;
+      const aDisplay = parseLocalDate(a.displayDate)?.getTime() ?? 0;
+      const bDisplay = parseLocalDate(b.displayDate)?.getTime() ?? 0;
+      return bDisplay - aDisplay;
     });
   }
 
@@ -754,6 +818,11 @@ export function TransactionsScreen() {
                   {isFixedExpense ? (
                     <span className="inline-flex rounded-full border border-[#3A8F8A] bg-[#163137] px-2 py-[2px] text-[10px] text-[#64D1C4]">
                       {t("newEntry.fixedExpense")}
+                    </span>
+                  ) : null}
+                  {item.isBudgetCarryover ? (
+                    <span className="inline-flex rounded-full border border-[#5DA7FF]/40 bg-[#122033] px-2 py-[2px] text-[10px] text-[#9DC4FF]">
+                      {t("transactions.nextMonthSalary")}
                     </span>
                   ) : null}
                 </div>

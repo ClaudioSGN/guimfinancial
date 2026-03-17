@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import { getErrorMessage, isTransientNetworkError } from "@/lib/errorUtils";
+import {
+  getErrorMessage,
+  hasMissingColumnError,
+  isTransientNetworkError,
+} from "@/lib/errorUtils";
 import { getMonthShortName } from "../../../shared/i18n";
 import { useLanguage } from "@/lib/language";
 import { useAuth } from "@/lib/auth";
@@ -47,23 +51,42 @@ type Transaction = {
   is_paid: boolean | null;
 };
 
+type RawTransaction = Omit<Transaction, "amount"> & {
+  amount?: number | string | null;
+  value?: number | string | null;
+};
+
 type Account = {
   id: string;
   name: string;
   balance: number | string;
 };
 
+type RawAccount = {
+  id: string;
+  name: string;
+  balance?: number | string | null;
+  initial_balance?: number | string | null;
+};
+
 type CreditCard = {
   id: string;
   name: string;
   limit_amount: number | string;
+  owner_type: "self" | "friend";
+  friend_name: string | null;
   closing_day: number;
   due_day: number;
 };
 
+type LegacyCreditCard = Omit<CreditCard, "owner_type" | "friend_name">;
+
 type CardReminder = {
   id: string;
   name: string;
+  owner_type: "self" | "friend";
+  friend_name: string | null;
+  dismissKey: string;
   status: "closed" | "expired";
   days: number;
   closingDay: number;
@@ -88,6 +111,45 @@ type FlowRow = {
   netDay: number;
 };
 
+type Transfer = {
+  id: string;
+  from_account_id: string | null;
+  to_account_id: string | null;
+  amount: number | string;
+  date: string;
+};
+
+type RawTransfer = Omit<Transfer, "amount"> & {
+  amount?: number | string | null;
+  value?: number | string | null;
+};
+
+function isCardOwnershipColumnMissing(error: unknown) {
+  return hasMissingColumnError(error, ["owner_type", "friend_name"]);
+}
+
+function hydrateLegacyCards(cards: LegacyCreditCard[]): CreditCard[] {
+  return cards.map((card) => ({
+    ...card,
+    owner_type: "self",
+    friend_name: null,
+  }));
+}
+
+function normalizeTransactionAmounts(rows: RawTransaction[]): Transaction[] {
+  return rows.map((row) => ({
+    ...row,
+    amount: row.amount ?? row.value ?? 0,
+  }));
+}
+
+function normalizeTransferAmounts(rows: RawTransfer[]): Transfer[] {
+  return rows.map((row) => ({
+    ...row,
+    amount: row.amount ?? row.value ?? 0,
+  }));
+}
+
 type LeagueProfileMini = {
   display_name: string | null;
   avatar_url: string | null;
@@ -98,7 +160,9 @@ type LeagueProfileMini = {
 type DisplayTransaction = Transaction & {
   displayId: string;
   displayDate: string;
+  effectiveDate: string;
   displayAmount: number;
+  isBudgetCarryover?: boolean;
 };
 
 function toDateString(date: Date) {
@@ -138,6 +202,33 @@ function formatCurrency(value: number, language: "pt" | "en") {
   }).format(value);
 }
 
+const SALARY_CARRYOVER_DAY_LIMIT = 10;
+const SALARY_HINT_KEYWORDS = ["salario", "salary", "wage", "payroll", "pagamento"];
+
+function normalizeSearchText(value: string | null | undefined) {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function getTransactionsQueryEnd(date: Date) {
+  return toDateString(
+    new Date(date.getFullYear(), date.getMonth() + 1, SALARY_CARRYOVER_DAY_LIMIT),
+  );
+}
+
+function isSalaryCarryoverCandidate(tx: Transaction, txDate: Date) {
+  if (tx.type !== "income") return false;
+  if (txDate.getDate() > SALARY_CARRYOVER_DAY_LIMIT) return false;
+
+  const haystacks = [tx.description, tx.category].map(normalizeSearchText).filter(Boolean);
+  return haystacks.some((text) =>
+    SALARY_HINT_KEYWORDS.some((keyword) => text.includes(keyword)),
+  );
+}
+
 function formatShortDate(date: Date, language: "pt" | "en") {
   return new Intl.DateTimeFormat(language === "pt" ? "pt-BR" : "en-US", {
     day: "2-digit",
@@ -146,15 +237,23 @@ function formatShortDate(date: Date, language: "pt" | "en") {
 }
 
 function parseLocalDate(value: string) {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const [y, m, d] = value.split("-").map(Number);
-    if (y && m && d) {
-      return new Date(y, m - 1, d);
-    }
+  const normalized = value.trim();
+  const datePrefix = normalized.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (datePrefix) {
+    const [, year, month, day] = datePrefix;
+    return new Date(Number(year), Number(month) - 1, Number(day));
   }
+
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed;
+}
+
+function isSameMonth(date: Date, month: Date) {
+  return (
+    date.getFullYear() === month.getFullYear() &&
+    date.getMonth() === month.getMonth()
+  );
 }
 
 function getMonthOverMonthChange(current: number, previous: number) {
@@ -218,6 +317,171 @@ function getDayWord(days: number, language: "pt" | "en") {
   return days === 1 ? "day" : "days";
 }
 
+const CARD_REMINDER_DISMISSALS_STORAGE_KEY = "guimfinancial:card-reminder-dismissals";
+
+function buildCardReminderDismissKey(
+  userId: string,
+  cardId: string,
+  status: CardReminder["status"],
+  closingDay: number,
+  dueDay: number,
+  now = new Date(),
+) {
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  return `${userId}:${cardId}:${monthKey}:${status}:${closingDay}:${dueDay}`;
+}
+
+function loadCardReminderDismissals() {
+  if (typeof window === "undefined") return {} as Record<string, true>;
+
+  try {
+    const raw = window.localStorage.getItem(CARD_REMINDER_DISMISSALS_STORAGE_KEY);
+    if (!raw) return {} as Record<string, true>;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return Object.entries(parsed).reduce<Record<string, true>>((acc, [key, value]) => {
+      if (value === true) acc[key] = true;
+      return acc;
+    }, {});
+  } catch {
+    return {} as Record<string, true>;
+  }
+}
+
+function saveCardReminderDismissals(next: Record<string, true>) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(
+    CARD_REMINDER_DISMISSALS_STORAGE_KEY,
+    JSON.stringify(next),
+  );
+}
+
+function getCardExpenseDueState(tx: Transaction, targetDate: Date) {
+  if (tx.type !== "card_expense" || !tx.card_id) return null;
+
+  const amount = Number(tx.amount) || 0;
+  if (amount <= 0) return null;
+
+  const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
+  const isInstallment = totalInstallments > 0;
+
+  if (isInstallment) {
+    const paidInstallments = Math.min(
+      Math.max(Number(tx.installments_paid) || 0, 0),
+      totalInstallments,
+    );
+    const monthOffset = getInstallmentMonthOffset(tx.date, targetDate);
+    const dueInstallments =
+      monthOffset == null
+        ? 0
+        : Math.min(Math.max(monthOffset + 1, 0), totalInstallments);
+    const installmentsToPay = Math.max(dueInstallments - paidInstallments, 0);
+    const perInstallment = amount / totalInstallments;
+    const pendingAmount = perInstallment * installmentsToPay;
+
+    if (pendingAmount <= 0) return null;
+
+    return { pendingAmount };
+  }
+
+  const txDate = parseLocalDate(tx.date);
+  const normalizedTxDate = txDate
+    ? new Date(txDate.getFullYear(), txDate.getMonth(), txDate.getDate())
+    : null;
+  const isDueNow = normalizedTxDate ? normalizedTxDate.getTime() <= targetDate.getTime() : true;
+  if (!isDueNow || tx.is_paid) return null;
+
+  return { pendingAmount: amount };
+}
+
+function getSettledCardExpenseAmount(tx: Transaction) {
+  if (tx.type !== "card_expense") return 0;
+
+  const amount = Number(tx.amount) || 0;
+  if (amount <= 0) return 0;
+
+  const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
+  if (totalInstallments > 0) {
+    const paidInstallments = Math.min(
+      Math.max(Number(tx.installments_paid) || 0, 0),
+      totalInstallments,
+    );
+    return (amount / totalInstallments) * paidInstallments;
+  }
+
+  return tx.is_paid ? amount : 0;
+}
+
+function computeEffectiveAccountBalance(
+  account: RawAccount,
+  transactions: Transaction[],
+  transfers: Transfer[],
+) {
+  let balance = Number(account.initial_balance) || 0;
+
+  transactions.forEach((tx) => {
+    if (tx.account_id !== account.id) return;
+
+    const amount = Number(tx.amount) || 0;
+    if (amount <= 0) return;
+
+    if (tx.type === "income") {
+      balance += amount;
+      return;
+    }
+
+    if (tx.type === "expense") {
+      balance -= amount;
+      return;
+    }
+
+    balance -= getSettledCardExpenseAmount(tx);
+  });
+
+  transfers.forEach((transfer) => {
+    const amount = Number(transfer.amount) || 0;
+    if (amount <= 0) return;
+    if (transfer.from_account_id === account.id) balance -= amount;
+    if (transfer.to_account_id === account.id) balance += amount;
+  });
+
+  return balance;
+}
+
+function buildMonthTransfers(transfers: Transfer[], month: Date) {
+  return transfers.filter((transfer) => {
+    const transferDate = parseLocalDate(transfer.date);
+    return transferDate ? isSameMonth(transferDate, month) : false;
+  });
+}
+
+function computePeriodAccountBalance(
+  accountId: string,
+  transactions: DisplayTransaction[],
+  transfers: Transfer[],
+) {
+  let balance = 0;
+
+  transactions.forEach((tx) => {
+    if (tx.account_id !== accountId) return;
+
+    if (tx.type === "income") {
+      balance += tx.displayAmount;
+      return;
+    }
+
+    balance -= tx.displayAmount;
+  });
+
+  transfers.forEach((transfer) => {
+    const amount = Number(transfer.amount) || 0;
+    if (amount <= 0) return;
+    if (transfer.from_account_id === accountId) balance -= amount;
+    if (transfer.to_account_id === accountId) balance += amount;
+  });
+
+  return balance;
+}
+
 function getInitials(name?: string) {
   if (!name) return "GF";
   const parts = name.trim().split(" ").filter(Boolean);
@@ -269,7 +533,7 @@ function buildFlowSeries(transactions: DisplayTransaction[], monthDate: Date) {
   }));
 
   transactions.forEach((tx) => {
-    const txDate = parseLocalDate(tx.displayDate);
+    const txDate = parseLocalDate(tx.effectiveDate);
     if (!txDate || Number.isNaN(txDate.getTime())) return;
     if (txDate.getFullYear() !== year || txDate.getMonth() !== month) return;
     const dayIndex = txDate.getDate() - 1;
@@ -294,6 +558,7 @@ function buildMonthTransactions(
 ): DisplayTransaction[] {
   const monthStart = new Date(month.getFullYear(), month.getMonth(), 1);
   const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0, 23, 59, 59, 999);
+  const budgetMonthEnd = toDateString(new Date(month.getFullYear(), month.getMonth() + 1, 0));
 
   return transactions.flatMap((tx) => {
     const txDate = parseLocalDate(tx.date);
@@ -314,10 +579,26 @@ function buildMonthTransactions(
           ...tx,
           displayId: `${tx.id}-i${i + 1}`,
           displayDate: toDateString(installmentDate),
+          effectiveDate: toDateString(installmentDate),
           displayAmount: perInstallment,
         });
       }
       return entries;
+    }
+
+    if (isSalaryCarryoverCandidate(tx, txDate)) {
+      const assignedMonth = new Date(txDate.getFullYear(), txDate.getMonth() - 1, 1);
+      if (!isSameMonth(assignedMonth, month)) return [];
+      return [
+        {
+          ...tx,
+          displayId: `${tx.id}-carry-${assignedMonth.getFullYear()}-${assignedMonth.getMonth() + 1}`,
+          displayDate: toDateString(txDate),
+          effectiveDate: budgetMonthEnd,
+          displayAmount: amount,
+          isBudgetCarryover: true,
+        },
+      ];
     }
 
     if (txDate < monthStart || txDate > monthEnd) return [];
@@ -326,9 +607,17 @@ function buildMonthTransactions(
         ...tx,
         displayId: tx.id,
         displayDate: toDateString(txDate),
+        effectiveDate: toDateString(txDate),
         displayAmount: amount,
       },
     ];
+  }).sort((a, b) => {
+    const aEffective = parseLocalDate(a.effectiveDate)?.getTime() ?? 0;
+    const bEffective = parseLocalDate(b.effectiveDate)?.getTime() ?? 0;
+    if (aEffective !== bEffective) return bEffective - aEffective;
+    const aDisplay = parseLocalDate(a.displayDate)?.getTime() ?? 0;
+    const bDisplay = parseLocalDate(b.displayDate)?.getTime() ?? 0;
+    return bDisplay - aDisplay;
   });
 }
 
@@ -338,6 +627,8 @@ export function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [totalBalance, setTotalBalance] = useState(0);
+  const [accountBalanceTotal, setAccountBalanceTotal] = useState(0);
+  const [usesHistoricalAccountBalances, setUsesHistoricalAccountBalances] = useState(false);
   const [income, setIncome] = useState(0);
   const [expenses, setExpenses] = useState(0);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
@@ -350,6 +641,8 @@ export function HomeScreen() {
   const [monthOpen, setMonthOpen] = useState(false);
   const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
+  const [payingReminderCardId, setPayingReminderCardId] = useState<string | null>(null);
+  const [dismissedCardReminderKeys, setDismissedCardReminderKeys] = useState<Record<string, true>>({});
   const [profile, setProfile] = useState<ProfileSettings>({});
   const [profileBioCode, setProfileBioCode] = useState<string | null>(null);
   const [profileSerasaNegative, setProfileSerasaNegative] = useState(false);
@@ -411,6 +704,10 @@ export function HomeScreen() {
   }, []);
 
   useEffect(() => {
+    setDismissedCardReminderKeys(loadCardReminderDismissals());
+  }, [user?.id]);
+
+  useEffect(() => {
     function handleProfileUpdate() {
       setProfile(loadProfileSettings());
       void loadLeagueProfile();
@@ -435,50 +732,191 @@ export function HomeScreen() {
 
   const loadData = useCallback(async () => {
     if (!user) return;
+    const userId = user.id;
     setLoading(true);
     setErrorMsg(null);
 
     const { end } = getMonthRange(selectedMonth);
+    const queryEnd = getTransactionsQueryEnd(selectedMonth);
+
+    async function loadCardsForDashboard() {
+      const cardsResult = await supabase
+        .from("credit_cards")
+        .select("id,name,limit_amount,owner_type,friend_name,closing_day,due_day")
+        .eq("user_id", userId)
+        .order("owner_type", { ascending: true })
+        .order("name", { ascending: true });
+
+      if (!cardsResult.error) {
+        return {
+          data: (cardsResult.data ?? []) as CreditCard[],
+          error: null as unknown,
+        };
+      }
+
+      if (!isCardOwnershipColumnMissing(cardsResult.error)) {
+        return { data: [] as CreditCard[], error: cardsResult.error };
+      }
+
+      const legacyCardsResult = await supabase
+        .from("credit_cards")
+        .select("id,name,limit_amount,closing_day,due_day")
+        .eq("user_id", userId)
+        .order("name", { ascending: true });
+
+      if (legacyCardsResult.error) {
+        return { data: [] as CreditCard[], error: legacyCardsResult.error };
+      }
+
+      return {
+        data: hydrateLegacyCards((legacyCardsResult.data ?? []) as LegacyCreditCard[]),
+        error: null as unknown,
+      };
+    }
+
+    async function loadAccountsForDashboard() {
+      const accountsResult = await supabase
+        .from("accounts")
+        .select("id,name,balance,initial_balance")
+        .eq("user_id", userId)
+        .order("name", { ascending: true });
+
+      if (!accountsResult.error) {
+        return {
+          data: (accountsResult.data ?? []) as RawAccount[],
+          error: null as unknown,
+        };
+      }
+
+      if (!hasMissingColumnError(accountsResult.error, ["initial_balance"])) {
+        return { data: [] as RawAccount[], error: accountsResult.error };
+      }
+
+      const legacyAccountsResult = await supabase
+        .from("accounts")
+        .select("id,name,balance")
+        .eq("user_id", userId)
+        .order("name", { ascending: true });
+
+      if (legacyAccountsResult.error) {
+        return { data: [] as RawAccount[], error: legacyAccountsResult.error };
+      }
+
+      return {
+        data: (legacyAccountsResult.data ?? []) as RawAccount[],
+        error: null as unknown,
+      };
+    }
+
+    async function loadTransactionsForDashboard() {
+      const transactionsResult = await supabase
+        .from("transactions")
+        .select("id,type,amount,value,date,account_id,card_id,description,category,is_installment,installment_total,installments_paid,is_paid")
+        .eq("user_id", userId)
+        .lte("date", queryEnd)
+        .order("date", { ascending: false });
+
+      if (!transactionsResult.error) {
+        return {
+          data: normalizeTransactionAmounts((transactionsResult.data ?? []) as RawTransaction[]),
+          error: null as unknown,
+        };
+      }
+
+      if (!hasMissingColumnError(transactionsResult.error, ["value", "amount"])) {
+        return { data: [] as Transaction[], error: transactionsResult.error };
+      }
+
+      const fallbackSelect = hasMissingColumnError(transactionsResult.error, ["value"])
+        ? "id,type,amount,date,account_id,card_id,description,category,is_installment,installment_total,installments_paid,is_paid"
+        : "id,type,value,date,account_id,card_id,description,category,is_installment,installment_total,installments_paid,is_paid";
+
+      const legacyTransactionsResult = await supabase
+        .from("transactions")
+        .select(fallbackSelect)
+        .eq("user_id", userId)
+        .lte("date", queryEnd)
+        .order("date", { ascending: false });
+
+      if (legacyTransactionsResult.error) {
+        return { data: [] as Transaction[], error: legacyTransactionsResult.error };
+      }
+
+      return {
+        data: normalizeTransactionAmounts((legacyTransactionsResult.data ?? []) as RawTransaction[]),
+        error: null as unknown,
+      };
+    }
+
+    async function loadTransfersForDashboard() {
+      const transfersResult = await supabase
+        .from("transfers")
+        .select("id,from_account_id,to_account_id,amount,value,date")
+        .eq("user_id", userId)
+        .lte("date", end)
+        .order("date", { ascending: false });
+
+      if (!transfersResult.error) {
+        return {
+          data: normalizeTransferAmounts((transfersResult.data ?? []) as RawTransfer[]),
+          error: null as unknown,
+        };
+      }
+
+      if (!hasMissingColumnError(transfersResult.error, ["value", "amount"])) {
+        return { data: [] as Transfer[], error: transfersResult.error };
+      }
+
+      const fallbackSelect = hasMissingColumnError(transfersResult.error, ["value"])
+        ? "id,from_account_id,to_account_id,amount,date"
+        : "id,from_account_id,to_account_id,value,date";
+
+      const legacyTransfersResult = await supabase
+        .from("transfers")
+        .select(fallbackSelect)
+        .eq("user_id", userId)
+        .lte("date", end)
+        .order("date", { ascending: false });
+
+      if (legacyTransfersResult.error) {
+        return { data: [] as Transfer[], error: legacyTransfersResult.error };
+      }
+
+      return {
+        data: normalizeTransferAmounts((legacyTransfersResult.data ?? []) as RawTransfer[]),
+        error: null as unknown,
+      };
+    }
 
     try {
       const [
         accountsResult,
         transactionsResult,
         cardsResult,
+        transfersResult,
         investmentsResult,
         purchasesResult,
       ] = await Promise.all([
-        supabase
-          .from("accounts")
-          .select("id,name,balance")
-          .eq("user_id", user.id)
-          .order("name", { ascending: true }),
-        supabase
-          .from("transactions")
-          .select("id,type,amount,date,account_id,card_id,description,category,is_installment,installment_total,installments_paid,is_paid")
-          .eq("user_id", user.id)
-          .lte("date", end)
-          .order("date", { ascending: false }),
-        supabase
-          .from("credit_cards")
-          .select("id,name,limit_amount,closing_day,due_day")
-          .eq("user_id", user.id)
-          .order("name", { ascending: true }),
+        loadAccountsForDashboard(),
+        loadTransactionsForDashboard(),
+        loadCardsForDashboard(),
+        loadTransfersForDashboard(),
         supabase
           .from("investments")
           .select("id,type,symbol,name,quantity,average_price")
-          .eq("user_id", user.id)
+          .eq("user_id", userId)
           .order("created_at", { ascending: false }),
         supabase
           .from("investment_purchases")
           .select("total_invested")
-          .eq("user_id", user.id),
+          .eq("user_id", userId),
       ]);
 
       if (
         accountsResult.error ||
         transactionsResult.error ||
         cardsResult.error ||
+        transfersResult.error ||
         investmentsResult.error ||
         purchasesResult.error
       ) {
@@ -486,14 +924,19 @@ export function HomeScreen() {
           accountsResult.error ||
           transactionsResult.error ||
           cardsResult.error ||
+          transfersResult.error ||
           investmentsResult.error ||
           purchasesResult.error;
         if (isTransientNetworkError(error)) {
           console.warn("[home] supabase load error:", getErrorMessage(error));
         } else {
-          console.error("Supabase load error", error);
+          console.error("Supabase load error", getErrorMessage(error), error);
         }
-        if (error?.code === "42P01") {
+        const errorCode =
+          error && typeof error === "object" && "code" in error
+            ? (error as { code?: unknown }).code
+            : null;
+        if (errorCode === "42P01") {
           setErrorMsg(t("home.schemaMissing"));
         } else {
           setErrorMsg(t("home.dataLoadError"));
@@ -502,8 +945,22 @@ export function HomeScreen() {
         return;
       }
 
-      const nextAccounts = (accountsResult.data ?? []) as Account[];
-      const transactions = (transactionsResult.data ?? []) as Transaction[];
+      const transactions = transactionsResult.data;
+      const transfers = transfersResult.data;
+      const monthTx = buildMonthTransactions(transactions, selectedMonth);
+      const monthTransfers = buildMonthTransfers(transfers, selectedMonth);
+      const hasHistoricalAccountBalances =
+        accountsResult.data.length > 0 &&
+        accountsResult.data.every((account) => account.initial_balance != null);
+      const nextAccounts = accountsResult.data.map((account) => {
+        return {
+          id: account.id,
+          name: account.name,
+          balance: hasHistoricalAccountBalances
+            ? computeEffectiveAccountBalance(account, transactions, transfers)
+            : computePeriodAccountBalance(account.id, monthTx, monthTransfers),
+        } satisfies Account;
+      });
       const nextCards = (cardsResult.data ?? []) as CreditCard[];
       const nextInvestments = (investmentsResult.data ?? []) as Investment[];
       const nextInvestedTotal = (purchasesResult.data ?? []).reduce((sum, item) => {
@@ -514,38 +971,6 @@ export function HomeScreen() {
         (sum, account) => sum + (Number(account.balance) || 0),
         0,
       );
-      const paidCardAdjustments = transactions.reduce((sum, tx) => {
-        if (tx.type !== "card_expense") return sum;
-        // If card expense is linked to an account, balance updates are already applied elsewhere.
-        if (tx.account_id) return sum;
-
-        const amount = Number(tx.amount) || 0;
-        if (amount <= 0) return sum;
-
-        const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
-        const isInstallment = totalInstallments > 0;
-        if (isInstallment) {
-          const monthOffset = getInstallmentMonthOffset(tx.date, selectedMonth);
-          if (monthOffset == null || monthOffset < 0 || monthOffset >= totalInstallments) {
-            return sum;
-          }
-          const paidInstallments = Math.min(
-            Math.max(Number(tx.installments_paid) || 0, 0),
-            totalInstallments,
-          );
-          // Deduct only the installment for the selected month when it is actually marked as paid.
-          return paidInstallments > monthOffset ? sum + amount / totalInstallments : sum;
-        }
-
-        if (!tx.is_paid) return sum;
-        const txDate = parseLocalDate(tx.date);
-        if (!txDate || Number.isNaN(txDate.getTime())) return sum;
-        const sameMonth =
-          txDate.getFullYear() === selectedMonth.getFullYear() &&
-          txDate.getMonth() === selectedMonth.getMonth();
-        return sameMonth ? sum + amount : sum;
-      }, 0);
-      const monthTx = buildMonthTransactions(transactions, selectedMonth);
       const monthIncome = monthTx.reduce((sum, tx) => {
         return tx.type === "income" ? sum + tx.displayAmount : sum;
       }, 0);
@@ -554,11 +979,12 @@ export function HomeScreen() {
           ? sum + tx.displayAmount
           : sum;
       }, 0);
+      const monthNet = monthIncome - monthExpenses;
+      const hasMonthActivity = monthIncome > 0 || monthExpenses > 0;
 
-      const hasAccounts = nextAccounts.length > 0;
-      setTotalBalance(
-        hasAccounts ? total - paidCardAdjustments : monthIncome - monthExpenses,
-      );
+      setTotalBalance(hasMonthActivity ? monthNet : total);
+      setAccountBalanceTotal(total);
+      setUsesHistoricalAccountBalances(hasHistoricalAccountBalances);
       setIncome(monthIncome);
       setExpenses(monthExpenses);
       setAccounts(nextAccounts);
@@ -749,54 +1175,27 @@ export function HomeScreen() {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    const parseTxDate = (value: string) => {
-      if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-        return new Date(
-          Number(value.slice(0, 4)),
-          Number(value.slice(5, 7)) - 1,
-          Number(value.slice(8, 10)),
-        );
-      }
-      const parsed = new Date(value);
-      return Number.isNaN(parsed.getTime()) ? null : parsed;
-    };
-
     transactions.forEach((tx) => {
-      if (tx.type !== "card_expense" || !tx.card_id) return;
-
-      const amount = Number(tx.amount) || 0;
-      if (amount <= 0) return;
-
-      let pendingAmount = 0;
-      const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
-      const isInstallment = totalInstallments > 0;
-
-      if (isInstallment) {
-        const paidInstallments = Math.min(
-          Math.max(Number(tx.installments_paid) || 0, 0),
-          totalInstallments,
-        );
-        const monthOffset = getInstallmentMonthOffset(tx.date, today);
-        const dueInstallments =
-          monthOffset == null
-            ? 0
-            : Math.min(Math.max(monthOffset + 1, 0), totalInstallments);
-        const pendingInstallments = Math.max(dueInstallments - paidInstallments, 0);
-        pendingAmount = (amount / totalInstallments) * pendingInstallments;
-      } else {
-        const txDate = parseTxDate(tx.date);
-        const isDueNow = txDate ? txDate.getTime() <= today.getTime() : true;
-        pendingAmount = isDueNow && !tx.is_paid ? amount : 0;
-      }
-
-      if (pendingAmount <= 0) return;
-      pendingByCard[tx.card_id] = (pendingByCard[tx.card_id] ?? 0) + pendingAmount;
+      const dueState = getCardExpenseDueState(tx, today);
+      if (!dueState || !tx.card_id) return;
+      pendingByCard[tx.card_id] = (pendingByCard[tx.card_id] ?? 0) + dueState.pendingAmount;
     });
 
     return pendingByCard;
   }, [transactions]);
 
+  const ownCards = useMemo(
+    () => cards.filter((card) => (card.owner_type ?? "self") !== "friend"),
+    [cards],
+  );
+
+  const friendCards = useMemo(
+    () => cards.filter((card) => (card.owner_type ?? "self") === "friend"),
+    [cards],
+  );
+
   const cardReminders = useMemo<CardReminder[]>(() => {
+    if (!user) return [];
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const year = today.getFullYear();
@@ -833,6 +1232,16 @@ export function HomeScreen() {
           return {
             id: card.id,
             name: card.name,
+            owner_type: card.owner_type ?? "self",
+            friend_name: card.friend_name ?? null,
+            dismissKey: buildCardReminderDismissKey(
+              user.id,
+              card.id,
+              "expired",
+              closingDay,
+              dueDay,
+              today,
+            ),
             status: "expired" as const,
             days,
             closingDay,
@@ -847,6 +1256,16 @@ export function HomeScreen() {
           return {
             id: card.id,
             name: card.name,
+            owner_type: card.owner_type ?? "self",
+            friend_name: card.friend_name ?? null,
+            dismissKey: buildCardReminderDismissKey(
+              user.id,
+              card.id,
+              "closed",
+              closingDay,
+              dueDay,
+              today,
+            ),
             status: "closed" as const,
             days,
             closingDay,
@@ -856,14 +1275,16 @@ export function HomeScreen() {
 
         return null;
       })
+      .filter((card): card is CardReminder => Boolean(card))
+      .filter((card) => !dismissedCardReminderKeys[card.dismissKey])
       .filter(Boolean)
       .sort((a, b) => {
         if (!a || !b) return 0;
         if (a.status !== b.status) return a.status === "expired" ? -1 : 1;
         if (a.days !== b.days) return b.days - a.days;
         return a.name.localeCompare(b.name);
-      }) as CardReminder[];
-  }, [cards, cardPendingDueById]);
+      });
+  }, [cards, cardPendingDueById, dismissedCardReminderKeys, user]);
 
   const cardUsedById = useMemo(() => {
     const usage: Record<string, number> = {};
@@ -899,7 +1320,8 @@ export function HomeScreen() {
     () => Object.values(cardUsedById).reduce((sum, value) => sum + value, 0),
     [cardUsedById],
   );
-  const netWorth = totalBalance + investedTotal;
+  const netWorthBase = usesHistoricalAccountBalances ? accountBalanceTotal : totalBalance;
+  const netWorth = netWorthBase + investedTotal;
   const investedShare = netWorth > 0 ? (investedTotal / netWorth) * 100 : 0;
 
   const displayName =
@@ -970,6 +1392,33 @@ export function HomeScreen() {
 
     loadData();
     window.dispatchEvent(new Event("data-refresh"));
+  }
+
+  async function handleMarkCardReminderPaid(card: CardReminder) {
+    if (!user) return;
+    if (payingReminderCardId) return;
+
+    const confirmationMessage = language === "pt"
+      ? `Marcar a fatura do cartão "${card.name}" como paga?`
+      : `Mark the "${card.name}" card statement as paid?`;
+    if (!window.confirm(confirmationMessage)) return;
+
+    setErrorMsg(null);
+    setPayingReminderCardId(card.id);
+
+    try {
+      const nextDismissals = {
+        ...dismissedCardReminderKeys,
+        [card.dismissKey]: true as const,
+      };
+      saveCardReminderDismissals(nextDismissals);
+      setDismissedCardReminderKeys(nextDismissals);
+    } catch (error) {
+      console.error("Error dismissing card reminder:", error);
+      setErrorMsg(t("home.cardReminderMarkPaidError"));
+    } finally {
+      setPayingReminderCardId(null);
+    }
   }
 
   const FlowTooltip = ({ active, payload, label }: TooltipContentProps<number, string>) => {
@@ -1243,7 +1692,7 @@ export function HomeScreen() {
           </div>
           <p className="mt-3 text-xs text-[#8D96A6]">
             {t("home.balanceAfterExpenses")}:{" "}
-            {loading ? "..." : formatCurrency(totalBalance - expenses, language)}
+            {loading ? "..." : formatCurrency(monthNet, language)}
           </p>
           <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
             <div className="rounded-lg border border-[#1E2636] bg-[#0F141E] p-2">
@@ -1540,7 +1989,7 @@ export function HomeScreen() {
             </div>
           )}
           <div className="mt-4 border-t border-[#1C2332] pt-3 text-sm font-semibold text-[#C7CEDA]">
-            {t("home.total")} {loading ? "..." : formatCurrency(totalBalance, language)}
+            {t("home.total")} {loading ? "..." : formatCurrency(accountBalanceTotal, language)}
           </div>
         </div>
 
@@ -1604,11 +2053,11 @@ export function HomeScreen() {
               {t("home.closedStatements")}
             </span>
           </div>
-          {cards.length === 0 ? (
-            <p className="text-xs text-[#8B94A6]">{t("home.noCards")}</p>
+          {ownCards.length === 0 ? (
+            <p className="text-xs text-[#8B94A6]">{t("home.noOwnCards")}</p>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
-              {cards.map((card) => (
+              {ownCards.map((card) => (
                 <div
                   key={card.id}
                   className="flex items-center justify-between gap-3 rounded-xl border border-[#1C2332] bg-[#0F141E] px-4 py-3"
@@ -1671,68 +2120,165 @@ export function HomeScreen() {
         </div>
 
         <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5 sm:col-span-2 lg:col-span-6">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-[#C7CEDA]">{t("home.friendCardsTitle")}</p>
+              <p className="text-xs text-[#8B94A6]">{t("home.friendCardsSubtitle")}</p>
+            </div>
+            <span className="rounded-full border border-[#263043] bg-[#0F141E] px-3 py-1 text-[11px] text-[#9AA3B2]">
+              {friendCards.length}
+            </span>
+          </div>
+          <p className="mb-4 text-xs text-[#8B94A6]">{t("home.friendCardsInfo")}</p>
+          {friendCards.length === 0 ? (
+            <p className="text-xs text-[#8B94A6]">{t("home.friendCardsEmpty")}</p>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              {friendCards.map((card) => (
+                <div
+                  key={card.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-[#25404B] bg-[#10212A] px-4 py-3"
+                >
+                  <div className="flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-[#E4E7EC]">{card.name}</p>
+                      <span className="rounded-full border border-[#2E6C79] bg-[#173038] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[#91E6DA]">
+                        {t("cards.ownerBadgeFriend")}
+                      </span>
+                    </div>
+                    {card.friend_name ? (
+                      <p className="mt-1 text-xs text-[#A8D7D1]">
+                        {t("home.friendCardOwner")}: {card.friend_name}
+                      </p>
+                    ) : null}
+                    <p className="mt-1 text-xs text-[#8B94A6]">
+                      {t("cards.closes")} {card.closing_day} - {t("cards.due")} {card.due_day}
+                    </p>
+                    <div className="mt-2 h-1.5 rounded-full bg-[#173038]">
+                      <div
+                        className="h-1.5 rounded-full bg-[#5DD6C7]"
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            Math.max(
+                              0,
+                              ((cardUsedById[card.id] ?? 0) /
+                                Math.max(Number(card.limit_amount) || 0, 1)) *
+                                100,
+                            ),
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-2 text-right">
+                    <span className="text-xs font-semibold text-[#5DD6C7]">
+                      {t("home.cardLimitAvailable")}{" "}
+                      {loading
+                        ? "..."
+                        : formatCurrency(
+                            (Number(card.limit_amount) || 0) - (cardUsedById[card.id] ?? 0),
+                            language,
+                          )}
+                    </span>
+                    <span className="text-[11px] text-[#A8D7D1]">
+                      {t("home.cardLimitUsed")}{" "}
+                      {loading
+                        ? "..."
+                        : formatCurrency(cardUsedById[card.id] ?? 0, language)}
+                    </span>
+                    <span className="text-[11px] text-[#A8D7D1]">
+                      {t("home.cardLimitTotal")}{" "}
+                      {loading ? "..." : formatCurrency(Number(card.limit_amount) || 0, language)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCard(card.id, card.name)}
+                      disabled={deletingCardId === card.id}
+                      className="rounded-full border border-[#2E6C79] bg-[#0F141E] px-3 py-1 text-[11px] text-[#A8D7D1] hover:border-red-500/60 hover:text-red-300 disabled:opacity-60"
+                    >
+                      {deletingCardId === card.id ? "Removendo..." : "Remover"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-4 sm:col-span-2 lg:col-span-6 sm:p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm font-semibold text-[#C7CEDA]">{t("transactions.title")}</p>
             <span className="rounded-full border border-[#263043] bg-[#0F141E] px-3 py-1 text-[11px] text-[#9AA3B2]">
               {t("transactions.monthSummary")}
             </span>
           </div>
-          <div className="mb-3 flex items-center justify-between text-[11px] text-[#8B94A6]">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#8B94A6]">
             <span>Transacoes do mes</span>
             <span>{monthTransactions.length}</span>
           </div>
           {monthTransactions.length === 0 ? (
             <p className="text-xs text-[#8B94A6]">{t("transactions.empty")}</p>
           ) : (
-            <div className="divide-y divide-[#1C2332]">
-              {monthTransactions.map((tx) => {
-                const isIncome = tx.type === "income";
-                const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
-                const isInstallment = totalInstallments > 0;
-                const paidInstallments = Math.max(0, Number(tx.installments_paid) || 0);
-                return (
-                  <div key={tx.displayId} className="flex items-center justify-between py-3">
-                    <div>
-                      <p className="text-sm font-semibold text-[#E4E7EC]">
-                        {tx.description || tx.category || "--"}
-                      </p>
-                      <p className="text-xs text-[#8B94A6]">
-                        {(() => {
-                          if (/^\d{4}-\d{2}-\d{2}$/.test(tx.displayDate)) {
-                            const [y, m, d] = tx.displayDate.split("-").map(Number);
-                            if (y && m && d) {
-                              return new Date(y, m - 1, d).toLocaleDateString(
-                                language === "pt" ? "pt-BR" : "en-US",
-                              );
-                            }
-                          }
-                          return new Date(tx.displayDate).toLocaleDateString(
-                            language === "pt" ? "pt-BR" : "en-US",
-                          );
-                        })()}
-                      </p>
-                      {isInstallment ? (
-                        <span
-                          className={`mt-1 inline-flex rounded-full border px-2 py-[2px] text-[10px] ${
-                            paidInstallments >= totalInstallments
-                              ? "border-emerald-500/40 text-emerald-300"
-                              : "border-amber-500/40 text-amber-300"
-                          }`}
-                        >
-                          {paidInstallments >= totalInstallments ? "Pago" : "Em aberto"}
-                        </span>
-                      ) : null}
-                    </div>
-                    <span
-                      className={`text-sm font-semibold ${
-                        isIncome ? "text-[#4FC3A1]" : "text-[#E36B6B]"
-                      }`}
+            <div className="max-h-[19rem] overflow-y-auto pr-1 sm:max-h-[22rem]">
+              <div className="divide-y divide-[#1C2332]">
+                {monthTransactions.map((tx) => {
+                  const isIncome = tx.type === "income";
+                  const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
+                  const isInstallment = totalInstallments > 0;
+                  const paidInstallments = Math.max(0, Number(tx.installments_paid) || 0);
+                  return (
+                    <div
+                      key={tx.displayId}
+                      className="flex flex-col gap-2 py-2.5 sm:flex-row sm:items-center sm:justify-between"
                     >
-                      {isIncome ? "+" : "-"} {formatCurrency(tx.displayAmount, language)}
-                    </span>
-                  </div>
-                );
-              })}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-[#E4E7EC]">
+                          {tx.description || tx.category || "--"}
+                        </p>
+                        <p className="text-xs text-[#8B94A6]">
+                          {(() => {
+                            if (/^\d{4}-\d{2}-\d{2}$/.test(tx.displayDate)) {
+                              const [y, m, d] = tx.displayDate.split("-").map(Number);
+                              if (y && m && d) {
+                                return new Date(y, m - 1, d).toLocaleDateString(
+                                  language === "pt" ? "pt-BR" : "en-US",
+                                );
+                              }
+                            }
+                            return new Date(tx.displayDate).toLocaleDateString(
+                              language === "pt" ? "pt-BR" : "en-US",
+                            );
+                          })()}
+                        </p>
+                        {isInstallment ? (
+                          <span
+                            className={`mt-1 inline-flex rounded-full border px-2 py-[2px] text-[10px] ${
+                              paidInstallments >= totalInstallments
+                                ? "border-emerald-500/40 text-emerald-300"
+                                : "border-amber-500/40 text-amber-300"
+                            }`}
+                          >
+                            {paidInstallments >= totalInstallments ? "Pago" : "Em aberto"}
+                          </span>
+                        ) : null}
+                        {tx.isBudgetCarryover ? (
+                          <span className="mt-1 inline-flex rounded-full border border-[#5DA7FF]/40 bg-[#122033] px-2 py-[2px] text-[10px] text-[#9DC4FF]">
+                            {t("transactions.nextMonthSalary")}
+                          </span>
+                        ) : null}
+                      </div>
+                      <span
+                        className={`shrink-0 text-sm font-semibold sm:text-right ${
+                          isIncome ? "text-[#4FC3A1]" : "text-[#E36B6B]"
+                        }`}
+                      >
+                        {isIncome ? "+" : "-"} {formatCurrency(tx.displayAmount, language)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -1771,6 +2317,11 @@ export function HomeScreen() {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-[#E4E7EC]">{card.name}</p>
+                        {card.owner_type === "friend" && card.friend_name ? (
+                          <p className="mt-1 text-[11px] text-[#A8B2C3]">
+                            {t("home.friendCardOwner")}: {card.friend_name}
+                          </p>
+                        ) : null}
                         <p className="mt-1 text-[11px] text-[#A8B2C3]">
                           {t("cards.closes")} {card.closingDay} - {t("cards.due")} {card.dueDay}
                         </p>
@@ -1787,16 +2338,32 @@ export function HomeScreen() {
                           : t("home.cardReminderClosedBadge")}
                       </span>
                     </div>
-                    <p
-                      className={`mt-3 text-xs ${
-                        isExpired ? "text-red-200" : "text-amber-200"
-                      }`}
-                    >
-                      {isExpired
-                        ? t("home.cardReminderExpiredSince")
-                        : t("home.cardReminderClosedSince")}{" "}
-                      {card.days} {getDayWord(card.days, language)}
-                    </p>
+                    <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+                      <p
+                        className={`text-xs ${
+                          isExpired ? "text-red-200" : "text-amber-200"
+                        }`}
+                      >
+                        {isExpired
+                          ? t("home.cardReminderExpiredSince")
+                          : t("home.cardReminderClosedSince")}{" "}
+                        {card.days} {getDayWord(card.days, language)}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => handleMarkCardReminderPaid(card)}
+                        disabled={payingReminderCardId === card.id}
+                        className={`rounded-full border px-3 py-1 text-[11px] font-medium transition ${
+                          isExpired
+                            ? "border-red-500/55 bg-red-500/10 text-red-100 hover:border-red-400"
+                            : "border-amber-500/55 bg-amber-500/10 text-amber-100 hover:border-amber-400"
+                        } disabled:cursor-not-allowed disabled:opacity-60`}
+                      >
+                        {payingReminderCardId === card.id
+                          ? t("home.cardReminderPaying")
+                          : t("home.cardReminderMarkPaid")}
+                      </button>
+                    </div>
                   </div>
                 );
               })}
