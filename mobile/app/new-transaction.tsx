@@ -15,6 +15,8 @@ import {
 import { supabase } from '@/lib/supabaseClient';
 import { useLanguage } from '@/lib/language';
 
+type CardOwnerType = 'self' | 'friend';
+
 type Account = {
   id: string;
   name: string;
@@ -24,7 +26,48 @@ type Account = {
 type Card = {
   id: string;
   name: string;
+  owner_type: CardOwnerType;
+  friend_name: string | null;
 };
+
+type LegacyCard = Omit<Card, 'owner_type' | 'friend_name'>;
+
+function getErrorMessage(error: unknown) {
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string') return message;
+  }
+  return '';
+}
+
+function isCardOwnershipColumnMissing(error: unknown) {
+  const patterns = [
+    /column ["']?([a-zA-Z0-9_]+)["']? does not exist/i,
+    /could not find (?:the )?["']?([a-zA-Z0-9_]+)["']? column/i,
+  ];
+  const candidates = [getErrorMessage(error)];
+
+  if (error && typeof error === 'object' && 'details' in error) {
+    const details = (error as { details?: unknown }).details;
+    if (typeof details === 'string') candidates.push(details);
+  }
+
+  return candidates.some((candidate) =>
+    patterns.some((pattern) => {
+      const match = candidate.match(pattern);
+      return match?.[1] === 'owner_type' || match?.[1] === 'friend_name';
+    })
+  );
+}
+
+function hydrateLegacyCards(cards: LegacyCard[]): Card[] {
+  return cards.map((card) => ({
+    ...card,
+    owner_type: 'self',
+    friend_name: null,
+  }));
+}
 
 function toDateString(date: Date) {
   const year = date.getFullYear();
@@ -65,9 +108,42 @@ export default function NewTransactionScreen() {
 
   useEffect(() => {
     async function loadRefs() {
+      const loadCards = async () => {
+        const cardsResult = await supabase
+          .from('credit_cards')
+          .select('id,name,owner_type,friend_name')
+          .order('owner_type', { ascending: true })
+          .order('name', { ascending: true });
+
+        if (!cardsResult.error) {
+          return {
+            data: (cardsResult.data ?? []) as Card[],
+            error: null as unknown,
+          };
+        }
+
+        if (!isCardOwnershipColumnMissing(cardsResult.error)) {
+          return { data: [] as Card[], error: cardsResult.error };
+        }
+
+        const legacyCardsResult = await supabase
+          .from('credit_cards')
+          .select('id,name')
+          .order('name', { ascending: true });
+
+        if (legacyCardsResult.error) {
+          return { data: [] as Card[], error: legacyCardsResult.error };
+        }
+
+        return {
+          data: hydrateLegacyCards((legacyCardsResult.data ?? []) as LegacyCard[]),
+          error: null as unknown,
+        };
+      };
+
       const [accountsResult, cardsResult] = await Promise.all([
         supabase.from('accounts').select('id,name,balance').order('name', { ascending: true }),
-        supabase.from('credit_cards').select('id,name').order('name', { ascending: true }),
+        loadCards(),
       ]);
 
       if (!accountsResult.error) {
@@ -258,7 +334,11 @@ export default function NewTransactionScreen() {
                         cardId === card.id ? styles.chipActive : undefined,
                       ]}
                       onPress={() => setCardId(card.id)}>
-                      <Text style={styles.chipText}>{card.name}</Text>
+                      <Text style={styles.chipText}>
+                        {card.owner_type === 'friend' && card.friend_name
+                          ? `${card.name} - ${card.friend_name}`
+                          : card.name}
+                      </Text>
                     </Pressable>
                   ))
                 )}

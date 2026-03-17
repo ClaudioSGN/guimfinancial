@@ -6,7 +6,10 @@ import { supabase } from "@/lib/supabaseClient";
 import { useLanguage } from "@/lib/language";
 import { useAuth } from "@/lib/auth";
 import { AppIcon } from "@/components/AppIcon";
+import { hasMissingColumnError } from "@/lib/errorUtils";
 import { formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
+
+type CardOwnerType = "self" | "friend";
 
 type Account = {
   id: string;
@@ -17,7 +20,11 @@ type Account = {
 type Card = {
   id: string;
   name: string;
+  owner_type: CardOwnerType;
+  friend_name: string | null;
 };
+
+type LegacyCard = Omit<Card, "owner_type" | "friend_name">;
 
 type Props = {
   entryType: string;
@@ -35,6 +42,18 @@ function labelForType(type: string, t: (key: string) => string) {
   if (type === "income") return t("newEntry.income");
   if (type === "card_expense") return t("newEntry.cardExpense");
   return t("newEntry.expense");
+}
+
+function isCardOwnershipColumnMissing(error: unknown) {
+  return hasMissingColumnError(error, ["owner_type", "friend_name"]);
+}
+
+function hydrateLegacyCards(cards: LegacyCard[]): Card[] {
+  return cards.map((card) => ({
+    ...card,
+    owner_type: "self",
+    friend_name: null,
+  }));
 }
 
 export function NewEntryScreen({ entryType }: Props) {
@@ -64,6 +83,8 @@ export function NewEntryScreen({ entryType }: Props) {
   const [createCardOpen, setCreateCardOpen] = useState(false);
   const [newCardName, setNewCardName] = useState("");
   const [newCardLimitAmount, setNewCardLimitAmount] = useState("R$ 0");
+  const [newCardOwnerType, setNewCardOwnerType] = useState<CardOwnerType>("self");
+  const [newCardFriendName, setNewCardFriendName] = useState("");
   const [newCardClosingDay, setNewCardClosingDay] = useState("");
   const [newCardDueDay, setNewCardDueDay] = useState("");
   const [createCardSaving, setCreateCardSaving] = useState(false);
@@ -72,17 +93,48 @@ export function NewEntryScreen({ entryType }: Props) {
   useEffect(() => {
     async function loadRefs() {
       if (!user) return;
+      const loadCards = async () => {
+        const cardsResult = await supabase
+          .from("credit_cards")
+          .select("id,name,owner_type,friend_name")
+          .eq("user_id", user.id)
+          .order("owner_type", { ascending: true })
+          .order("name", { ascending: true });
+
+        if (!cardsResult.error) {
+          return {
+            data: (cardsResult.data ?? []) as Card[],
+            error: null as unknown,
+          };
+        }
+
+        if (!isCardOwnershipColumnMissing(cardsResult.error)) {
+          return { data: [] as Card[], error: cardsResult.error };
+        }
+
+        const legacyCardsResult = await supabase
+          .from("credit_cards")
+          .select("id,name")
+          .eq("user_id", user.id)
+          .order("name", { ascending: true });
+
+        if (legacyCardsResult.error) {
+          return { data: [] as Card[], error: legacyCardsResult.error };
+        }
+
+        return {
+          data: hydrateLegacyCards((legacyCardsResult.data ?? []) as LegacyCard[]),
+          error: null as unknown,
+        };
+      };
+
       const [accountsResult, cardsResult] = await Promise.all([
         supabase
           .from("accounts")
           .select("id,name,balance")
           .eq("user_id", user.id)
           .order("name", { ascending: true }),
-        supabase
-          .from("credit_cards")
-          .select("id,name")
-          .eq("user_id", user.id)
-          .order("name", { ascending: true }),
+        loadCards(),
       ]);
 
       if (!accountsResult.error) {
@@ -216,6 +268,8 @@ export function NewEntryScreen({ entryType }: Props) {
   function resetCreateCardForm() {
     setNewCardName("");
     setNewCardLimitAmount("R$ 0");
+    setNewCardOwnerType("self");
+    setNewCardFriendName("");
     setNewCardClosingDay("");
     setNewCardDueDay("");
     setCreateCardError(null);
@@ -240,9 +294,14 @@ export function NewEntryScreen({ entryType }: Props) {
     const parsedLimit = parseCentsInput(newCardLimitAmount);
     const parsedClosing = Number(newCardClosingDay);
     const parsedDue = Number(newCardDueDay);
+    const trimmedFriendName = newCardFriendName.trim();
 
     if (!newCardName.trim()) {
       setCreateCardError(t("cards.nameError"));
+      return;
+    }
+    if (newCardOwnerType === "friend" && !trimmedFriendName) {
+      setCreateCardError(t("cards.friendNameError"));
       return;
     }
     if (!Number.isFinite(parsedLimit) || parsedLimit <= 0) {
@@ -259,19 +318,53 @@ export function NewEntryScreen({ entryType }: Props) {
     }
 
     setCreateCardSaving(true);
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("credit_cards")
       .insert([
         {
           user_id: user.id,
           name: newCardName.trim(),
           limit_amount: parsedLimit,
+          owner_type: newCardOwnerType,
+          friend_name: newCardOwnerType === "friend" ? trimmedFriendName : null,
           closing_day: parsedClosing,
           due_day: parsedDue,
         },
       ])
-      .select("id,name")
+      .select("id,name,owner_type,friend_name")
       .single();
+
+    if (error && isCardOwnershipColumnMissing(error)) {
+      if (newCardOwnerType === "friend") {
+        setCreateCardError(t("cards.schemaUpdateRequired"));
+        setCreateCardSaving(false);
+        return;
+      }
+
+      const legacyResult = await supabase
+        .from("credit_cards")
+        .insert([
+          {
+            user_id: user.id,
+            name: newCardName.trim(),
+            limit_amount: parsedLimit,
+            closing_day: parsedClosing,
+            due_day: parsedDue,
+          },
+        ])
+        .select("id,name")
+        .single();
+
+      data = legacyResult.data
+        ? {
+            ...(legacyResult.data as LegacyCard),
+            owner_type: "self",
+            friend_name: null,
+          }
+        : null;
+      error = legacyResult.error;
+    }
+
     setCreateCardSaving(false);
 
     if (error) {
@@ -391,7 +484,9 @@ export function NewEntryScreen({ entryType }: Props) {
                           : "border-[#2A3140] bg-[#0F141E] text-[#C7CEDA]"
                       }`}
                     >
-                      {card.name}
+                      {card.owner_type === "friend" && card.friend_name
+                        ? `${card.name} - ${card.friend_name}`
+                        : card.name}
                     </button>
                   ))
                 )}
@@ -540,12 +635,49 @@ export function NewEntryScreen({ entryType }: Props) {
             </div>
 
             <div className="space-y-3">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8B94A6]">
+                  {t("cards.ownerLabel")}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewCardOwnerType("self")}
+                    className={`rounded-full border px-3 py-1 text-xs ${
+                      newCardOwnerType === "self"
+                        ? "border-[#5DD6C7] bg-[#173038] text-[#D7FBF6]"
+                        : "border-[#2A3140] bg-[#0F141E] text-[#A8B2C3]"
+                    }`}
+                  >
+                    {t("cards.ownerSelf")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewCardOwnerType("friend")}
+                    className={`rounded-full border px-3 py-1 text-xs ${
+                      newCardOwnerType === "friend"
+                        ? "border-[#5DD6C7] bg-[#173038] text-[#D7FBF6]"
+                        : "border-[#2A3140] bg-[#0F141E] text-[#A8B2C3]"
+                    }`}
+                  >
+                    {t("cards.ownerFriend")}
+                  </button>
+                </div>
+              </div>
               <input
                 value={newCardName}
                 onChange={(event) => setNewCardName(event.target.value)}
                 placeholder={t("cards.namePlaceholder")}
                 className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
               />
+              {newCardOwnerType === "friend" ? (
+                <input
+                  value={newCardFriendName}
+                  onChange={(event) => setNewCardFriendName(event.target.value)}
+                  placeholder={t("cards.friendNamePlaceholder")}
+                  className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
+                />
+              ) : null}
               <input
                 value={newCardLimitAmount}
                 onChange={(event) =>

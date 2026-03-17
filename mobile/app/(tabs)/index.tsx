@@ -34,9 +34,50 @@ type CreditCard = {
   id: string;
   name: string;
   limit_amount: number | string;
+  owner_type: 'self' | 'friend';
+  friend_name: string | null;
   closing_day: number;
   due_day: number;
 };
+
+type LegacyCreditCard = Omit<CreditCard, 'owner_type' | 'friend_name'>;
+
+function getErrorMessage(error: unknown) {
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string') return message;
+  }
+  return '';
+}
+
+function isCardOwnershipColumnMissing(error: unknown) {
+  const patterns = [
+    /column ["']?([a-zA-Z0-9_]+)["']? does not exist/i,
+    /could not find (?:the )?["']?([a-zA-Z0-9_]+)["']? column/i,
+  ];
+  const candidates = [getErrorMessage(error)];
+
+  if (error && typeof error === 'object' && 'details' in error) {
+    const details = (error as { details?: unknown }).details;
+    if (typeof details === 'string') candidates.push(details);
+  }
+
+  return candidates.some((candidate) =>
+    patterns.some((pattern) => {
+      const match = candidate.match(pattern);
+      return match?.[1] === 'owner_type' || match?.[1] === 'friend_name';
+    })
+  );
+}
+
+function hydrateLegacyCards(cards: LegacyCreditCard[]): CreditCard[] {
+  return cards.map((card) => ({
+    ...card,
+    owner_type: 'self',
+    friend_name: null,
+  }));
+}
 
 const CHART_BUCKETS = 10;
 
@@ -122,6 +163,39 @@ export default function HomeScreen() {
 
     const { start, end } = getMonthRange(selectedMonth);
 
+    const loadCards = async () => {
+      const cardsResult = await supabase
+        .from('credit_cards')
+        .select('id,name,limit_amount,owner_type,friend_name,closing_day,due_day')
+        .order('owner_type', { ascending: true })
+        .order('name', { ascending: true });
+
+      if (!cardsResult.error) {
+        return {
+          data: (cardsResult.data ?? []) as CreditCard[],
+          error: null as unknown,
+        };
+      }
+
+      if (!isCardOwnershipColumnMissing(cardsResult.error)) {
+        return { data: [] as CreditCard[], error: cardsResult.error };
+      }
+
+      const legacyCardsResult = await supabase
+        .from('credit_cards')
+        .select('id,name,limit_amount,closing_day,due_day')
+        .order('name', { ascending: true });
+
+      if (legacyCardsResult.error) {
+        return { data: [] as CreditCard[], error: legacyCardsResult.error };
+      }
+
+      return {
+        data: hydrateLegacyCards((legacyCardsResult.data ?? []) as LegacyCreditCard[]),
+        error: null as unknown,
+      };
+    };
+
     const [accountsResult, transactionsResult, cardsResult] = await Promise.all([
       supabase.from('accounts').select('id,name,balance').order('name', { ascending: true }),
       supabase
@@ -130,10 +204,7 @@ export default function HomeScreen() {
         .gte('date', start)
         .lte('date', end)
         .order('date', { ascending: false }),
-      supabase
-        .from('credit_cards')
-        .select('id,name,limit_amount,closing_day,due_day')
-        .order('name', { ascending: true }),
+      loadCards(),
     ]);
 
     if (accountsResult.error || transactionsResult.error || cardsResult.error) {
@@ -218,6 +289,16 @@ export default function HomeScreen() {
     const maxValue = Math.max(1, ...chartValues.map((value) => Math.abs(value)));
     return maxValue;
   }, [chartValues]);
+
+  const ownCards = useMemo(
+    () => cards.filter((card) => (card.owner_type ?? 'self') !== 'friend'),
+    [cards]
+  );
+
+  const friendCards = useMemo(
+    () => cards.filter((card) => (card.owner_type ?? 'self') === 'friend'),
+    [cards]
+  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -351,10 +432,10 @@ export default function HomeScreen() {
                 <Text style={styles.pillText}>{t('home.closedStatements')}</Text>
               </View>
             </View>
-            {cards.length === 0 ? (
-              <Text style={styles.emptyText}>{t('home.noCards')}</Text>
+            {ownCards.length === 0 ? (
+              <Text style={styles.emptyText}>{t('home.noOwnCards')}</Text>
             ) : (
-              cards.map((card) => (
+              ownCards.map((card) => (
                 <View key={card.id} style={styles.cardRow}>
                   <View style={styles.cardInfo}>
                     <Text style={styles.cardName}>{card.name}</Text>
@@ -368,6 +449,45 @@ export default function HomeScreen() {
                 </View>
               ))
             )}
+            <View style={styles.friendCardsBox}>
+              <View style={styles.friendCardsHeader}>
+                <View>
+                  <Text style={styles.friendCardsTitle}>{t('home.friendCardsTitle')}</Text>
+                  <Text style={styles.friendCardsSubtitle}>{t('home.friendCardsSubtitle')}</Text>
+                </View>
+                <View style={styles.friendCountBadge}>
+                  <Text style={styles.friendCountText}>{friendCards.length}</Text>
+                </View>
+              </View>
+              <Text style={styles.friendCardsInfo}>{t('home.friendCardsInfo')}</Text>
+              {friendCards.length === 0 ? (
+                <Text style={styles.emptyText}>{t('home.friendCardsEmpty')}</Text>
+              ) : (
+                friendCards.map((card) => (
+                  <View key={card.id} style={styles.friendCardRow}>
+                    <View style={styles.cardInfo}>
+                      <View style={styles.friendBadgeRow}>
+                        <Text style={styles.cardName}>{card.name}</Text>
+                        <View style={styles.friendBadge}>
+                          <Text style={styles.friendBadgeText}>{t('cards.ownerBadgeFriend')}</Text>
+                        </View>
+                      </View>
+                      {card.friend_name ? (
+                        <Text style={styles.friendOwnerText}>
+                          {t('home.friendCardOwner')}: {card.friend_name}
+                        </Text>
+                      ) : null}
+                      <Text style={styles.cardMeta}>
+                        {t('cards.closes')} {card.closing_day} - {t('cards.due')} {card.due_day}
+                      </Text>
+                    </View>
+                    <Text style={styles.cardLimit}>
+                      {loading ? '...' : formatCurrency(Number(card.limit_amount) || 0, language)}
+                    </Text>
+                  </View>
+                ))
+              )}
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -663,6 +783,83 @@ const styles = StyleSheet.create({
     color: '#A8B2C3',
     fontSize: 12,
     fontWeight: '600',
+  },
+  friendCardsBox: {
+    marginTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#1A2230',
+    paddingTop: 14,
+    gap: 10,
+  },
+  friendCardsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  friendCardsTitle: {
+    color: '#E4E7EC',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  friendCardsSubtitle: {
+    color: '#8A93A3',
+    fontSize: 11,
+  },
+  friendCardsInfo: {
+    color: '#8A93A3',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  friendCountBadge: {
+    minWidth: 26,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#2A3140',
+    backgroundColor: '#0F141E',
+    alignItems: 'center',
+  },
+  friendCountText: {
+    color: '#9AA3B2',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  friendCardRow: {
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#25404B',
+    backgroundColor: '#10212A',
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  friendBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  friendBadge: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#2E6C79',
+    backgroundColor: '#173038',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  friendBadgeText: {
+    color: '#91E6DA',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  friendOwnerText: {
+    color: '#A8D7D1',
+    fontSize: 11,
   },
   error: {
     color: '#F87171',

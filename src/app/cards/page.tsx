@@ -4,14 +4,33 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { useLanguage } from "@/lib/language";
+import { hasMissingColumnError } from "@/lib/errorUtils";
+
+type CardOwnerType = "self" | "friend";
 
 type Card = {
   id: string;
   name: string;
   limit_amount: number | string;
+  owner_type: CardOwnerType;
+  friend_name: string | null;
   closing_day: number;
   due_day: number;
 };
+
+type LegacyCard = Omit<Card, "owner_type" | "friend_name">;
+
+function isCardOwnershipColumnMissing(error: unknown) {
+  return hasMissingColumnError(error, ["owner_type", "friend_name"]);
+}
+
+function hydrateLegacyCards(cards: LegacyCard[]): Card[] {
+  return cards.map((card) => ({
+    ...card,
+    owner_type: "self",
+    friend_name: null,
+  }));
+}
 
 function formatCentsInput(digits: string) {
   const cleaned = digits.replace(/\D/g, "");
@@ -36,6 +55,8 @@ export default function CardsPage() {
   const [cards, setCards] = useState<Card[]>([]);
   const [name, setName] = useState("");
   const [limitAmount, setLimitAmount] = useState("R$ 0");
+  const [ownerType, setOwnerType] = useState<CardOwnerType>("self");
+  const [friendName, setFriendName] = useState("");
   const [closingDay, setClosingDay] = useState("");
   const [dueDay, setDueDay] = useState("");
   const [saving, setSaving] = useState(false);
@@ -43,6 +64,8 @@ export default function CardsPage() {
   const [editing, setEditing] = useState<Card | null>(null);
   const [editName, setEditName] = useState("");
   const [editLimitAmount, setEditLimitAmount] = useState("R$ 0");
+  const [editOwnerType, setEditOwnerType] = useState<CardOwnerType>("self");
+  const [editFriendName, setEditFriendName] = useState("");
   const [editClosingDay, setEditClosingDay] = useState("");
   const [editDueDay, setEditDueDay] = useState("");
   const [editSaving, setEditSaving] = useState(false);
@@ -51,10 +74,23 @@ export default function CardsPage() {
   async function loadCards() {
     const { data, error } = await supabase
       .from("credit_cards")
-      .select("id,name,limit_amount,closing_day,due_day")
+      .select("id,name,limit_amount,owner_type,friend_name,closing_day,due_day")
+      .order("owner_type", { ascending: true })
       .order("name", { ascending: true });
     if (!error) {
       setCards((data ?? []) as Card[]);
+      return;
+    }
+
+    if (!isCardOwnershipColumnMissing(error)) return;
+
+    const legacyResult = await supabase
+      .from("credit_cards")
+      .select("id,name,limit_amount,closing_day,due_day")
+      .order("name", { ascending: true });
+
+    if (!legacyResult.error) {
+      setCards(hydrateLegacyCards((legacyResult.data ?? []) as LegacyCard[]));
     }
   }
 
@@ -67,9 +103,14 @@ export default function CardsPage() {
     const parsedLimit = parseCentsInput(limitAmount);
     const parsedClosing = Number(closingDay);
     const parsedDue = Number(dueDay);
+    const trimmedFriendName = friendName.trim();
 
     if (!name.trim()) {
       setErrorMsg(t("cards.nameError"));
+      return;
+    }
+    if (ownerType === "friend" && !trimmedFriendName) {
+      setErrorMsg(t("cards.friendNameError"));
       return;
     }
     if (!Number.isFinite(parsedLimit) || !Number.isFinite(parsedClosing) || !Number.isFinite(parsedDue)) {
@@ -78,14 +119,34 @@ export default function CardsPage() {
     }
 
     setSaving(true);
-    const { error } = await supabase.from("credit_cards").insert([
+    let { error } = await supabase.from("credit_cards").insert([
       {
         name: name.trim(),
         limit_amount: parsedLimit,
+        owner_type: ownerType,
+        friend_name: ownerType === "friend" ? trimmedFriendName : null,
         closing_day: parsedClosing,
         due_day: parsedDue,
       },
     ]);
+
+    if (error && isCardOwnershipColumnMissing(error)) {
+      if (ownerType === "friend") {
+        setErrorMsg(t("cards.schemaUpdateRequired"));
+        setSaving(false);
+        return;
+      }
+
+      const legacyResult = await supabase.from("credit_cards").insert([
+        {
+          name: name.trim(),
+          limit_amount: parsedLimit,
+          closing_day: parsedClosing,
+          due_day: parsedDue,
+        },
+      ]);
+      error = legacyResult.error;
+    }
 
     if (error) {
       setErrorMsg(t("cards.saveError"));
@@ -95,6 +156,8 @@ export default function CardsPage() {
 
     setName("");
     setLimitAmount("R$ 0");
+    setOwnerType("self");
+    setFriendName("");
     setClosingDay("");
     setDueDay("");
     setSaving(false);
@@ -108,6 +171,8 @@ export default function CardsPage() {
     setEditLimitAmount(
       formatCentsInput(String(Math.round((Number(card.limit_amount) || 0) * 100))),
     );
+    setEditOwnerType(card.owner_type ?? "self");
+    setEditFriendName(card.friend_name ?? "");
     setEditClosingDay(String(card.closing_day ?? ""));
     setEditDueDay(String(card.due_day ?? ""));
     setErrorMsg(null);
@@ -124,9 +189,14 @@ export default function CardsPage() {
     const parsedLimit = parseCentsInput(editLimitAmount);
     const parsedClosing = Number(editClosingDay);
     const parsedDue = Number(editDueDay);
+    const trimmedFriendName = editFriendName.trim();
 
     if (!editName.trim()) {
       setErrorMsg(t("cards.nameError"));
+      return;
+    }
+    if (editOwnerType === "friend" && !trimmedFriendName) {
+      setErrorMsg(t("cards.friendNameError"));
       return;
     }
     if (!Number.isFinite(parsedLimit) || !Number.isFinite(parsedClosing) || !Number.isFinite(parsedDue)) {
@@ -135,15 +205,37 @@ export default function CardsPage() {
     }
 
     setEditSaving(true);
-    const { error } = await supabase
+    let { error } = await supabase
       .from("credit_cards")
       .update({
         name: editName.trim(),
         limit_amount: parsedLimit,
+        owner_type: editOwnerType,
+        friend_name: editOwnerType === "friend" ? trimmedFriendName : null,
         closing_day: parsedClosing,
         due_day: parsedDue,
       })
       .eq("id", editing.id);
+
+    if (error && isCardOwnershipColumnMissing(error)) {
+      if (editOwnerType === "friend") {
+        setErrorMsg(t("cards.schemaUpdateRequired"));
+        setEditSaving(false);
+        return;
+      }
+
+      const legacyResult = await supabase
+        .from("credit_cards")
+        .update({
+          name: editName.trim(),
+          limit_amount: parsedLimit,
+          closing_day: parsedClosing,
+          due_day: parsedDue,
+        })
+        .eq("id", editing.id);
+      error = legacyResult.error;
+    }
+
     setEditSaving(false);
 
     if (error) {
@@ -197,12 +289,49 @@ export default function CardsPage() {
         </div>
 
         <div className="space-y-3">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8B94A6]">
+              {t("cards.ownerLabel")}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setOwnerType("self")}
+                className={`rounded-full border px-3 py-1 text-xs ${
+                  ownerType === "self"
+                    ? "border-[#5DD6C7] bg-[#173038] text-[#D7FBF6]"
+                    : "border-[#2A3140] bg-[#0F141E] text-[#A8B2C3]"
+                }`}
+              >
+                {t("cards.ownerSelf")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setOwnerType("friend")}
+                className={`rounded-full border px-3 py-1 text-xs ${
+                  ownerType === "friend"
+                    ? "border-[#5DD6C7] bg-[#173038] text-[#D7FBF6]"
+                    : "border-[#2A3140] bg-[#0F141E] text-[#A8B2C3]"
+                }`}
+              >
+                {t("cards.ownerFriend")}
+              </button>
+            </div>
+          </div>
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder={t("cards.namePlaceholder")}
             className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
           />
+          {ownerType === "friend" ? (
+            <input
+              value={friendName}
+              onChange={(event) => setFriendName(event.target.value)}
+              placeholder={t("cards.friendNamePlaceholder")}
+              className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
+            />
+          ) : null}
           <input
             value={limitAmount}
             onChange={(event) => setLimitAmount(formatCentsInput(event.target.value))}
@@ -241,7 +370,19 @@ export default function CardsPage() {
               className="flex items-center justify-between rounded-2xl border border-[#1E232E] bg-[#121621] p-4"
             >
               <div className="space-y-1">
-                <p className="text-sm font-semibold text-[#E4E7EC]">{item.name}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-[#E4E7EC]">{item.name}</p>
+                  <span className="rounded-full border border-[#2A3140] bg-[#0F141E] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[#9AA3B2]">
+                    {item.owner_type === "friend"
+                      ? t("cards.ownerBadgeFriend")
+                      : t("cards.ownerBadgeSelf")}
+                  </span>
+                  {item.owner_type === "friend" && item.friend_name ? (
+                    <span className="text-[11px] text-[#8B94A6]">
+                      {t("home.friendCardOwner")}: {item.friend_name}
+                    </span>
+                  ) : null}
+                </div>
                 <p className="text-xs text-[#8A93A3]">
                   {t("cards.closes")} {item.closing_day} · {t("cards.due")} {item.due_day}
                 </p>
@@ -293,12 +434,49 @@ export default function CardsPage() {
               </button>
             </div>
             <div className="space-y-3">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8B94A6]">
+                  {t("cards.ownerLabel")}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditOwnerType("self")}
+                    className={`rounded-full border px-3 py-1 text-xs ${
+                      editOwnerType === "self"
+                        ? "border-[#5DD6C7] bg-[#173038] text-[#D7FBF6]"
+                        : "border-[#2A3140] bg-[#0F141E] text-[#A8B2C3]"
+                    }`}
+                  >
+                    {t("cards.ownerSelf")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditOwnerType("friend")}
+                    className={`rounded-full border px-3 py-1 text-xs ${
+                      editOwnerType === "friend"
+                        ? "border-[#5DD6C7] bg-[#173038] text-[#D7FBF6]"
+                        : "border-[#2A3140] bg-[#0F141E] text-[#A8B2C3]"
+                    }`}
+                  >
+                    {t("cards.ownerFriend")}
+                  </button>
+                </div>
+              </div>
               <input
                 value={editName}
                 onChange={(event) => setEditName(event.target.value)}
                 placeholder={t("cards.namePlaceholder")}
                 className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
               />
+              {editOwnerType === "friend" ? (
+                <input
+                  value={editFriendName}
+                  onChange={(event) => setEditFriendName(event.target.value)}
+                  placeholder={t("cards.friendNamePlaceholder")}
+                  className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
+                />
+              ) : null}
               <input
                 value={editLimitAmount}
                 onChange={(event) => setEditLimitAmount(formatCentsInput(event.target.value))}

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { motion, AnimatePresence } from "framer-motion";
+import { hasMissingTableError } from "@/lib/errorUtils";
 import { formatCentsFromNumber, formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
 
 type GoalRow = {
@@ -126,6 +127,10 @@ export function GoalsPageClient({
       setSaving(false);
 
       if (error) {
+        if (hasMissingTableError(error, ["goals"])) {
+          setErrorMsg("Cria a tabela goals no Supabase antes de usar metas.");
+          return;
+        }
         console.error(error);
         setErrorMsg("Erro ao criar meta.");
         return;
