@@ -1052,10 +1052,10 @@ export function GamificationScreen() {
             rankingRows.map((row, index) => (
               <div
                 key={row.profile.user_id}
-                className="flex items-center justify-between rounded-xl border border-[#2A3344] bg-[#0F121A] px-3 py-2"
+                className="flex flex-col gap-2 rounded-xl border border-[#2A3344] bg-[#0F121A] px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
               >
-                <div className="flex items-center gap-3">
-                  <span className="w-14 rounded-md border border-[#33435F] px-2 py-1 text-center text-[11px] text-[#C8D4EE]">
+                <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+                  <span className="shrink-0 min-w-[6.25rem] rounded-md border border-[#33435F] px-2 py-1 text-center text-[10px] leading-tight text-[#C8D4EE] sm:text-[11px]">
                     {getRankingLabel(index, language)}
                   </span>
                   <div className="flex min-w-0 items-center gap-2">
@@ -1076,11 +1076,11 @@ export function GamificationScreen() {
                       )}
                     </div>
                     <div className="min-w-0">
-                      <div className="flex min-w-0 items-center gap-2">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
                         <p className="truncate text-sm font-semibold text-[#E4E7EC]">
                           {row.profile.display_name || t("gamification.player")}
                         </p>
-                        <span className="rounded-full border border-[#2E3B54] bg-[#131C2A] px-2 py-0.5 text-[10px] text-[#BFD0EB]">
+                        <span className="shrink-0 rounded-full border border-[#2E3B54] bg-[#131C2A] px-2 py-0.5 text-[10px] text-[#BFD0EB]">
                           {getBioTag(row.profile.bio_code)}
                         </span>
                       </div>
@@ -1095,7 +1095,7 @@ export function GamificationScreen() {
                     rankingMetric === "monthPnl" && row.monthPnl < 0
                       ? "text-red-300"
                       : "text-emerald-300"
-                  }`}
+                  } self-end sm:self-auto`}
                 >
                   {rankingMetric === "monthPnl"
                     ? formatSignedCurrency(row.monthPnl)
