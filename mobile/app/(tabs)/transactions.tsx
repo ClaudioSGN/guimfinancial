@@ -3,8 +3,10 @@ import { FlatList, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { supabase } from '@/lib/supabaseClient';
+import { useCurrency } from '@/lib/currency';
 import { getMonthShortName } from '@shared/i18n';
 import { useLanguage } from '@/lib/language';
+import { formatCurrencyValue } from '@shared/currency';
 
 type Transaction = {
   id: string;
@@ -34,12 +36,8 @@ function getMonthLabel(date = new Date(), language: 'pt' | 'en') {
   return `${getMonthShortName(language, month)} ${year}`;
 }
 
-function formatCurrency(value: number, language: 'pt' | 'en') {
-  return new Intl.NumberFormat(language === 'pt' ? 'pt-BR' : 'en-US', {
-    style: 'currency',
-    currency: 'BRL',
-    minimumFractionDigits: 2,
-  }).format(value);
+function formatCurrency(value: number, language: 'pt' | 'en', currency: 'BRL' | 'EUR') {
+  return formatCurrencyValue(value, language, currency);
 }
 
 function formatDate(value: string, language: 'pt' | 'en') {
@@ -49,6 +47,7 @@ function formatDate(value: string, language: 'pt' | 'en') {
 
 export default function TransactionsScreen() {
   const { language, t } = useLanguage();
+  const { currency } = useCurrency();
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -117,7 +116,7 @@ export default function TransactionsScreen() {
                 </Text>
               </View>
               <Text style={[styles.rowAmount, isIncome ? styles.amountPositive : styles.amountNegative]}>
-                {isIncome ? '+' : '-'} {formatCurrency(amount, language)}
+                {isIncome ? '+' : '-'} {formatCurrency(amount, language, currency)}
               </Text>
             </View>
           );

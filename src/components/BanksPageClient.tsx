@@ -4,6 +4,8 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/lib/auth";
+import { useCurrency } from "@/lib/currency";
+import { formatCurrencyValue } from "../../shared/currency";
 
 type AccountRow = {
   id: string;
@@ -24,14 +26,6 @@ type AccountFormState = {
   dueDay: string;
 };
 
-function formatCurrency(value: number) {
-  return value.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-  });
-}
-
 export function BanksPageClient({
   initialAccounts,
   loading = false,
@@ -39,6 +33,8 @@ export function BanksPageClient({
   initialAccounts: AccountRow[];
   loading?: boolean;
 }) {
+  const { currency } = useCurrency();
+  const formatCurrency = (value: number) => formatCurrencyValue(value, "pt", currency);
   const { user } = useAuth();
   const [editing, setEditing] = useState<AccountRow | null>(null);
   const [creating, setCreating] = useState(false);
@@ -374,7 +370,7 @@ export function BanksPageClient({
 
               <div className="space-y-1 text-sm">
                 <label className="text-xs text-zinc-400">
-                  Saldo inicial (R$)
+                  Saldo inicial ({currency})
                 </label>
                 <input
                   type="text"
@@ -392,7 +388,7 @@ export function BanksPageClient({
 
               <div className="space-y-1 text-sm">
                 <label className="text-xs text-zinc-400">
-                  Limite do cartão (R$) (opcional)
+                  Limite do cartão ({currency}) (opcional)
                 </label>
                 <input
                   type="text"

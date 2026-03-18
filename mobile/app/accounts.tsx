@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { FlatList, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { supabase } from '@/lib/supabaseClient';
+import { useCurrency } from '@/lib/currency';
 import { useLanguage } from '@/lib/language';
+import { formatCentsInputValue, formatCurrencyValue, parseCentsInputValue } from '@shared/currency';
 
 type Account = {
   id: string;
@@ -13,10 +15,12 @@ type Account = {
 
 export default function AccountsScreen() {
   const { language, t } = useLanguage();
+  const { currency } = useCurrency();
+  const emptyMoneyValue = formatCentsInputValue('', currency);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [name, setName] = useState('');
   const [type, setType] = useState('');
-  const [balance, setBalance] = useState('');
+  const [balance, setBalance] = useState(emptyMoneyValue);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -31,9 +35,14 @@ export default function AccountsScreen() {
     loadAccounts();
   }, []);
 
+  useEffect(() => {
+    if (parseCentsInputValue(balance) !== 0) return;
+    setBalance(emptyMoneyValue);
+  }, [balance, emptyMoneyValue]);
+
   async function handleAdd() {
     setErrorMsg(null);
-    const parsedBalance = Number(balance.replace(',', '.'));
+    const parsedBalance = parseCentsInputValue(balance);
     if (!name.trim() || !type.trim()) {
       setErrorMsg(t('accounts.nameTypeError'));
       return;
@@ -61,7 +70,7 @@ export default function AccountsScreen() {
 
     setName('');
     setType('');
-    setBalance('');
+    setBalance(emptyMoneyValue);
     setSaving(false);
     loadAccounts();
   }
@@ -90,8 +99,8 @@ export default function AccountsScreen() {
         />
         <TextInput
           value={balance}
-          onChangeText={setBalance}
-          placeholder={t('accounts.balancePlaceholder')}
+          onChangeText={(value) => setBalance(formatCentsInputValue(value, currency))}
+          placeholder={emptyMoneyValue}
           placeholderTextColor="#5E6777"
           keyboardType="decimal-pad"
           style={styles.input}
@@ -115,10 +124,7 @@ export default function AccountsScreen() {
               <Text style={styles.rowMeta}>{item.type}</Text>
             </View>
             <Text style={styles.rowAmount}>
-              {new Intl.NumberFormat(language === 'pt' ? 'pt-BR' : 'en-US', {
-                style: 'currency',
-                currency: 'BRL',
-              }).format(Number(item.balance) || 0)}
+              {formatCurrencyValue(Number(item.balance) || 0, language, currency)}
             </Text>
           </View>
         )}

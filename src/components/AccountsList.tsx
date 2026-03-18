@@ -3,15 +3,8 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import type { AccountStat } from "@/lib/accountTypes";
-
-function formatCurrency(value: number | null | undefined) {
-  const safe = Number(value) || 0;
-  return safe.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-  });
-}
+import { useCurrency } from "@/lib/currency";
+import { formatCurrencyValue } from "../../shared/currency";
 
 function getBankVisual(name: string): {
   label: string;
@@ -72,6 +65,9 @@ type Props = {
 };
 
 export function AccountsList({ accounts }: Props) {
+  const { currency } = useCurrency();
+  const formatCurrency = (value: number | null | undefined) =>
+    formatCurrencyValue(Number(value) || 0, "pt", currency);
   const [editing, setEditing] = useState<AccountStat | null>(null);
   const [name, setName] = useState("");
   const [initialBalance, setInitialBalance] = useState("");
@@ -366,7 +362,7 @@ export function AccountsList({ accounts }: Props) {
               {editing?.accountType !== "card" && (
                 <div className="space-y-1 text-sm">
                   <label className="text-xs text-zinc-400">
-                    Saldo inicial / ajuste (R$)
+                    Saldo inicial / ajuste ({currency})
                   </label>
                   <input
                     type="number"

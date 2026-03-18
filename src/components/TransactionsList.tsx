@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useCurrency } from "@/lib/currency";
+import { formatCurrencyValue } from "../../shared/currency";
 type UiTransaction = {
   id: string;
   description: string;
@@ -22,15 +24,9 @@ type Props = {
   tx: UiTransaction;
 };
 
-function formatCurrency(value: number) {
-  return value.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-  });
-}
-
 export function TransactionRow({ tx }: Props) {
+  const { currency } = useCurrency();
+  const formatCurrency = (value: number) => formatCurrencyValue(value, "pt", currency);
   const [localPaid, setLocalPaid] = useState(tx.isPaid);
   const [updating, setUpdating] = useState(false);
 

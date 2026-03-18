@@ -1,6 +1,8 @@
 "use client";
 
 import { PieChart, Pie, Cell, Tooltip } from "recharts";
+import { useCurrency } from "@/lib/currency";
+import { formatCurrencyValue } from "../../shared/currency";
 
 type CategoryStat = {
   category: string;
@@ -21,14 +23,6 @@ const PIE_COLORS = [
   "#737373",
 ];
 
-function formatCurrency(value: number) {
-  return value.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-  });
-}
-
 export function CategoryPieCard({
   data,
   periodLabel,
@@ -36,6 +30,8 @@ export function CategoryPieCard({
   data: CategoryStat[];
   periodLabel: string;
 }) {
+  const { currency } = useCurrency();
+  const formatCurrency = (value: number) => formatCurrencyValue(value, "pt", currency);
   const totalExpenses = data.reduce((sum, item) => sum + item.total, 0);
 
   if (data.length === 0) {

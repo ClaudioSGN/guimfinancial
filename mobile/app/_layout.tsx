@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { CurrencyProvider } from '@/lib/currency';
 import { LanguageProvider, useLanguage } from '@/lib/language';
 
 export const unstable_settings = {
@@ -35,7 +36,9 @@ function RootLayoutInner() {
 export default function RootLayout() {
   return (
     <LanguageProvider>
-      <RootLayoutInner />
+      <CurrencyProvider>
+        <RootLayoutInner />
+      </CurrencyProvider>
     </LanguageProvider>
   );
 }

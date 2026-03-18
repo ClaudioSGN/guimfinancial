@@ -16,7 +16,15 @@ import {
 } from 'react-native';
 
 import { supabase } from '@/lib/supabaseClient';
+import { useCurrency as useAppCurrency } from '@/lib/currency';
 import { useLanguage } from '@/lib/language';
+import {
+  canSelectInvestmentCurrency,
+  DEFAULT_INVESTMENT_CURRENCY,
+  getCoinGeckoCurrency,
+  normalizeInvestmentCurrency,
+  type SupportedInvestmentCurrency,
+} from '@shared/investmentCurrency';
 import {
   computeNewAveragePrice,
   computeQuantityFromValue,
@@ -28,6 +36,7 @@ type Investment = {
   type: 'b3' | 'crypto';
   symbol: string;
   name: string | null;
+  currency: SupportedInvestmentCurrency;
   quantity: number;
   average_price: number;
 };
@@ -65,17 +74,30 @@ function normalizeCryptoId(value: string) {
 }
 
 function normalizeSymbol(type: 'b3' | 'crypto', value: string) {
-  return type === 'b3' ? normalizeB3Symbol(value) : value.toLowerCase().trim();
+  return type === 'b3' ? normalizeB3Symbol(value) : normalizeCryptoId(value);
+}
+
+function getAssetCurrency(asset: Pick<Investment, 'type' | 'currency'>) {
+  return normalizeInvestmentCurrency(asset.currency, asset.type);
+}
+
+function getAssetQuoteKey(asset: Investment) {
+  if (asset.type === 'b3') return normalizeB3Symbol(asset.symbol);
+  return `${normalizeCryptoId(asset.symbol)}:${getAssetCurrency(asset)}`;
 }
 
 function getQuantityDecimals(type: 'b3' | 'crypto') {
   return type === 'crypto' ? 8 : 0;
 }
 
-function formatCurrency(value: number, language: 'pt' | 'en') {
+function formatCurrency(
+  value: number,
+  language: 'pt' | 'en',
+  currency: SupportedInvestmentCurrency = DEFAULT_INVESTMENT_CURRENCY
+) {
   return new Intl.NumberFormat(language === 'pt' ? 'pt-BR' : 'en-US', {
     style: 'currency',
-    currency: 'BRL',
+    currency,
     minimumFractionDigits: 2,
   }).format(value);
 }
@@ -101,6 +123,7 @@ function toDateString(date: Date) {
 
 export default function PlanScreen() {
   const { language, t } = useLanguage();
+  const { currency: appCurrency } = useAppCurrency();
   const { width } = useWindowDimensions();
   const params = useLocalSearchParams<{ new?: string }>();
   const [assets, setAssets] = useState<Investment[]>([]);
@@ -114,6 +137,9 @@ export default function PlanScreen() {
   const [type, setType] = useState<'b3' | 'crypto'>('b3');
   const [symbol, setSymbol] = useState('');
   const [name, setName] = useState('');
+  const [currency, setCurrency] = useState<SupportedInvestmentCurrency>(
+    DEFAULT_INVESTMENT_CURRENCY
+  );
   const [mode, setMode] = useState<'quantity' | 'value'>('quantity');
   const [quantity, setQuantity] = useState('');
   const [investedValue, setInvestedValue] = useState('');
@@ -125,6 +151,7 @@ export default function PlanScreen() {
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const openedFromQuery = useRef(false);
+  const preferredNewInvestmentCurrency = normalizeInvestmentCurrency(appCurrency, 'crypto');
 
   const cardGap = 12;
   const cardSize = (width - 40 - cardGap) / 2;
@@ -132,31 +159,88 @@ export default function PlanScreen() {
   const loadAssets = useCallback(async () => {
     const { data, error } = await supabase
       .from('investments')
-      .select('id,type,symbol,name,quantity,average_price')
+      .select('id,type,symbol,name,currency,quantity,average_price')
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error(error);
-      setAssets([]);
-    } else {
-      setAssets((data ?? []) as Investment[]);
+      const missingColumn =
+        error.code === '42703' || String(error.message ?? '').toLowerCase().includes('column');
+      if (!missingColumn) {
+        console.error(error);
+        setAssets([]);
+        return;
+      }
+
+      const fallback = await supabase
+        .from('investments')
+        .select('id,type,symbol,name,quantity,average_price')
+        .order('created_at', { ascending: false });
+
+      if (fallback.error) {
+        console.error(fallback.error);
+        setAssets([]);
+        return;
+      }
+
+      setAssets(
+        ((fallback.data ?? []) as Array<Omit<Investment, 'currency'>>).map((asset) => ({
+          ...asset,
+          currency: normalizeInvestmentCurrency(appCurrency, asset.type),
+        }))
+      );
+      return;
     }
-  }, []);
+
+    setAssets(
+      ((data ?? []) as Array<Omit<Investment, 'currency'> & { currency?: string | null }>).map(
+        (asset) => ({
+          ...asset,
+          currency: normalizeInvestmentCurrency(asset.currency, asset.type),
+        })
+      )
+    );
+  }, [appCurrency]);
 
   useEffect(() => {
     loadAssets();
   }, [loadAssets]);
 
+  useEffect(() => {
+    if (canSelectInvestmentCurrency(type)) return;
+    if (currency === DEFAULT_INVESTMENT_CURRENCY) return;
+    setCurrency(DEFAULT_INVESTMENT_CURRENCY);
+  }, [currency, type]);
+
+  useEffect(() => {
+    if (type !== 'crypto') return;
+    setPreviewQuote(null);
+    previewFetchRef.current = 0;
+  }, [currency, type]);
+
   const fetchQuotes = useCallback(async () => {
-    if (!assets.length) return;
+    if (!assets.length) {
+      setQuotes({});
+      setQuoteError(null);
+      return;
+    }
     setQuoteError(null);
 
     const b3Symbols = assets
       .filter((asset) => asset.type === 'b3')
       .map((asset) => normalizeB3Symbol(asset.symbol));
-    const cryptoIds = assets
-      .filter((asset) => asset.type === 'crypto')
-      .map((asset) => normalizeCryptoId(asset.symbol));
+    const cryptoIdsByCurrency = assets.reduce(
+      (map, asset) => {
+        if (asset.type !== 'crypto') return map;
+        const id = normalizeCryptoId(asset.symbol);
+        const assetCurrency = getAssetCurrency(asset);
+        map[assetCurrency].add(id);
+        return map;
+      },
+      {
+        BRL: new Set<string>(),
+        EUR: new Set<string>(),
+      } satisfies Record<SupportedInvestmentCurrency, Set<string>>
+    );
 
     const nextQuotes: Record<string, Quote> = {};
 
@@ -194,19 +278,30 @@ export default function PlanScreen() {
       }
     }
 
-    if (cryptoIds.length) {
+    for (const assetCurrency of ['BRL', 'EUR'] as const) {
+      const cryptoIds = Array.from(cryptoIdsByCurrency[assetCurrency]);
+      if (!cryptoIds.length) continue;
+      const vsCurrency = getCoinGeckoCurrency(assetCurrency, 'crypto');
       try {
         const url = `https://api.coingecko.com/api/v3/simple/price?ids=${cryptoIds.join(
           ','
-        )}&vs_currencies=brl&include_24hr_change=true`;
+        )}&vs_currencies=${vsCurrency}&include_24hr_change=true`;
         const res = await fetch(url);
+        if (!res.ok) {
+          setQuoteError(t('investments.quoteError'));
+          continue;
+        }
         const json = await res.json();
         cryptoIds.forEach((id) => {
           const entry = json?.[id];
-          if (!entry?.brl) return;
-          nextQuotes[id] = {
-            price: Number(entry.brl) || 0,
-            changePct: entry?.brl_24h_change != null ? Number(entry.brl_24h_change) : null,
+          const price = entry?.[vsCurrency];
+          if (price == null) return;
+          nextQuotes[`${id}:${assetCurrency}`] = {
+            price: Number(price) || 0,
+            changePct:
+              entry?.[`${vsCurrency}_24h_change`] != null
+                ? Number(entry[`${vsCurrency}_24h_change`])
+                : null,
           };
         });
       } catch (err) {
@@ -223,8 +318,27 @@ export default function PlanScreen() {
   }, [fetchQuotes]);
 
   const activeAsset = selectedAsset;
-  const currentAvg = activeAsset ? new Big(activeAsset.average_price || 0) : new Big(0);
-  const currentQty = activeAsset ? new Big(activeAsset.quantity || 0) : new Big(0);
+  const formCurrency = normalizeInvestmentCurrency(currency, type);
+  const existingAssetForForm = useMemo(() => {
+    if (selectedAsset) return null;
+    const trimmedSymbol = symbol.trim();
+    if (!trimmedSymbol) return null;
+    const normalized = normalizeSymbol(type, trimmedSymbol);
+    return (
+      assets.find(
+        (asset) =>
+          asset.type === type &&
+          normalizeSymbol(asset.type, asset.symbol) === normalized &&
+          getAssetCurrency(asset) === formCurrency
+      ) ?? null
+    );
+  }, [assets, formCurrency, selectedAsset, symbol, type]);
+  const mathAsset = activeAsset ?? existingAssetForForm;
+  const activeAssetCurrency = activeAsset
+    ? getAssetCurrency(activeAsset)
+    : DEFAULT_INVESTMENT_CURRENCY;
+  const currentAvg = mathAsset ? new Big(mathAsset.average_price || 0) : new Big(0);
+  const currentQty = mathAsset ? new Big(mathAsset.quantity || 0) : new Big(0);
   const priceBig = previewQuote?.price != null ? new Big(previewQuote.price) : null;
   const quantityBig = parseBig(quantity);
   const investedBig = parseBig(investedValue);
@@ -252,11 +366,7 @@ export default function PlanScreen() {
 
   const currentQuoteForSelected = useMemo(() => {
     if (!activeAsset) return null;
-    const key =
-      activeAsset.type === 'b3'
-        ? normalizeB3Symbol(activeAsset.symbol)
-        : normalizeCryptoId(activeAsset.symbol);
-    return quotes[key] ?? null;
+    return quotes[getAssetQuoteKey(activeAsset)] ?? null;
   }, [activeAsset, quotes]);
 
   useEffect(() => {
@@ -289,21 +399,22 @@ export default function PlanScreen() {
         return;
       }
       const id = normalizeCryptoId(symbol);
+      const vsCurrency = getCoinGeckoCurrency(formCurrency, 'crypto');
       const res = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=brl&include_24hr_change=true`
+        `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=${vsCurrency}&include_24hr_change=true`
       );
       if (!res.ok) return;
       const json = await res.json();
-      if (json?.[id]?.brl != null) {
+      if (json?.[id]?.[vsCurrency] != null) {
         setPreviewQuote({
-          price: Number(json[id].brl) || 0,
-          changePct: json[id].brl_24h_change ?? null,
+          price: Number(json[id][vsCurrency]) || 0,
+          changePct: json[id][`${vsCurrency}_24h_change`] ?? null,
         });
       }
     }
 
     fetchPreview();
-  }, [showModal, isCreate, symbol, type]);
+  }, [formCurrency, isCreate, showModal, symbol, type]);
 
   const openCreate = useCallback(() => {
     setIsCreate(true);
@@ -312,6 +423,7 @@ export default function PlanScreen() {
     setType('b3');
     setSymbol('');
     setName('');
+    setCurrency(DEFAULT_INVESTMENT_CURRENCY);
     setMode('quantity');
     setQuantity('');
     setInvestedValue('');
@@ -375,9 +487,7 @@ export default function PlanScreen() {
     setSaving(true);
 
     const normalized = normalizeSymbol(type, symbol);
-    const existing = assets.find(
-      (asset) => asset.type === type && normalizeSymbol(asset.type, asset.symbol) === normalized
-    );
+    const existing = existingAssetForForm ?? undefined;
 
     const nextAvg = computed.newAvg;
     const nextQty = existing ? new Big(existing.quantity).plus(computed.qty) : computed.qty;
@@ -390,6 +500,7 @@ export default function PlanScreen() {
         .update({
           quantity: nextQty.toString(),
           average_price: nextAvg.toString(),
+          currency: formCurrency,
         })
         .eq('id', existing.id);
       if (error) {
@@ -408,7 +519,7 @@ export default function PlanScreen() {
             name: name.trim() ? name.trim() : null,
             quantity: nextQty.toString(),
             average_price: nextAvg.toString(),
-            currency: 'BRL',
+            currency: formCurrency,
           },
         ])
         .select('id')
@@ -462,10 +573,8 @@ export default function PlanScreen() {
 
         <View style={styles.grid}>
           {assets.map((asset, index) => {
-            const key =
-              asset.type === 'b3'
-                ? normalizeB3Symbol(asset.symbol)
-                : normalizeCryptoId(asset.symbol);
+            const key = getAssetQuoteKey(asset);
+            const assetCurrency = getAssetCurrency(asset);
             const quote = quotes[key];
             const current = quote?.price ?? null;
             const value = current != null ? current * asset.quantity : null;
@@ -480,13 +589,13 @@ export default function PlanScreen() {
                     {asset.name || asset.symbol.toUpperCase()}
                   </Text>
                   <Text style={styles.cardMeta}>
-                    {asset.type === 'b3' ? 'B3' : 'Cripto'} - {asset.symbol}
+                    {asset.type === 'b3' ? 'B3' : 'Cripto'} - {asset.symbol} · {assetCurrency}
                   </Text>
                 </View>
                 <View>
                   <Text style={styles.cardLabel}>{t('investments.totalValue')}</Text>
                   <Text style={styles.cardValue}>
-                    {value != null ? formatCurrency(value, language) : '--'}
+                    {value != null ? formatCurrency(value, language, assetCurrency) : '--'}
                   </Text>
                 </View>
               </Pressable>
@@ -517,11 +626,45 @@ export default function PlanScreen() {
                     <Text style={styles.toggleText}>{t('investments.b3')}</Text>
                   </Pressable>
                   <Pressable
-                    onPress={() => setType('crypto')}
+                    onPress={() => {
+                      setType('crypto');
+                      if (type === 'b3') {
+                        setCurrency(preferredNewInvestmentCurrency);
+                      }
+                    }}
                     style={[styles.toggle, type === 'crypto' && styles.toggleActive]}>
                     <Text style={styles.toggleText}>{t('investments.crypto')}</Text>
                   </Pressable>
                 </View>
+
+                <View style={styles.row}>
+                  {(['BRL', 'EUR'] as const).map((option) => {
+                    const disabled = !canSelectInvestmentCurrency(type) && option !== 'BRL';
+                    const active = formCurrency === option;
+                    return (
+                      <Pressable
+                        key={option}
+                        onPress={() => setCurrency(option)}
+                        disabled={disabled}
+                        style={[
+                          styles.toggle,
+                          active && styles.toggleActive,
+                          disabled && styles.toggleDisabled,
+                        ]}>
+                        <Text style={styles.toggleText}>{option}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Text style={styles.helper}>
+                  {canSelectInvestmentCurrency(type)
+                    ? `${t('investments.currency')}: ${
+                        formCurrency === 'BRL'
+                          ? t('investments.currencyBrl')
+                          : t('investments.currencyEur')
+                      }`
+                    : t('investments.currencyLockedB3')}
+                </Text>
 
                 <View style={styles.field}>
                   <TextInput
@@ -599,7 +742,7 @@ export default function PlanScreen() {
                     <Text style={styles.summaryLabel}>{t('investments.total')}</Text>
                     <Text style={styles.summaryValue}>
                       {priceBig && computed.qty.gt(0)
-                        ? formatCurrency(Number(computed.total.toString()), language)
+                        ? formatCurrency(Number(computed.total.toString()), language, formCurrency)
                         : '--'}
                     </Text>
                   </View>
@@ -607,7 +750,7 @@ export default function PlanScreen() {
                     <Text style={styles.summaryLabel}>{t('investments.currentPrice')}</Text>
                     <Text style={styles.summaryValue}>
                       {previewQuote?.price != null
-                        ? formatCurrency(previewQuote.price, language)
+                        ? formatCurrency(previewQuote.price, language, formCurrency)
                         : '--'}
                     </Text>
                   </View>
@@ -615,7 +758,7 @@ export default function PlanScreen() {
                     <Text style={styles.summaryLabel}>{t('investments.currentAvg')}</Text>
                     <Text style={styles.summaryValue}>
                       {currentAvg.gt(0)
-                        ? formatCurrency(Number(currentAvg.toString()), language)
+                        ? formatCurrency(Number(currentAvg.toString()), language, formCurrency)
                         : '--'}
                     </Text>
                   </View>
@@ -623,7 +766,7 @@ export default function PlanScreen() {
                     <Text style={styles.summaryLabel}>{t('investments.newAvg')}</Text>
                     <Text style={styles.summaryValue}>
                       {computed.newAvg.gt(0)
-                        ? formatCurrency(Number(computed.newAvg.toString()), language)
+                        ? formatCurrency(Number(computed.newAvg.toString()), language, formCurrency)
                         : '--'}
                     </Text>
                   </View>
@@ -646,7 +789,8 @@ export default function PlanScreen() {
                       {selectedAsset.name || selectedAsset.symbol.toUpperCase()}
                     </Text>
                     <Text style={styles.modalSubtitle}>
-                      {selectedAsset.type === 'b3' ? 'B3' : 'Cripto'} - {selectedAsset.symbol}
+                      {selectedAsset.type === 'b3' ? 'B3' : 'Cripto'} - {selectedAsset.symbol} ·{' '}
+                      {activeAssetCurrency}
                     </Text>
                   </View>
                   <Pressable onPress={() => setShowModal(false)}>
@@ -663,14 +807,14 @@ export default function PlanScreen() {
                     <Text style={styles.summaryLabel}>{t('investments.currentPrice')}</Text>
                     <Text style={styles.summaryValue}>
                       {currentQuoteForSelected?.price != null
-                        ? formatCurrency(currentQuoteForSelected.price, language)
+                        ? formatCurrency(currentQuoteForSelected.price, language, activeAssetCurrency)
                         : '--'}
                     </Text>
                   </View>
                   <View style={styles.summaryCard}>
                     <Text style={styles.summaryLabel}>{t('investments.currentAvg')}</Text>
                     <Text style={styles.summaryValue}>
-                      {formatCurrency(selectedAsset.average_price, language)}
+                      {formatCurrency(selectedAsset.average_price, language, activeAssetCurrency)}
                     </Text>
                   </View>
                   <View style={styles.summaryCard}>
@@ -679,7 +823,8 @@ export default function PlanScreen() {
                       {currentQuoteForSelected?.price != null
                         ? formatCurrency(
                             currentQuoteForSelected.price * selectedAsset.quantity,
-                            language
+                            language,
+                            activeAssetCurrency
                           )
                         : '--'}
                     </Text>
@@ -841,6 +986,9 @@ const styles = StyleSheet.create({
   toggleActive: {
     borderColor: '#3A8F8A',
     backgroundColor: '#163137',
+  },
+  toggleDisabled: {
+    opacity: 0.45,
   },
   toggleText: {
     color: '#DCE3EE',

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { supabase } from "@/lib/supabaseClient";
+import { useCurrency } from "@/lib/currency";
+import { formatCurrencyValue } from "../../shared/currency";
 
 type AccountRow = {
   id: string;
@@ -18,14 +20,6 @@ type TransactionRow = {
   account_id: string | null;
 };
 
-function formatCurrency(value: number) {
-  return value.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-  });
-}
-
 const truncate = (text: string, max: number) => {
   if (max <= 3) return text.slice(0, max);
   return text.length > max ? `${text.slice(0, max - 3)}...` : text;
@@ -37,8 +31,9 @@ function getMonthRange(year: number, month: number) {
   return { start, end };
 }
 
-async function buildPdf(year: number, month: number) {
+async function buildPdf(year: number, month: number, currency: "BRL" | "EUR") {
   const { start, end } = getMonthRange(year, month);
+  const formatCurrency = (value: number) => formatCurrencyValue(value, "pt", currency);
 
   const { data: accountsData } = await supabase
     .from("accounts")
@@ -259,6 +254,8 @@ async function buildPdf(year: number, month: number) {
 }
 
 export function ExportMonthlyPdfButton() {
+  const { currency } = useCurrency();
+  const formatCurrency = (value: number) => formatCurrencyValue(value, "pt", currency);
   const [loading, setLoading] = useState(false);
 
   async function handleClick() {
@@ -269,7 +266,7 @@ export function ExportMonthlyPdfButton() {
       const year = now.getFullYear();
       const month = now.getMonth() + 1;
 
-      const { pdfBytes, fileName } = await buildPdf(year, month);
+    const { pdfBytes, fileName } = await buildPdf(year, month, currency);
       const blob = new Blob([new Uint8Array(pdfBytes)], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
 

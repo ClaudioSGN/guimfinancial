@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useEffect, useState } from 'react';
 import { FlatList, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { supabase } from '@/lib/supabaseClient';
+import { useCurrency } from '@/lib/currency';
 import { useLanguage } from '@/lib/language';
+import { formatCentsInputValue, formatCurrencyValue, parseCentsInputValue } from '@shared/currency';
 
 type CardOwnerType = 'self' | 'friend';
 
@@ -58,9 +59,11 @@ function hydrateLegacyCards(cards: LegacyCard[]): Card[] {
 
 export default function CardsScreen() {
   const { language, t } = useLanguage();
+  const { currency } = useCurrency();
+  const emptyMoneyValue = formatCentsInputValue('', currency);
   const [cards, setCards] = useState<Card[]>([]);
   const [name, setName] = useState('');
-  const [limitAmount, setLimitAmount] = useState('');
+  const [limitAmount, setLimitAmount] = useState(emptyMoneyValue);
   const [ownerType, setOwnerType] = useState<CardOwnerType>('self');
   const [friendName, setFriendName] = useState('');
   const [closingDay, setClosingDay] = useState('');
@@ -95,9 +98,14 @@ export default function CardsScreen() {
     loadCards();
   }, []);
 
+  useEffect(() => {
+    if (parseCentsInputValue(limitAmount) !== 0) return;
+    setLimitAmount(emptyMoneyValue);
+  }, [emptyMoneyValue, limitAmount]);
+
   async function handleAdd() {
     setErrorMsg(null);
-    const parsedLimit = Number(limitAmount.replace(',', '.'));
+    const parsedLimit = parseCentsInputValue(limitAmount);
     const parsedClosing = Number(closingDay);
     const parsedDue = Number(dueDay);
     const trimmedFriendName = friendName.trim();
@@ -152,7 +160,7 @@ export default function CardsScreen() {
     }
 
     setName('');
-    setLimitAmount('');
+    setLimitAmount(emptyMoneyValue);
     setOwnerType('self');
     setFriendName('');
     setClosingDay('');
@@ -206,8 +214,8 @@ export default function CardsScreen() {
         ) : null}
         <TextInput
           value={limitAmount}
-          onChangeText={setLimitAmount}
-          placeholder={t('cards.limitPlaceholder')}
+          onChangeText={(value) => setLimitAmount(formatCentsInputValue(value, currency))}
+          placeholder={emptyMoneyValue}
           placeholderTextColor="#5E6777"
           keyboardType="decimal-pad"
           style={styles.input}
@@ -259,10 +267,7 @@ export default function CardsScreen() {
               </Text>
             </View>
             <Text style={styles.rowAmount}>
-              {new Intl.NumberFormat(language === 'pt' ? 'pt-BR' : 'en-US', {
-                style: 'currency',
-                currency: 'BRL',
-              }).format(Number(item.limit_amount) || 0)}
+              {formatCurrencyValue(Number(item.limit_amount) || 0, language, currency)}
             </Text>
           </View>
         )}

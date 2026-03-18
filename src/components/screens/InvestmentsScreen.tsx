@@ -15,14 +15,22 @@ import {
 } from "recharts";
 import { supabase } from "@/lib/supabaseClient";
 import { useLanguage } from "@/lib/language";
+import { useCurrency } from "@/lib/currency";
 import { useAuth } from "@/lib/auth";
 import { AppIcon } from "@/components/AppIcon";
-import { formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
+import { parseCentsInput } from "@/lib/moneyInput";
 import {
   computeNewAveragePrice,
   computeQuantityFromValue,
   computeTotal,
 } from "@/lib/investments/math";
+import {
+  canSelectInvestmentCurrency,
+  DEFAULT_INVESTMENT_CURRENCY,
+  getCoinGeckoCurrency,
+  normalizeInvestmentCurrency,
+  type SupportedInvestmentCurrency,
+} from "../../../shared/investmentCurrency";
 
 type InvestmentType = "b3" | "crypto" | "fixed_income";
 
@@ -31,6 +39,7 @@ type Investment = {
   type: InvestmentType;
   symbol: string;
   name: string | null;
+  currency: SupportedInvestmentCurrency;
   quantity: number;
   average_price: number;
   cdi_rate_pct: number | null;
@@ -647,14 +656,18 @@ async function fetchB3History(symbol: string): Promise<PricePoint[]> {
   return [];
 }
 
-async function fetchCryptoHistory(symbol: string): Promise<PricePoint[]> {
+async function fetchCryptoHistory(
+  symbol: string,
+  currency: SupportedInvestmentCurrency,
+): Promise<PricePoint[]> {
   const id = normalizeCryptoId(symbol);
+  const vsCurrency = getCoinGeckoCurrency(currency, "crypto");
 
   try {
     const res = await fetch(
       `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(
         id,
-      )}/market_chart?vs_currency=brl&days=365`,
+      )}/market_chart?vs_currency=${vsCurrency}&days=365`,
       { cache: "no-store" },
     );
 
@@ -680,10 +693,14 @@ function normalizeCryptoId(value: string) {
   return value.toLowerCase().trim().replace(/\s+/g, "");
 }
 
-async function fetchCryptoMarketSnapshot(id: string): Promise<CryptoMarketSnapshot | null> {
+async function fetchCryptoMarketSnapshot(
+  id: string,
+  currency: SupportedInvestmentCurrency,
+): Promise<CryptoMarketSnapshot | null> {
+  const vsCurrency = getCoinGeckoCurrency(currency, "crypto");
   try {
     const res = await fetch(
-      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=brl&ids=${encodeURIComponent(
+      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=${vsCurrency}&ids=${encodeURIComponent(
         id,
       )}&price_change_percentage=24h`,
       { cache: "no-store" },
@@ -728,12 +745,16 @@ async function fetchCryptoMarketSnapshot(id: string): Promise<CryptoMarketSnapsh
   }
 }
 
-async function fetchFeaturedCryptoOptions(ids = FEATURED_CRYPTO_IDS) {
+async function fetchFeaturedCryptoOptions(
+  ids = FEATURED_CRYPTO_IDS,
+  currency: SupportedInvestmentCurrency = DEFAULT_INVESTMENT_CURRENCY,
+) {
   const normalizedIds = ids.map((id) => normalizeCryptoId(id)).filter(Boolean);
   if (!normalizedIds.length) return [];
+  const vsCurrency = getCoinGeckoCurrency(currency, "crypto");
   try {
     const res = await fetch(
-      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=brl&ids=${encodeURIComponent(
+      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=${vsCurrency}&ids=${encodeURIComponent(
         normalizedIds.join(","),
       )}&price_change_percentage=24h`,
       { cache: "no-store" },
@@ -791,9 +812,15 @@ function normalizeSymbol(type: InvestmentType, value: string) {
   return "CDI";
 }
 
+function getAssetCurrency(asset: Pick<Investment, "type" | "currency">) {
+  return normalizeInvestmentCurrency(asset.currency, asset.type);
+}
+
 function getAssetQuoteKey(asset: Investment) {
   if (asset.type === "b3") return normalizeB3Symbol(asset.symbol);
-  if (asset.type === "crypto") return normalizeCryptoId(asset.symbol);
+  if (asset.type === "crypto") {
+    return `${normalizeCryptoId(asset.symbol)}:${getAssetCurrency(asset)}`;
+  }
   return `fixed:${asset.id}`;
 }
 
@@ -835,11 +862,37 @@ function getInvestmentCategory(asset: Investment): InvestmentCategory {
   return "other";
 }
 
-function formatCurrency(value: number, language: "pt" | "en") {
+function formatCurrency(
+  value: number,
+  language: "pt" | "en",
+  currency: SupportedInvestmentCurrency = DEFAULT_INVESTMENT_CURRENCY,
+) {
   return new Intl.NumberFormat(language === "pt" ? "pt-BR" : "en-US", {
     style: "currency",
-    currency: "BRL",
+    currency,
     minimumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatCentsInputForCurrency(
+  raw: string,
+  currency: SupportedInvestmentCurrency = DEFAULT_INVESTMENT_CURRENCY,
+) {
+  const cleaned = raw.replace(/\D/g, "");
+  if (!cleaned) {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(0);
+  }
+  const value = Number(cleaned) / 100;
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(value);
 }
 
@@ -860,10 +913,14 @@ function formatChartDate(value: number, language: "pt" | "en") {
   }).format(new Date(value));
 }
 
-function formatAxisCurrency(value: number, language: "pt" | "en") {
+function formatAxisCurrency(
+  value: number,
+  language: "pt" | "en",
+  currency: SupportedInvestmentCurrency = DEFAULT_INVESTMENT_CURRENCY,
+) {
   return new Intl.NumberFormat(language === "pt" ? "pt-BR" : "en-US", {
     style: "currency",
-    currency: "BRL",
+    currency,
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(value);
@@ -1080,6 +1137,7 @@ function buildFixedIncomeHistory(
 
 export function InvestmentsScreen() {
   const { language, t } = useLanguage();
+  const { currency: appCurrency } = useCurrency();
   const { user } = useAuth();
   const searchParams = useSearchParams();
   const openNewKey = searchParams.get("new") ?? undefined;
@@ -1101,6 +1159,9 @@ export function InvestmentsScreen() {
   const [type, setType] = useState<InvestmentType>("b3");
   const [symbol, setSymbol] = useState("");
   const [name, setName] = useState("");
+  const [currency, setCurrency] = useState<SupportedInvestmentCurrency>(
+    DEFAULT_INVESTMENT_CURRENCY,
+  );
   const [mode, setMode] = useState<"quantity" | "value">("quantity");
   const [quantity, setQuantity] = useState("");
   const [investedValue, setInvestedValue] = useState("");
@@ -1123,6 +1184,9 @@ export function InvestmentsScreen() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [editSymbol, setEditSymbol] = useState("");
   const [editName, setEditName] = useState("");
+  const [editCurrency, setEditCurrency] = useState<SupportedInvestmentCurrency>(
+    DEFAULT_INVESTMENT_CURRENCY,
+  );
   const [editSaving, setEditSaving] = useState(false);
   const [organizeBy, setOrganizeBy] = useState<InvestmentOrganizer>("alphabetical");
   const [investmentFilter, setInvestmentFilter] = useState<InvestmentFilterSettings>(
@@ -1130,6 +1194,7 @@ export function InvestmentsScreen() {
   );
   const [filterOpen, setFilterOpen] = useState(false);
   const [liveNowMs, setLiveNowMs] = useState(() => Date.now());
+  const preferredNewInvestmentCurrency = normalizeInvestmentCurrency(appCurrency, "crypto");
   const filterStorageKey = user?.id
     ? `${INVESTMENT_FILTER_STORAGE_PREFIX}:${user.id}`
     : null;
@@ -1137,7 +1202,7 @@ export function InvestmentsScreen() {
   const loadAssets = useCallback(async () => {
     if (!user) return;
     const fullSelect =
-      "id,type,symbol,name,quantity,average_price,cdi_rate_pct,cdi_multiplier_pct,fixed_started_at,created_at";
+      "id,type,symbol,name,currency,quantity,average_price,cdi_rate_pct,cdi_multiplier_pct,fixed_started_at,created_at";
     const baseSelect = "id,type,symbol,name,quantity,average_price,created_at";
 
     const { data, error } = await supabase
@@ -1170,6 +1235,7 @@ export function InvestmentsScreen() {
 
       const normalizedFallback = (fallback.data ?? []).map((asset: any) => ({
         ...asset,
+        currency: normalizeInvestmentCurrency(appCurrency, asset.type),
         cdi_rate_pct: null,
         cdi_multiplier_pct: null,
         fixed_started_at: null,
@@ -1178,14 +1244,23 @@ export function InvestmentsScreen() {
       return;
     }
 
-    setAssets((data ?? []) as Investment[]);
-  }, [user]);
+    setAssets(
+      ((data ?? []) as Array<Omit<Investment, "currency"> & { currency?: string | null }>).map(
+        (asset) => ({
+          ...asset,
+          currency: normalizeInvestmentCurrency(asset.currency, asset.type),
+        }),
+      ),
+    );
+  }, [appCurrency, user]);
 
   const fetchHistoryForAsset = useCallback(
     async (asset: Investment) => {
       try {
         if (asset.type === "b3") return await fetchB3History(asset.symbol);
-        if (asset.type === "crypto") return await fetchCryptoHistory(asset.symbol);
+        if (asset.type === "crypto") {
+          return await fetchCryptoHistory(asset.symbol, getAssetCurrency(asset));
+        }
         return [];
       } catch (err) {
         console.error(err);
@@ -1275,18 +1350,52 @@ export function InvestmentsScreen() {
     window.localStorage.setItem(filterStorageKey, JSON.stringify(investmentFilter));
   }, [filterStorageKey, investmentFilter]);
 
+  useEffect(() => {
+    if (canSelectInvestmentCurrency(type)) return;
+    if (currency === DEFAULT_INVESTMENT_CURRENCY) return;
+    setCurrency(DEFAULT_INVESTMENT_CURRENCY);
+  }, [currency, type]);
+
+  useEffect(() => {
+    const nextCurrency = normalizeInvestmentCurrency(currency, type);
+    setInvestedValue((current) => {
+      if (!current) return current;
+      const next = formatCentsInputForCurrency(current, nextCurrency);
+      return next === current ? current : next;
+    });
+    setManualPrice((current) => {
+      if (!current) return current;
+      const next = formatCentsInputForCurrency(current, nextCurrency);
+      return next === current ? current : next;
+    });
+  }, [currency, type]);
+
   const fetchQuotes = useCallback(async () => {
-    if (!assets.length) return;
+    if (!assets.length) {
+      setQuotes({});
+      setQuoteError(null);
+      return;
+    }
     setQuoteError(null);
 
     const b3Symbols = Array.from(new Set(assets
       .filter((asset) => asset.type === "b3")
       .map((asset) => normalizeB3Symbol(asset.symbol))
       .filter((symbol) => isLikelyB3Symbol(symbol) && !badB3Symbols.has(symbol))));
-    const cryptoIds = Array.from(new Set(assets
-      .filter((asset) => asset.type === "crypto")
-      .map((asset) => normalizeCryptoId(asset.symbol))
-      .filter((id) => isLikelyCryptoId(id))));
+    const cryptoIdsByCurrency = assets.reduce(
+      (map, asset) => {
+        if (asset.type !== "crypto") return map;
+        const id = normalizeCryptoId(asset.symbol);
+        if (!isLikelyCryptoId(id)) return map;
+        const assetCurrency = getAssetCurrency(asset);
+        map[assetCurrency].add(id);
+        return map;
+      },
+      {
+        BRL: new Set<string>(),
+        EUR: new Set<string>(),
+      } satisfies Record<SupportedInvestmentCurrency, Set<string>>,
+    );
 
     const nextQuotes: Record<string, Quote> = {};
     let hadFailures = false;
@@ -1319,27 +1428,29 @@ export function InvestmentsScreen() {
       }
     }
 
-    if (cryptoIds.length) {
+    for (const assetCurrency of ["BRL", "EUR"] as const) {
+      const cryptoIds = Array.from(cryptoIdsByCurrency[assetCurrency]);
+      if (!cryptoIds.length) continue;
+      const vsCurrency = getCoinGeckoCurrency(assetCurrency, "crypto");
       try {
         const url = `https://api.coingecko.com/api/v3/simple/price?ids=${cryptoIds.join(
           ",",
-        )}&vs_currencies=brl&include_24hr_change=true`;
+        )}&vs_currencies=${vsCurrency}&include_24hr_change=true`;
         const res = await fetch(url);
         if (!res.ok) {
           hadFailures = true;
-          setQuotes(nextQuotes);
-          setQuoteError(t("investments.quoteError"));
-          return;
+          continue;
         }
         const json = await res.json();
         cryptoIds.forEach((id) => {
           const entry = json?.[id];
-          if (!entry?.brl) return;
-          nextQuotes[id] = {
-            price: Number(entry.brl) || 0,
+          const price = entry?.[vsCurrency];
+          if (price == null) return;
+          nextQuotes[`${id}:${assetCurrency}`] = {
+            price: Number(price) || 0,
             changePct:
-            entry?.brl_24h_change != null
-                ? Number(entry.brl_24h_change)
+              entry?.[`${vsCurrency}_24h_change`] != null
+                ? Number(entry[`${vsCurrency}_24h_change`])
                 : null,
           };
         });
@@ -1472,8 +1583,30 @@ export function InvestmentsScreen() {
 
   const activeAsset = selectedAsset;
   const isFixedIncome = type === "fixed_income";
-  const currentAvg = activeAsset ? new Big(activeAsset.average_price || 0) : new Big(0);
-  const currentQty = activeAsset ? new Big(activeAsset.quantity || 0) : new Big(0);
+  const formCurrency = normalizeInvestmentCurrency(currency, type);
+  const existingAssetForForm = useMemo(() => {
+    if (selectedAsset || type === "fixed_income") return null;
+    const trimmedSymbol = symbol.trim();
+    if (!trimmedSymbol) return null;
+    const normalized = normalizeSymbol(type, trimmedSymbol);
+    return (
+      assets.find(
+        (asset) =>
+          asset.type === type &&
+          normalizeSymbol(asset.type, asset.symbol) === normalized &&
+          getAssetCurrency(asset) === formCurrency,
+      ) ?? null
+    );
+  }, [assets, formCurrency, selectedAsset, symbol, type]);
+  const mathAsset = activeAsset ?? existingAssetForForm;
+  const activeAssetCurrency = activeAsset
+    ? getAssetCurrency(activeAsset)
+    : DEFAULT_INVESTMENT_CURRENCY;
+  const editAssetCurrency = activeAsset
+    ? normalizeInvestmentCurrency(editCurrency, activeAsset.type)
+    : DEFAULT_INVESTMENT_CURRENCY;
+  const currentAvg = mathAsset ? new Big(mathAsset.average_price || 0) : new Big(0);
+  const currentQty = mathAsset ? new Big(mathAsset.quantity || 0) : new Big(0);
   const previewPriceBig =
     previewQuote?.price != null ? new Big(previewQuote.price) : null;
   const manualPriceValue = parseCentsInput(manualPrice);
@@ -1552,6 +1685,17 @@ export function InvestmentsScreen() {
   ]);
 
   useEffect(() => {
+    if (type !== "crypto") return;
+    setFeaturedCryptoOptions([]);
+    featuredCryptoOptionsRef.current = [];
+    setSelectedCrypto(null);
+    setCryptoMarket(null);
+    setPreviewQuote(null);
+    previewFetchRef.current = 0;
+    previewKeyRef.current = "";
+  }, [formCurrency, type]);
+
+  useEffect(() => {
     if (!showModal || !isCreate) return;
     if (type === "fixed_income") {
       setPreviewQuote(null);
@@ -1568,7 +1712,7 @@ export function InvestmentsScreen() {
       previewKeyRef.current = "";
       return;
     }
-    const previewKey = `${type}:${normalizeSymbol(type, trimmedSymbol)}`;
+    const previewKey = `${type}:${normalizeSymbol(type, trimmedSymbol)}:${formCurrency}`;
     if (previewKeyRef.current !== previewKey) {
       previewKeyRef.current = previewKey;
       previewFetchRef.current = 0;
@@ -1624,7 +1768,7 @@ export function InvestmentsScreen() {
           setName((current) => (current.trim() ? current : cachedFeatured.name));
           return;
         }
-        const snapshot = await fetchCryptoMarketSnapshot(id);
+        const snapshot = await fetchCryptoMarketSnapshot(id, formCurrency);
         if (previewRequestRef.current !== requestId) return;
         if (!snapshot) {
           setCryptoMarket(null);
@@ -1653,7 +1797,7 @@ export function InvestmentsScreen() {
     }
 
     void fetchPreview();
-  }, [showModal, isCreate, symbol, type]);
+  }, [formCurrency, isCreate, showModal, symbol, type]);
 
   useEffect(() => {
     featuredCryptoOptionsRef.current = featuredCryptoOptions;
@@ -1664,7 +1808,7 @@ export function InvestmentsScreen() {
     let cancelled = false;
     async function loadFeaturedCryptos() {
       setFeaturedCryptoLoading(true);
-      const options = await fetchFeaturedCryptoOptions();
+      const options = await fetchFeaturedCryptoOptions(FEATURED_CRYPTO_IDS, formCurrency);
       if (cancelled) return;
       setFeaturedCryptoOptions(options);
       setFeaturedCryptoLoading(false);
@@ -1692,7 +1836,7 @@ export function InvestmentsScreen() {
     return () => {
       cancelled = true;
     };
-  }, [showModal, isCreate, type, symbol, featuredCryptoOptions.length]);
+  }, [featuredCryptoOptions.length, formCurrency, isCreate, showModal, symbol, type]);
 
   async function handleRemove(id: string) {
     if (!user) return;
@@ -1715,6 +1859,7 @@ export function InvestmentsScreen() {
     if (!user || !selectedAsset) return;
     const nextSymbol = editSymbol.trim();
     const nextName = editName.trim();
+    const nextCurrency = normalizeInvestmentCurrency(editCurrency, selectedAsset.type);
     if (!nextSymbol) {
       setErrorMsg(t("investments.symbolHint"));
       return;
@@ -1726,6 +1871,7 @@ export function InvestmentsScreen() {
       .update({
         symbol: nextSymbol,
         name: nextName || null,
+        currency: nextCurrency,
       })
       .eq("id", selectedAsset.id)
       .eq("user_id", user.id);
@@ -1747,6 +1893,7 @@ export function InvestmentsScreen() {
     setType("b3");
     setSymbol("");
     setName("");
+    setCurrency(DEFAULT_INVESTMENT_CURRENCY);
     setMode("quantity");
     setQuantity("");
     setInvestedValue("");
@@ -1775,6 +1922,7 @@ export function InvestmentsScreen() {
     setErrorMsg(null);
     setEditSymbol(asset.symbol ?? "");
     setEditName(asset.name ?? "");
+    setEditCurrency(getAssetCurrency(asset));
   }
 
   useEffect(() => {
@@ -1899,13 +2047,7 @@ export function InvestmentsScreen() {
       persistedName = `CDI ${cdiText}%`;
     }
 
-    const existing = isFixedIncome
-      ? undefined
-      : assets.find(
-      (asset) =>
-        asset.type === type &&
-        normalizeSymbol(asset.type, asset.symbol) === normalized,
-    );
+    const existing = isFixedIncome ? undefined : existingAssetForForm ?? undefined;
 
     const nextAvg = isFixedIncome ? computed.total : computed.newAvg;
     const nextQty = existing
@@ -1920,6 +2062,7 @@ export function InvestmentsScreen() {
         .update({
           quantity: nextQty.toString(),
           average_price: nextAvg.toString(),
+          currency: formCurrency,
           cdi_rate_pct: isFixedIncome ? fixedAnnualCdiPct : null,
           cdi_multiplier_pct: isFixedIncome ? fixedCdiMultiplier : null,
           fixed_started_at: isFixedIncome
@@ -1958,7 +2101,7 @@ export function InvestmentsScreen() {
             fixed_started_at: isFixedIncome
               ? new Date((parseLocalDateInputToMs(date) ?? Date.now())).toISOString()
               : null,
-            currency: "BRL",
+            currency: formCurrency,
           },
         ])
         .select("id")
@@ -2168,6 +2311,7 @@ export function InvestmentsScreen() {
           const quote = allQuotes[key];
           const history = allPriceHistory[asset.id] ?? [];
           const fixedSnapshot = fixedSnapshotByAssetId[asset.id];
+          const assetCurrency = getAssetCurrency(asset);
           const current = quote?.price ?? getLatestPrice(history);
           const value =
             asset.type === "fixed_income"
@@ -2183,12 +2327,12 @@ export function InvestmentsScreen() {
             .map((metricKey) => metricLabelByKey[metricKey])
             .join(", ");
           const exchangeLabel = asset.type === "b3"
-            ? `BVMF - ${normalizeB3Symbol(asset.symbol)}`
+            ? `BVMF - ${normalizeB3Symbol(asset.symbol)} · ${assetCurrency}`
             : asset.type === "crypto"
-              ? `CRYPTO - ${normalizeCryptoId(asset.symbol).toUpperCase()}`
+              ? `CRYPTO - ${normalizeCryptoId(asset.symbol).toUpperCase()} · ${assetCurrency}`
               : language === "pt"
-                ? "RENDA FIXA - CDI"
-                : "FIXED INCOME - CDI";
+                ? `RENDA FIXA - CDI · ${assetCurrency}`
+                : `FIXED INCOME - CDI · ${assetCurrency}`;
           return (
             <button
               key={asset.id}
@@ -2231,7 +2375,7 @@ export function InvestmentsScreen() {
                 <div className="flex items-baseline gap-2">
                   <span className="text-xl font-semibold text-[#E5E8EF]">
                     {summary.current != null
-                      ? formatCurrency(summary.current, language)
+                      ? formatCurrency(summary.current, language, assetCurrency)
                       : "--"}
                   </span>
                   {summary.changePct != null ? (
@@ -2289,7 +2433,7 @@ export function InvestmentsScreen() {
                       </p>
                       <p className="text-[11px] font-semibold text-emerald-300">
                         {fixedSnapshot
-                          ? formatCurrency(fixedSnapshot.profit, language)
+                          ? formatCurrency(fixedSnapshot.profit, language, assetCurrency)
                           : "--"}
                       </p>
                     </div>
@@ -2304,7 +2448,7 @@ export function InvestmentsScreen() {
                         if (metric.isPercent) {
                           display = formatPlainPercent(metricValue, language);
                         } else if (metric.key === "bookValue") {
-                          display = formatCurrency(metricValue, language);
+                          display = formatCurrency(metricValue, language, assetCurrency);
                         } else if (metric.key === "sharesOutstanding") {
                           display = formatCompactNumber(metricValue, language);
                         } else {
@@ -2358,7 +2502,9 @@ export function InvestmentsScreen() {
                         tickLine={{ stroke: "#1F2632" }}
                       />
                       <YAxis
-                        tickFormatter={(value) => formatAxisCurrency(value, language)}
+                        tickFormatter={(value) =>
+                          formatAxisCurrency(value, language, assetCurrency)
+                        }
                         tick={{ fill: "#7F8694", fontSize: 10 }}
                         axisLine={{ stroke: "#1F2632" }}
                         tickLine={{ stroke: "#1F2632" }}
@@ -2372,7 +2518,9 @@ export function InvestmentsScreen() {
                         />
                       ) : null}
                       <Tooltip
-                        formatter={(value) => formatCurrency(Number(value ?? 0), language)}
+                        formatter={(value) =>
+                          formatCurrency(Number(value ?? 0), language, assetCurrency)
+                        }
                         labelFormatter={(label) => formatShortDate(String(label), language)}
                         contentStyle={{
                           background: "#0F121A",
@@ -2403,7 +2551,7 @@ export function InvestmentsScreen() {
               <div>
                 <p className="text-xs text-[#8B94A6]">{t("investments.totalValue")}</p>
                 <p className="text-sm font-semibold text-[#E5E8EF]">
-                  {value != null ? formatCurrency(value, language) : "--"}
+                  {value != null ? formatCurrency(value, language, assetCurrency) : "--"}
                 </p>
               </div>
             </button>
@@ -2543,6 +2691,9 @@ export function InvestmentsScreen() {
                       type="button"
                       onClick={() => {
                         setType("crypto");
+                        if (type === "b3") {
+                          setCurrency(preferredNewInvestmentCurrency);
+                        }
                         setMode("quantity");
                         setSymbol("");
                         setSelectedCrypto(null);
@@ -2563,6 +2714,9 @@ export function InvestmentsScreen() {
                       type="button"
                       onClick={() => {
                         setType("fixed_income");
+                        if (type === "b3") {
+                          setCurrency(preferredNewInvestmentCurrency);
+                        }
                         setMode("value");
                         setSymbol("CDI");
                         setSelectedCrypto(null);
@@ -2709,6 +2863,43 @@ export function InvestmentsScreen() {
                   />
                 </div>
 
+                <div className="space-y-2">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-[#8B94A6]">
+                    {t("investments.currency")}
+                  </p>
+                  <div className="flex gap-2">
+                    {(["BRL", "EUR"] as const).map((option) => {
+                      const disabled = !canSelectInvestmentCurrency(type) && option !== "BRL";
+                      const active = formCurrency === option;
+                      return (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => setCurrency(option)}
+                          disabled={disabled}
+                          className={`flex-1 rounded-xl border px-3 py-2 text-left text-xs transition ${
+                            active
+                              ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
+                              : "border-[#1C2332] bg-[#0F121A] text-[#DCE3EE]"
+                          } ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+                        >
+                          <span className="block font-semibold">{option}</span>
+                          <span className="block text-[10px] text-[#8B94A6]">
+                            {option === "BRL"
+                              ? t("investments.currencyBrl")
+                              : t("investments.currencyEur")}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {!canSelectInvestmentCurrency(type) ? (
+                    <p className="text-[11px] text-[#8B94A6]">
+                      {t("investments.currencyLockedB3")}
+                    </p>
+                  ) : null}
+                </div>
+
                 {type !== "fixed_income" ? (
                   <div className="flex gap-2">
                     <button
@@ -2741,7 +2932,11 @@ export function InvestmentsScreen() {
                     <>
                       <input
                         value={investedValue}
-                        onChange={(event) => setInvestedValue(formatCentsInput(event.target.value))}
+                        onChange={(event) =>
+                          setInvestedValue(
+                            formatCentsInputForCurrency(event.target.value, formCurrency),
+                          )
+                        }
                         placeholder={t("investments.investedValue")}
                         inputMode="numeric"
                         pattern="[0-9]*"
@@ -2784,7 +2979,11 @@ export function InvestmentsScreen() {
                       ) : (
                         <input
                           value={investedValue}
-                          onChange={(event) => setInvestedValue(formatCentsInput(event.target.value))}
+                          onChange={(event) =>
+                            setInvestedValue(
+                              formatCentsInputForCurrency(event.target.value, formCurrency),
+                            )
+                          }
                           placeholder={t("investments.investedValue")}
                           inputMode="numeric"
                           pattern="[0-9]*"
@@ -2793,8 +2992,12 @@ export function InvestmentsScreen() {
                       )}
                       <div>
                         <input
-                          value={manualPrice}
-                          onChange={(event) => setManualPrice(formatCentsInput(event.target.value))}
+                        value={manualPrice}
+                        onChange={(event) =>
+                          setManualPrice(
+                            formatCentsInputForCurrency(event.target.value, formCurrency),
+                          )
+                        }
                           placeholder={t("investments.manualPrice")}
                           inputMode="numeric"
                           pattern="[0-9]*"
@@ -2815,7 +3018,7 @@ export function InvestmentsScreen() {
                     </p>
                     <p className="text-sm font-semibold text-[#E5E8EF]">
                       {(type === "fixed_income" || priceBig) && computed.qty.gt(0)
-                        ? formatCurrency(Number(computed.total.toString()), language)
+                        ? formatCurrency(Number(computed.total.toString()), language, formCurrency)
                         : "--"}
                     </p>
                   </div>
@@ -2827,7 +3030,11 @@ export function InvestmentsScreen() {
                         </p>
                         <p className="text-sm font-semibold text-[#E5E8EF]">
                           {fixedPreviewSnapshot
-                            ? formatCurrency(fixedPreviewSnapshot.currentValue, language)
+                            ? formatCurrency(
+                                fixedPreviewSnapshot.currentValue,
+                                language,
+                                formCurrency,
+                              )
                             : "--"}
                         </p>
                       </div>
@@ -2837,7 +3044,11 @@ export function InvestmentsScreen() {
                         </p>
                         <p className="text-sm font-semibold text-emerald-300">
                           {fixedPreviewSnapshot
-                            ? formatCurrency(fixedPreviewSnapshot.profit, language)
+                            ? formatCurrency(
+                                fixedPreviewSnapshot.profit,
+                                language,
+                                formCurrency,
+                              )
                             : "--"}
                         </p>
                       </div>
@@ -2847,7 +3058,11 @@ export function InvestmentsScreen() {
                         </p>
                         <p className="text-sm font-semibold text-[#E5E8EF]">
                           {fixedPreviewSnapshot
-                            ? formatCurrency(fixedPreviewSnapshot.estimatedDailyProfit, language)
+                            ? formatCurrency(
+                                fixedPreviewSnapshot.estimatedDailyProfit,
+                                language,
+                                formCurrency,
+                              )
                             : "--"}
                         </p>
                       </div>
@@ -2860,7 +3075,7 @@ export function InvestmentsScreen() {
                         </p>
                         <p className="text-sm font-semibold text-[#E5E8EF]">
                           {displayPrice != null
-                            ? formatCurrency(displayPrice, language)
+                            ? formatCurrency(displayPrice, language, formCurrency)
                             : "--"}
                         </p>
                       </div>
@@ -2870,7 +3085,7 @@ export function InvestmentsScreen() {
                         </p>
                         <p className="text-sm font-semibold text-[#E5E8EF]">
                           {currentAvg.gt(0)
-                            ? formatCurrency(Number(currentAvg.toString()), language)
+                            ? formatCurrency(Number(currentAvg.toString()), language, formCurrency)
                             : "--"}
                         </p>
                       </div>
@@ -2880,7 +3095,11 @@ export function InvestmentsScreen() {
                         </p>
                         <p className="text-sm font-semibold text-[#E5E8EF]">
                           {computed.newAvg.gt(0)
-                            ? formatCurrency(Number(computed.newAvg.toString()), language)
+                            ? formatCurrency(
+                                Number(computed.newAvg.toString()),
+                                language,
+                                formCurrency,
+                              )
                             : "--"}
                         </p>
                       </div>
@@ -2962,7 +3181,7 @@ export function InvestmentsScreen() {
                       </p>
                       <p className="text-sm font-semibold text-[#E5E8EF]">
                         {cryptoMarket?.marketCap != null
-                          ? formatCurrency(cryptoMarket.marketCap, language)
+                          ? formatCurrency(cryptoMarket.marketCap, language, formCurrency)
                           : "--"}
                       </p>
                       <p className="text-[11px] text-[#8B94A6]">
@@ -2978,11 +3197,11 @@ export function InvestmentsScreen() {
                       </p>
                       <p className="text-sm font-semibold text-[#E5E8EF]">
                         {cryptoMarket?.low24h != null
-                          ? formatCurrency(cryptoMarket.low24h, language)
+                          ? formatCurrency(cryptoMarket.low24h, language, formCurrency)
                           : "--"}{" "}
                         -{" "}
                         {cryptoMarket?.high24h != null
-                          ? formatCurrency(cryptoMarket.high24h, language)
+                          ? formatCurrency(cryptoMarket.high24h, language, formCurrency)
                           : "--"}
                       </p>
                       <p
@@ -3008,7 +3227,7 @@ export function InvestmentsScreen() {
                     </p>
                     <p className="mt-1 text-sm font-semibold text-[#E5E8EF]">
                       {fixedPreviewSnapshot
-                        ? `${formatCurrency(fixedPreviewSnapshot.currentValue, language)} · ${formatPlainPercent(fixedPreviewSnapshot.effectiveAnnualPct, language)}`
+                        ? `${formatCurrency(fixedPreviewSnapshot.currentValue, language, formCurrency)} · ${formatPlainPercent(fixedPreviewSnapshot.effectiveAnnualPct, language)}`
                         : "--"}
                     </p>
                     <p className="mt-1 text-[11px] text-[#8B94A6]">
@@ -3045,7 +3264,7 @@ export function InvestmentsScreen() {
                           : language === "pt"
                             ? "Renda fixa"
                             : "Fixed income"} -{" "}
-                      {activeAsset.symbol}
+                      {activeAsset.symbol} · {activeAssetCurrency}
                     </p>
                   </div>
                   <button
@@ -3083,7 +3302,11 @@ export function InvestmentsScreen() {
                           <div className="mt-2 grid grid-cols-2 gap-2 text-[#E5E8EF]">
                             <div>
                               {t("investments.pricePerShare")}{" "}
-                              {formatCurrency(Number(purchase.price_per_share) || 0, language)}
+                              {formatCurrency(
+                                Number(purchase.price_per_share) || 0,
+                                language,
+                                activeAssetCurrency,
+                              )}
                             </div>
                             <div>
                               {t("investments.quantity")}{" "}
@@ -3094,6 +3317,7 @@ export function InvestmentsScreen() {
                               {formatCurrency(
                                 Number(purchase.total_invested) || 0,
                                 language,
+                                activeAssetCurrency,
                               )}
                             </div>
                             {purchase.input_value ? (
@@ -3102,6 +3326,7 @@ export function InvestmentsScreen() {
                                 {formatCurrency(
                                   Number(purchase.input_value) || 0,
                                   language,
+                                  activeAssetCurrency,
                                 )}
                               </div>
                             ) : null}
@@ -3131,6 +3356,43 @@ export function InvestmentsScreen() {
                       placeholder={t("investments.name")}
                       className="w-full rounded-xl border border-[#1E232E] bg-[#0F121A] px-3 py-2 text-sm text-[#E4E7EC]"
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-[#8B94A6]">
+                      {t("investments.currency")}
+                    </p>
+                    <div className="flex gap-2">
+                      {(["BRL", "EUR"] as const).map((option) => {
+                        const disabled =
+                          !canSelectInvestmentCurrency(activeAsset.type) && option !== "BRL";
+                        const active = editAssetCurrency === option;
+                        return (
+                          <button
+                            key={`${activeAsset.id}-${option}`}
+                            type="button"
+                            onClick={() => setEditCurrency(option)}
+                            disabled={disabled}
+                            className={`flex-1 rounded-xl border px-3 py-2 text-left text-xs transition ${
+                              active
+                                ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
+                                : "border-[#1C2332] bg-[#0F121A] text-[#DCE3EE]"
+                            } ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+                          >
+                            <span className="block font-semibold">{option}</span>
+                            <span className="block text-[10px] text-[#8B94A6]">
+                              {option === "BRL"
+                                ? t("investments.currencyBrl")
+                                : t("investments.currencyEur")}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {!canSelectInvestmentCurrency(activeAsset.type) ? (
+                      <p className="text-[11px] text-[#8B94A6]">
+                        {t("investments.currencyLockedB3")}
+                      </p>
+                    ) : null}
                   </div>
                   <button
                     type="button"

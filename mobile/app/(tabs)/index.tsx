@@ -14,8 +14,10 @@ import { useFocusEffect } from '@react-navigation/native';
 
 import { supabase } from '@/lib/supabaseClient';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useCurrency } from '@/lib/currency';
 import { getMonthShortName } from '@shared/i18n';
 import { useLanguage } from '@/lib/language';
+import { formatCurrencyValue } from '@shared/currency';
 
 type Transaction = {
   id: string;
@@ -110,12 +112,8 @@ function getMonthOptions(language: 'pt' | 'en', total = 12) {
   return options;
 }
 
-function formatCurrency(value: number, language: 'pt' | 'en') {
-  return new Intl.NumberFormat(language === 'pt' ? 'pt-BR' : 'en-US', {
-    style: 'currency',
-    currency: 'BRL',
-    minimumFractionDigits: 2,
-  }).format(value);
+function formatCurrency(value: number, language: 'pt' | 'en', currency: 'BRL' | 'EUR') {
+  return formatCurrencyValue(value, language, currency);
 }
 
 function buildChartData(transactions: Transaction[]) {
@@ -141,6 +139,7 @@ function buildChartData(transactions: Transaction[]) {
 
 export default function HomeScreen() {
   const { language, t } = useLanguage();
+  const { currency } = useCurrency();
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [totalBalance, setTotalBalance] = useState(0);
@@ -325,7 +324,7 @@ export default function HomeScreen() {
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>{t('home.balanceLabel')}</Text>
           <Text style={styles.balanceValue}>
-              {loading ? '...' : showBalance ? formatCurrency(totalBalance, language) : '****'}
+              {loading ? '...' : showBalance ? formatCurrency(totalBalance, language, currency) : '****'}
           </Text>
           <Pressable style={styles.eyeButton} onPress={() => setShowBalance((value) => !value)}>
             <IconSymbol name={showBalance ? 'eye.slash' : 'eye'} size={20} color="#A3ABB9" />
@@ -338,7 +337,7 @@ export default function HomeScreen() {
               <View>
                 <Text style={styles.balanceCaption}>{t('home.income')}</Text>
                 <Text style={styles.balanceAmount}>
-                  {loading ? '...' : formatCurrency(income, language)}
+                  {loading ? '...' : formatCurrency(income, language, currency)}
                 </Text>
               </View>
             </View>
@@ -349,7 +348,7 @@ export default function HomeScreen() {
               <View>
                 <Text style={styles.balanceCaption}>{t('home.expenses')}</Text>
                 <Text style={styles.balanceAmount}>
-                  {loading ? '...' : formatCurrency(expenses, language)}
+                  {loading ? '...' : formatCurrency(expenses, language, currency)}
                 </Text>
               </View>
             </View>
@@ -402,7 +401,7 @@ export default function HomeScreen() {
                   <View style={styles.accountInfo}>
                     <Text style={styles.accountName}>{account.name}</Text>
                     <Text style={styles.accountBalance}>
-                      {loading ? '...' : formatCurrency(Number(account.balance) || 0, language)}
+                      {loading ? '...' : formatCurrency(Number(account.balance) || 0, language, currency)}
                     </Text>
                   </View>
                 </View>
@@ -410,7 +409,7 @@ export default function HomeScreen() {
             )}
             <View style={styles.sectionFooter}>
               <Text style={styles.sectionFooterText}>
-                {t('home.total')} {loading ? '...' : formatCurrency(totalBalance, language)}
+                {t('home.total')} {loading ? '...' : formatCurrency(totalBalance, language, currency)}
               </Text>
             </View>
           </View>
@@ -444,7 +443,7 @@ export default function HomeScreen() {
                     </Text>
                   </View>
                   <Text style={styles.cardLimit}>
-                    {loading ? '...' : formatCurrency(Number(card.limit_amount) || 0, language)}
+                    {loading ? '...' : formatCurrency(Number(card.limit_amount) || 0, language, currency)}
                   </Text>
                 </View>
               ))
@@ -482,7 +481,7 @@ export default function HomeScreen() {
                       </Text>
                     </View>
                     <Text style={styles.cardLimit}>
-                      {loading ? '...' : formatCurrency(Number(card.limit_amount) || 0, language)}
+                      {loading ? '...' : formatCurrency(Number(card.limit_amount) || 0, language, currency)}
                     </Text>
                   </View>
                 ))

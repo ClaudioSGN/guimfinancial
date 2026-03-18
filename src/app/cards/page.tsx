@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { useLanguage } from "@/lib/language";
+import { useCurrency } from "@/lib/currency";
+import { formatCentsFromNumber, formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
 import { hasMissingColumnError } from "@/lib/errorUtils";
 
 type CardOwnerType = "self" | "friend";
@@ -32,29 +34,13 @@ function hydrateLegacyCards(cards: LegacyCard[]): Card[] {
   }));
 }
 
-function formatCentsInput(digits: string) {
-  const cleaned = digits.replace(/\D/g, "");
-  if (!cleaned) return "R$ 0";
-  const value = Number(cleaned) / 100;
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
-}
-
-function parseCentsInput(value: string) {
-  const cleaned = value.replace(/\D/g, "");
-  if (!cleaned) return 0;
-  return Number(cleaned) / 100;
-}
-
 export default function CardsPage() {
   const { language, t } = useLanguage();
+  const { currency } = useCurrency();
+  const emptyMoneyValue = formatCentsInput("", currency);
   const [cards, setCards] = useState<Card[]>([]);
   const [name, setName] = useState("");
-  const [limitAmount, setLimitAmount] = useState("R$ 0");
+  const [limitAmount, setLimitAmount] = useState(emptyMoneyValue);
   const [ownerType, setOwnerType] = useState<CardOwnerType>("self");
   const [friendName, setFriendName] = useState("");
   const [closingDay, setClosingDay] = useState("");
@@ -63,7 +49,7 @@ export default function CardsPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [editing, setEditing] = useState<Card | null>(null);
   const [editName, setEditName] = useState("");
-  const [editLimitAmount, setEditLimitAmount] = useState("R$ 0");
+  const [editLimitAmount, setEditLimitAmount] = useState(emptyMoneyValue);
   const [editOwnerType, setEditOwnerType] = useState<CardOwnerType>("self");
   const [editFriendName, setEditFriendName] = useState("");
   const [editClosingDay, setEditClosingDay] = useState("");
@@ -97,6 +83,15 @@ export default function CardsPage() {
   useEffect(() => {
     loadCards();
   }, []);
+
+  useEffect(() => {
+    if (parseCentsInput(limitAmount) === 0) {
+      setLimitAmount(emptyMoneyValue);
+    }
+    if (parseCentsInput(editLimitAmount) === 0) {
+      setEditLimitAmount(emptyMoneyValue);
+    }
+  }, [editLimitAmount, emptyMoneyValue, limitAmount]);
 
   async function handleAdd() {
     setErrorMsg(null);
@@ -155,7 +150,7 @@ export default function CardsPage() {
     }
 
     setName("");
-    setLimitAmount("R$ 0");
+    setLimitAmount(emptyMoneyValue);
     setOwnerType("self");
     setFriendName("");
     setClosingDay("");
@@ -169,7 +164,7 @@ export default function CardsPage() {
     setEditing(card);
     setEditName(card.name);
     setEditLimitAmount(
-      formatCentsInput(String(Math.round((Number(card.limit_amount) || 0) * 100))),
+      formatCentsFromNumber(Number(card.limit_amount) || 0, currency),
     );
     setEditOwnerType(card.owner_type ?? "self");
     setEditFriendName(card.friend_name ?? "");
@@ -334,7 +329,7 @@ export default function CardsPage() {
           ) : null}
           <input
             value={limitAmount}
-            onChange={(event) => setLimitAmount(formatCentsInput(event.target.value))}
+            onChange={(event) => setLimitAmount(formatCentsInput(event.target.value, currency))}
             placeholder={t("cards.limitPlaceholder")}
             inputMode="decimal"
             pattern="[0-9.,]*"
@@ -391,7 +386,7 @@ export default function CardsPage() {
                 <p className="text-sm font-semibold text-[#C7CEDA]">
                   {new Intl.NumberFormat(language === "pt" ? "pt-BR" : "en-US", {
                     style: "currency",
-                    currency: "BRL",
+                    currency,
                   }).format(Number(item.limit_amount) || 0)}
                 </p>
                 <button
@@ -479,7 +474,9 @@ export default function CardsPage() {
               ) : null}
               <input
                 value={editLimitAmount}
-                onChange={(event) => setEditLimitAmount(formatCentsInput(event.target.value))}
+                onChange={(event) =>
+                  setEditLimitAmount(formatCentsInput(event.target.value, currency))
+                }
                 placeholder={t("cards.limitPlaceholder")}
                 inputMode="numeric"
                 pattern="[0-9]*"

@@ -5,6 +5,7 @@ import { PwaRegister } from "@/components/PwaRegister";
 import { DailyReminderWatcher } from "@/components/DailyReminderWatcher";
 import { LanguageProvider } from "@/lib/language";
 import { AuthProvider } from "@/lib/auth";
+import { CurrencyProvider } from "@/lib/currency";
 import { AuthGate } from "@/components/AuthGate";
 import { UpdateChecker } from "@/components/UpdateChecker";
 import { DesktopWindowFrame } from "@/components/DesktopWindowFrame";
@@ -19,14 +20,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="pt-BR" suppressHydrationWarning>
       <body className="min-h-screen bg-[#0D0F14] text-slate-50" suppressHydrationWarning>
         <LanguageProvider>
-          <AuthProvider>
-            <DailyReminderWatcher />
-            <PwaRegister />
-            <UpdateChecker />
-            <DesktopWindowFrame>
-              <AuthGate>{children}</AuthGate>
-            </DesktopWindowFrame>
-          </AuthProvider>
+          <CurrencyProvider>
+            <AuthProvider>
+              <DailyReminderWatcher />
+              <PwaRegister />
+              <UpdateChecker />
+              <DesktopWindowFrame>
+                <AuthGate>{children}</AuthGate>
+              </DesktopWindowFrame>
+            </AuthProvider>
+          </CurrencyProvider>
         </LanguageProvider>
       </body>
     </html>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useCurrency } from "@/lib/currency";
 import { formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
 
 type AccountRow = {
@@ -28,6 +29,8 @@ const CATEGORIES = [
 ];
 
 export function NewTransactionButton({ accounts }: Props) {
+  const { currency } = useCurrency();
+  const emptyMoneyValue = formatCentsInput("", currency);
   const [accountList, setAccountList] = useState<AccountRow[]>(accounts);
   const [loadingAccounts, setLoadingAccounts] = useState(false);
 
@@ -55,7 +58,7 @@ export function NewTransactionButton({ accounts }: Props) {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<"income" | "expense">("expense");
   const [description, setDescription] = useState("");
-  const [value, setValue] = useState("R$ 0");
+  const [value, setValue] = useState(emptyMoneyValue);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [bankAccountId, setBankAccountId] = useState("");
   const [creditCardId, setCreditCardId] = useState("");
@@ -68,10 +71,15 @@ export function NewTransactionButton({ accounts }: Props) {
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (parseCentsInput(value) !== 0) return;
+    setValue(emptyMoneyValue);
+  }, [emptyMoneyValue, value]);
+
   function resetForm() {
     setType("expense");
     setDescription("");
-    setValue("R$ 0");
+    setValue(emptyMoneyValue);
     setDate(new Date().toISOString().slice(0, 10));
     setBankAccountId("");
     setCreditCardId("");
@@ -249,15 +257,15 @@ export function NewTransactionButton({ accounts }: Props) {
 
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="space-y-1">
-                  <label className="text-xs text-zinc-400">Valor (R$)</label>
+                  <label className="text-xs text-zinc-400">Valor ({currency})</label>
                   <input
                     type="text"
                     inputMode="numeric"
                     value={value}
-                    onChange={(e) => setValue(formatCentsInput(e.target.value))}
+                    onChange={(e) => setValue(formatCentsInput(e.target.value, currency))}
                     className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
                     pattern="[0-9]*"
-                    placeholder="R$ 0"
+                    placeholder={emptyMoneyValue}
                   />
                 </div>
 

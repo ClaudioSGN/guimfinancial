@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 
+import { useCurrency } from '@/lib/currency';
 import { useLanguage } from '@/lib/language';
 
 const STORAGE_KEYS = {
@@ -38,6 +39,7 @@ function pad2(value: number) {
 export default function MoreScreen() {
   const router = useRouter();
   const { language, setLanguage, t } = useLanguage();
+  const { currency, setCurrency } = useCurrency();
   const [enabled, setEnabled] = useState(true);
   const [hour, setHour] = useState(9);
   const [minute, setMinute] = useState(0);
@@ -274,6 +276,23 @@ export default function MoreScreen() {
               style={[styles.languageButton, language === 'en' && styles.languageActive]}
               onPress={() => setLanguage('en')}>
               <Text style={styles.languageText}>{t('more.english')}</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('more.currency')}</Text>
+          <Text style={styles.helper}>{t('more.currencyHelper')}</Text>
+          <View style={styles.languageRow}>
+            <Pressable
+              style={[styles.languageButton, currency === 'BRL' && styles.languageActive]}
+              onPress={() => setCurrency('BRL')}>
+              <Text style={styles.languageText}>{t('more.currencyBrl')}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.languageButton, currency === 'EUR' && styles.languageActive]}
+              onPress={() => setCurrency('EUR')}>
+              <Text style={styles.languageText}>{t('more.currencyEur')}</Text>
             </Pressable>
           </View>
         </View>

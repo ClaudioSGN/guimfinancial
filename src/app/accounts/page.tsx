@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { useLanguage } from "@/lib/language";
+import { useCurrency } from "@/lib/currency";
 import { formatCentsFromNumber, formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
 import { useAuth } from "@/lib/auth";
 
@@ -16,17 +17,19 @@ type Account = {
 
 export default function AccountsPage() {
   const { language, t } = useLanguage();
+  const { currency } = useCurrency();
   const { user } = useAuth();
+  const emptyMoneyValue = formatCentsInput("", currency);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [name, setName] = useState("");
   const [type, setType] = useState("");
-  const [balance, setBalance] = useState("R$ 0");
+  const [balance, setBalance] = useState(emptyMoneyValue);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [editing, setEditing] = useState<Account | null>(null);
   const [editName, setEditName] = useState("");
   const [editType, setEditType] = useState("");
-  const [editBalance, setEditBalance] = useState("R$ 0");
+  const [editBalance, setEditBalance] = useState(emptyMoneyValue);
   const [editSaving, setEditSaving] = useState(false);
   const typeOptions = [
     { label: "Conta poupanca", value: "Conta poupanca" },
@@ -48,6 +51,15 @@ export default function AccountsPage() {
   useEffect(() => {
     loadAccounts();
   }, [user]);
+
+  useEffect(() => {
+    if (parseCentsInput(balance) === 0) {
+      setBalance(emptyMoneyValue);
+    }
+    if (parseCentsInput(editBalance) === 0) {
+      setEditBalance(emptyMoneyValue);
+    }
+  }, [balance, editBalance, emptyMoneyValue]);
 
   async function handleAdd() {
     if (!user) return;
@@ -82,7 +94,7 @@ export default function AccountsPage() {
 
     setName("");
     setType("");
-    setBalance("R$ 0");
+    setBalance(emptyMoneyValue);
     setSaving(false);
     loadAccounts();
     window.dispatchEvent(new Event("data-refresh"));
@@ -92,7 +104,7 @@ export default function AccountsPage() {
     setEditing(account);
     setEditName(account.name);
     setEditType(account.type);
-    setEditBalance(formatCentsFromNumber(Number(account.balance) || 0));
+    setEditBalance(formatCentsFromNumber(Number(account.balance) || 0, currency));
     setErrorMsg(null);
   }
 
@@ -185,7 +197,7 @@ export default function AccountsPage() {
           </div>
           <input
             value={balance}
-            onChange={(event) => setBalance(formatCentsInput(event.target.value))}
+            onChange={(event) => setBalance(formatCentsInput(event.target.value, currency))}
             placeholder={t("accounts.balancePlaceholder")}
             inputMode="decimal"
             pattern="[0-9.,]*"
@@ -216,7 +228,7 @@ export default function AccountsPage() {
                 <p className="text-sm font-semibold text-[#C7CEDA]">
                   {new Intl.NumberFormat(language === "pt" ? "pt-BR" : "en-US", {
                     style: "currency",
-                    currency: "BRL",
+                    currency,
                   }).format(Number(item.balance) || 0)}
                 </p>
                 <button
@@ -281,7 +293,7 @@ export default function AccountsPage() {
               </div>
               <input
                 value={editBalance}
-                onChange={(event) => setEditBalance(formatCentsInput(event.target.value))}
+                onChange={(event) => setEditBalance(formatCentsInput(event.target.value, currency))}
                 placeholder={t("accounts.balancePlaceholder")}
                 inputMode="numeric"
                 pattern="[0-9]*"

@@ -1,6 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useCurrency } from "@/lib/currency";
+import { formatCurrencyValue } from "../../shared/currency";
 
 type InstallmentMonthSummary = {
   key: string;
@@ -9,19 +11,13 @@ type InstallmentMonthSummary = {
   total: number;
 };
 
-function formatCurrency(value: number) {
-  return value.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-  });
-}
-
 export function InstallmentsPlannerCard({
   months,
 }: {
   months: InstallmentMonthSummary[];
 }) {
+  const { currency } = useCurrency();
+  const formatCurrency = (value: number) => formatCurrencyValue(value, "pt", currency);
   if (!months || months.length === 0) {
     return (
       <section className="rounded-2xl border border-zinc-900 bg-zinc-950/80 p-4">

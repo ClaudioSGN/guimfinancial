@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useLanguage } from "@/lib/language";
+import { useCurrency } from "@/lib/currency";
 import { useAuth } from "@/lib/auth";
 import { AppIcon } from "@/components/AppIcon";
 import { hasMissingColumnError } from "@/lib/errorUtils";
@@ -58,6 +59,7 @@ function hydrateLegacyCards(cards: LegacyCard[]): Card[] {
 
 export function NewEntryScreen({ entryType }: Props) {
   const { language, t } = useLanguage();
+  const { currency } = useCurrency();
   const { user } = useAuth();
   const router = useRouter();
   const isTransfer = entryType === "transfer";
@@ -65,7 +67,8 @@ export function NewEntryScreen({ entryType }: Props) {
   const needsAccount = entryType === "income" || entryType === "expense";
   const isExpenseEntry = entryType === "expense" || entryType === "card_expense";
 
-  const [amount, setAmount] = useState("R$ 0");
+  const emptyMoneyValue = formatCentsInput("", currency);
+  const [amount, setAmount] = useState(emptyMoneyValue);
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [date, setDate] = useState(toDateString(new Date()));
@@ -82,13 +85,22 @@ export function NewEntryScreen({ entryType }: Props) {
   const [installmentTotal, setInstallmentTotal] = useState("");
   const [createCardOpen, setCreateCardOpen] = useState(false);
   const [newCardName, setNewCardName] = useState("");
-  const [newCardLimitAmount, setNewCardLimitAmount] = useState("R$ 0");
+  const [newCardLimitAmount, setNewCardLimitAmount] = useState(emptyMoneyValue);
   const [newCardOwnerType, setNewCardOwnerType] = useState<CardOwnerType>("self");
   const [newCardFriendName, setNewCardFriendName] = useState("");
   const [newCardClosingDay, setNewCardClosingDay] = useState("");
   const [newCardDueDay, setNewCardDueDay] = useState("");
   const [createCardSaving, setCreateCardSaving] = useState(false);
   const [createCardError, setCreateCardError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (parseCentsInput(amount) === 0) {
+      setAmount(emptyMoneyValue);
+    }
+    if (parseCentsInput(newCardLimitAmount) === 0) {
+      setNewCardLimitAmount(emptyMoneyValue);
+    }
+  }, [amount, emptyMoneyValue, newCardLimitAmount]);
 
   useEffect(() => {
     async function loadRefs() {
@@ -267,7 +279,7 @@ export function NewEntryScreen({ entryType }: Props) {
 
   function resetCreateCardForm() {
     setNewCardName("");
-    setNewCardLimitAmount("R$ 0");
+    setNewCardLimitAmount(emptyMoneyValue);
     setNewCardOwnerType("self");
     setNewCardFriendName("");
     setNewCardClosingDay("");
@@ -415,8 +427,8 @@ export function NewEntryScreen({ entryType }: Props) {
             </label>
             <input
               value={amount}
-              onChange={(event) => setAmount(formatCentsInput(event.target.value))}
-              placeholder="R$ 0"
+              onChange={(event) => setAmount(formatCentsInput(event.target.value, currency))}
+              placeholder={emptyMoneyValue}
               inputMode="numeric"
               pattern="[0-9]*"
               className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
@@ -681,7 +693,7 @@ export function NewEntryScreen({ entryType }: Props) {
               <input
                 value={newCardLimitAmount}
                 onChange={(event) =>
-                  setNewCardLimitAmount(formatCentsInput(event.target.value))
+                  setNewCardLimitAmount(formatCentsInput(event.target.value, currency))
                 }
                 placeholder={t("cards.limitPlaceholder")}
                 inputMode="numeric"

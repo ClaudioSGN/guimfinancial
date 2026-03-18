@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/lib/language";
 import { useAuth } from "@/lib/auth";
+import { useCurrency } from "@/lib/currency";
 import { supabase } from "@/lib/supabaseClient";
 import { getErrorMessage } from "@/lib/errorUtils";
 import { CheckForUpdatesCard } from "@/components/CheckForUpdatesCard";
@@ -27,6 +28,7 @@ type TotpSetupState = {
 
 export function MoreScreen() {
   const { language, setLanguage, t } = useLanguage();
+  const { currency, setCurrency } = useCurrency();
   const { user, signOut } = useAuth();
   const router = useRouter();
   const [enabled, setEnabled] = useState(true);
@@ -657,6 +659,35 @@ export function MoreScreen() {
             }`}
           >
             {t("more.english")}
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <p className="text-sm font-semibold text-[#C7CEDA]">{t("more.currency")}</p>
+        <p className="text-xs text-[#8A93A3]">{t("more.currencyHelper")}</p>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={() => setCurrency("BRL")}
+            className={`flex-1 rounded-xl border px-4 py-2 text-sm font-semibold ${
+              currency === "BRL"
+                ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
+                : "border-[#1C2332] bg-[#0F121A] text-[#DCE3EE]"
+            }`}
+          >
+            {t("more.currencyBrl")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setCurrency("EUR")}
+            className={`flex-1 rounded-xl border px-4 py-2 text-sm font-semibold ${
+              currency === "EUR"
+                ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
+                : "border-[#1C2332] bg-[#0F121A] text-[#DCE3EE]"
+            }`}
+          >
+            {t("more.currencyEur")}
           </button>
         </div>
       </div>

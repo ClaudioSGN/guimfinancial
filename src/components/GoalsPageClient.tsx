@@ -4,7 +4,9 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { motion, AnimatePresence } from "framer-motion";
 import { hasMissingTableError } from "@/lib/errorUtils";
+import { useCurrency } from "@/lib/currency";
 import { formatCentsFromNumber, formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
+import { formatCurrencyValue } from "../../shared/currency";
 
 type GoalRow = {
   id: string;
@@ -20,14 +22,6 @@ type GoalFormState = {
   currentAmount: string;
   deadline: string;
 };
-
-function formatCurrency(value: number) {
-  return value.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-  });
-}
 
 function formatDeadline(dateStr: string | null) {
   if (!dateStr) return "Sem prazo";
@@ -45,6 +39,9 @@ export function GoalsPageClient({
 }: {
   initialGoals: GoalRow[];
 }) {
+  const { currency } = useCurrency();
+  const emptyMoneyValue = formatCentsInput("", currency);
+  const formatCurrency = (value: number) => formatCurrencyValue(value, "pt", currency);
   const [creating, setCreating] = useState(false);
   const [editingGoal, setEditingGoal] = useState<GoalRow | null>(null);
   const [saving, setSaving] = useState(false);
@@ -52,16 +49,16 @@ export function GoalsPageClient({
 
   const [form, setForm] = useState<GoalFormState>({
     name: "",
-    targetAmount: "R$ 0",
-    currentAmount: "R$ 0",
+    targetAmount: emptyMoneyValue,
+    currentAmount: emptyMoneyValue,
     deadline: "",
   });
 
   function openCreate() {
     setForm({
       name: "",
-      targetAmount: "R$ 0",
-      currentAmount: "R$ 0",
+      targetAmount: emptyMoneyValue,
+      currentAmount: emptyMoneyValue,
       deadline: "",
     });
     setErrorMsg(null);
@@ -72,8 +69,8 @@ export function GoalsPageClient({
   function openEdit(goal: GoalRow) {
     setForm({
       name: goal.name,
-      targetAmount: formatCentsFromNumber(goal.target_amount),
-      currentAmount: formatCentsFromNumber(goal.current_amount),
+      targetAmount: formatCentsFromNumber(goal.target_amount, currency),
+      currentAmount: formatCentsFromNumber(goal.current_amount, currency),
       deadline: goal.deadline ? goal.deadline.slice(0, 10) : "",
     });
     setErrorMsg(null);
@@ -322,42 +319,38 @@ export function GoalsPageClient({
               </div>
 
               <div className="space-y-1 text-sm">
-                <label className="text-xs text-zinc-400">
-                  Valor alvo (R$)
-                </label>
+                <label className="text-xs text-zinc-400">Valor alvo ({currency})</label>
                 <input
                   type="text"
                   value={form.targetAmount}
                   onChange={(e) =>
                     setForm((f) => ({
                       ...f,
-                      targetAmount: formatCentsInput(e.target.value),
+                      targetAmount: formatCentsInput(e.target.value, currency),
                     }))
                   }
                   className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
                   inputMode="numeric"
                   pattern="[0-9]*"
-                  placeholder="R$ 0"
+                  placeholder={emptyMoneyValue}
                 />
               </div>
 
               <div className="space-y-1 text-sm">
-                <label className="text-xs text-zinc-400">
-                  Quanto já tens (R$)
-                </label>
+                <label className="text-xs text-zinc-400">Quanto já tens ({currency})</label>
                 <input
                   type="text"
                   value={form.currentAmount}
                   onChange={(e) =>
                     setForm((f) => ({
                       ...f,
-                      currentAmount: formatCentsInput(e.target.value),
+                      currentAmount: formatCentsInput(e.target.value, currency),
                     }))
                   }
                   className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
                   inputMode="numeric"
                   pattern="[0-9]*"
-                  placeholder="R$ 0"
+                  placeholder={emptyMoneyValue}
                 />
               </div>
 

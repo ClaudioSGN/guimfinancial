@@ -9,7 +9,9 @@ import {
   isTransientNetworkError,
 } from "@/lib/errorUtils";
 import { getMonthShortName } from "../../../shared/i18n";
+import { formatCurrencyValue, type AppCurrency } from "../../../shared/currency";
 import { useLanguage } from "@/lib/language";
+import { useCurrency } from "@/lib/currency";
 import { useAuth } from "@/lib/auth";
 import { AppIcon } from "@/components/AppIcon";
 import {
@@ -165,6 +167,10 @@ type DisplayTransaction = Transaction & {
   isBudgetCarryover?: boolean;
 };
 
+function isCardLinkedExpense(tx: Transaction) {
+  return Boolean(tx.card_id) && tx.type !== "income";
+}
+
 function toDateString(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -194,12 +200,12 @@ function getMonthOptions(language: "pt" | "en", total = 12) {
   return options;
 }
 
-function formatCurrency(value: number, language: "pt" | "en") {
-  return new Intl.NumberFormat(language === "pt" ? "pt-BR" : "en-US", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-  }).format(value);
+function formatCurrency(
+  value: number,
+  language: "pt" | "en",
+  currency: AppCurrency,
+) {
+  return formatCurrencyValue(value, language, currency);
 }
 
 const SALARY_CARRYOVER_DAY_LIMIT = 10;
@@ -290,8 +296,12 @@ function formatPercent(value: number, language: "pt" | "en") {
   return `${formatter.format(value)}%`;
 }
 
-function formatSignedCurrency(value: number, language: "pt" | "en") {
-  return `${value >= 0 ? "+" : "-"}${formatCurrency(Math.abs(value), language)}`;
+function formatSignedCurrency(
+  value: number,
+  language: "pt" | "en",
+  currency: AppCurrency,
+) {
+  return `${value >= 0 ? "+" : "-"}${formatCurrency(Math.abs(value), language, currency)}`;
 }
 
 function getSafeDayInMonth(year: number, month: number, day: number) {
@@ -356,7 +366,7 @@ function saveCardReminderDismissals(next: Record<string, true>) {
 }
 
 function getCardExpenseDueState(tx: Transaction, targetDate: Date) {
-  if (tx.type !== "card_expense" || !tx.card_id) return null;
+  if (!isCardLinkedExpense(tx)) return null;
 
   const amount = Number(tx.amount) || 0;
   if (amount <= 0) return null;
@@ -394,7 +404,7 @@ function getCardExpenseDueState(tx: Transaction, targetDate: Date) {
 }
 
 function getSettledCardExpenseAmount(tx: Transaction) {
-  if (tx.type !== "card_expense") return 0;
+  if (!isCardLinkedExpense(tx)) return 0;
 
   const amount = Number(tx.amount) || 0;
   if (amount <= 0) return 0;
@@ -623,6 +633,7 @@ function buildMonthTransactions(
 
 export function HomeScreen() {
   const { language, t } = useLanguage();
+  const { currency } = useCurrency();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -635,6 +646,7 @@ export function HomeScreen() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [cards, setCards] = useState<CreditCard[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [cardTransactions, setCardTransactions] = useState<Transaction[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [investedTotal, setInvestedTotal] = useState(0);
   const [showBalance, setShowBalance] = useState(true);
@@ -848,6 +860,46 @@ export function HomeScreen() {
       };
     }
 
+    async function loadCardTransactionsForDashboard() {
+      const cardTransactionsResult = await supabase
+        .from("transactions")
+        .select("id,type,amount,value,date,account_id,card_id,description,category,is_installment,installment_total,installments_paid,is_paid")
+        .eq("user_id", userId)
+        .not("card_id", "is", null)
+        .order("date", { ascending: false });
+
+      if (!cardTransactionsResult.error) {
+        return {
+          data: normalizeTransactionAmounts((cardTransactionsResult.data ?? []) as RawTransaction[]),
+          error: null as unknown,
+        };
+      }
+
+      if (!hasMissingColumnError(cardTransactionsResult.error, ["value", "amount"])) {
+        return { data: [] as Transaction[], error: cardTransactionsResult.error };
+      }
+
+      const fallbackSelect = hasMissingColumnError(cardTransactionsResult.error, ["value"])
+        ? "id,type,amount,date,account_id,card_id,description,category,is_installment,installment_total,installments_paid,is_paid"
+        : "id,type,value,date,account_id,card_id,description,category,is_installment,installment_total,installments_paid,is_paid";
+
+      const legacyCardTransactionsResult = await supabase
+        .from("transactions")
+        .select(fallbackSelect)
+        .eq("user_id", userId)
+        .not("card_id", "is", null)
+        .order("date", { ascending: false });
+
+      if (legacyCardTransactionsResult.error) {
+        return { data: [] as Transaction[], error: legacyCardTransactionsResult.error };
+      }
+
+      return {
+        data: normalizeTransactionAmounts((legacyCardTransactionsResult.data ?? []) as RawTransaction[]),
+        error: null as unknown,
+      };
+    }
+
     async function loadTransfersForDashboard() {
       const transfersResult = await supabase
         .from("transfers")
@@ -892,6 +944,7 @@ export function HomeScreen() {
       const [
         accountsResult,
         transactionsResult,
+        cardTransactionsResult,
         cardsResult,
         transfersResult,
         investmentsResult,
@@ -899,6 +952,7 @@ export function HomeScreen() {
       ] = await Promise.all([
         loadAccountsForDashboard(),
         loadTransactionsForDashboard(),
+        loadCardTransactionsForDashboard(),
         loadCardsForDashboard(),
         loadTransfersForDashboard(),
         supabase
@@ -915,6 +969,7 @@ export function HomeScreen() {
       if (
         accountsResult.error ||
         transactionsResult.error ||
+        cardTransactionsResult.error ||
         cardsResult.error ||
         transfersResult.error ||
         investmentsResult.error ||
@@ -923,6 +978,7 @@ export function HomeScreen() {
         const error =
           accountsResult.error ||
           transactionsResult.error ||
+          cardTransactionsResult.error ||
           cardsResult.error ||
           transfersResult.error ||
           investmentsResult.error ||
@@ -946,6 +1002,7 @@ export function HomeScreen() {
       }
 
       const transactions = transactionsResult.data;
+      const nextCardTransactions = cardTransactionsResult.data;
       const transfers = transfersResult.data;
       const monthTx = buildMonthTransactions(transactions, selectedMonth);
       const monthTransfers = buildMonthTransfers(transfers, selectedMonth);
@@ -990,6 +1047,7 @@ export function HomeScreen() {
       setAccounts(nextAccounts);
       setCards(nextCards);
       setTransactions(transactions);
+      setCardTransactions(nextCardTransactions);
       setInvestments(nextInvestments);
       setInvestedTotal(nextInvestedTotal);
       setLoading(false);
@@ -1175,14 +1233,14 @@ export function HomeScreen() {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    transactions.forEach((tx) => {
+    cardTransactions.forEach((tx) => {
       const dueState = getCardExpenseDueState(tx, today);
       if (!dueState || !tx.card_id) return;
       pendingByCard[tx.card_id] = (pendingByCard[tx.card_id] ?? 0) + dueState.pendingAmount;
     });
 
     return pendingByCard;
-  }, [transactions]);
+  }, [cardTransactions]);
 
   const ownCards = useMemo(
     () => cards.filter((card) => (card.owner_type ?? "self") !== "friend"),
@@ -1289,8 +1347,8 @@ export function HomeScreen() {
   const cardUsedById = useMemo(() => {
     const usage: Record<string, number> = {};
 
-    transactions.forEach((tx) => {
-      if (tx.type !== "card_expense" || !tx.card_id) return;
+    cardTransactions.forEach((tx) => {
+      if (!isCardLinkedExpense(tx) || !tx.card_id) return;
 
       const amount = Number(tx.amount) || 0;
       if (amount <= 0) return;
@@ -1314,7 +1372,7 @@ export function HomeScreen() {
     });
 
     return usage;
-  }, [transactions]);
+  }, [cardTransactions]);
 
   const cardUsedTotal = useMemo(
     () => Object.values(cardUsedById).reduce((sum, value) => sum + value, 0),
@@ -1433,19 +1491,19 @@ export function HomeScreen() {
         <div className="mt-2 grid gap-1">
           <div className="flex items-center justify-between gap-4">
             <span className="text-[#67D6B2]">{t("home.income")}</span>
-            <span className="font-semibold">{formatCurrency(row.income, language)}</span>
+            <span className="font-semibold">{formatCurrency(row.income, language, currency)}</span>
           </div>
           <div className="flex items-center justify-between gap-4">
             <span className="text-[#F0A3A3]">{t("home.expenses")}</span>
-            <span className="font-semibold">{formatCurrency(row.expense, language)}</span>
+            <span className="font-semibold">{formatCurrency(row.expense, language, currency)}</span>
           </div>
           <div className="flex items-center justify-between gap-4">
             <span className="text-[#EAC37A]">Saldo diario</span>
-            <span className="font-semibold">{formatCurrency(row.netDay, language)}</span>
+            <span className="font-semibold">{formatCurrency(row.netDay, language, currency)}</span>
           </div>
           <div className="flex items-center justify-between gap-4">
             <span className="text-[#9AB0C9]">Saldo acumulado</span>
-            <span className="font-semibold">{formatCurrency(row.net, language)}</span>
+            <span className="font-semibold">{formatCurrency(row.net, language, currency)}</span>
           </div>
         </div>
       </div>
@@ -1461,7 +1519,7 @@ export function HomeScreen() {
     return (
       <div className="rounded-xl border border-[#1C2332] bg-[#0F141E] p-3 text-xs text-[#E4E7EC] shadow-lg">
         <p className="font-semibold text-[#E7ECF2]">{item.name}</p>
-        <p className="mt-1 text-[#9AA3B2]">{formatCurrency(item.value, language)}</p>
+        <p className="mt-1 text-[#9AA3B2]">{formatCurrency(item.value, language, currency)}</p>
         <p className="text-[#9AA3B2]">{formatPercent(item.percent, language)}</p>
       </div>
     );
@@ -1557,10 +1615,10 @@ export function HomeScreen() {
             </button>
           </div>
           <p className="mt-4 text-3xl font-semibold text-[#E7ECF2]">
-            {loading ? "..." : showBalance ? formatCurrency(totalBalance, language) : "****"}
+            {loading ? "..." : showBalance ? formatCurrency(totalBalance, language, currency) : "****"}
           </p>
           <p className="mt-3 text-xs text-[#8D96A6]">
-            {t("home.total")} {loading ? "..." : formatCurrency(totalBalance, language)}
+            {t("home.total")} {loading ? "..." : formatCurrency(totalBalance, language, currency)}
           </p>
           <div className="mt-4 rounded-xl border border-[#1E2636] bg-[#0F141E] p-3">
             <div className="flex items-center justify-between">
@@ -1568,7 +1626,7 @@ export function HomeScreen() {
                 {language === "pt" ? "Patrimonio total" : "Net worth"}
               </p>
               <p className="text-xs font-semibold text-[#E7ECF2]">
-                {loading ? "..." : formatCurrency(netWorth, language)}
+                {loading ? "..." : formatCurrency(netWorth, language, currency)}
               </p>
             </div>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#111827]">
@@ -1579,7 +1637,7 @@ export function HomeScreen() {
             </div>
             <p className="mt-2 text-[11px] text-[#8D96A6]">
               {language === "pt" ? "Investido" : "Invested"}:{" "}
-              {loading ? "..." : formatCurrency(investedTotal, language)}
+              {loading ? "..." : formatCurrency(investedTotal, language, currency)}
             </p>
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2">
@@ -1594,7 +1652,7 @@ export function HomeScreen() {
                 {language === "pt" ? "Em cartoes" : "Card usage"}
               </p>
               <p className="mt-1 text-sm font-semibold text-[#E7ECF2]">
-                {loading ? "..." : formatCurrency(cardUsedTotal, language)}
+                {loading ? "..." : formatCurrency(cardUsedTotal, language, currency)}
               </p>
             </div>
           </div>
@@ -1615,7 +1673,7 @@ export function HomeScreen() {
                   <div>
                     <p className="text-xs text-[#8D96A6]">{t("home.income")}</p>
                     <p className="text-lg font-semibold text-[#E3E9F1]">
-                      {loading ? "..." : formatCurrency(income, language)}
+                      {loading ? "..." : formatCurrency(income, language, currency)}
                     </p>
                   </div>
                 </div>
@@ -1657,7 +1715,7 @@ export function HomeScreen() {
                   <div>
                     <p className="text-xs text-[#8D96A6]">{t("home.expenses")}</p>
                     <p className="text-lg font-semibold text-[#E3E9F1]">
-                      {loading ? "..." : formatCurrency(expenses, language)}
+                      {loading ? "..." : formatCurrency(expenses, language, currency)}
                     </p>
                   </div>
                 </div>
@@ -1692,7 +1750,7 @@ export function HomeScreen() {
           </div>
           <p className="mt-3 text-xs text-[#8D96A6]">
             {t("home.balanceAfterExpenses")}:{" "}
-            {loading ? "..." : formatCurrency(monthNet, language)}
+            {loading ? "..." : formatCurrency(monthNet, language, currency)}
           </p>
           <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
             <div className="rounded-lg border border-[#1E2636] bg-[#0F141E] p-2">
@@ -1704,7 +1762,7 @@ export function HomeScreen() {
                   monthNet >= 0 ? "text-emerald-300" : "text-rose-300"
                 }`}
               >
-                {loading ? "..." : formatSignedCurrency(monthNet, language)}
+                {loading ? "..." : formatSignedCurrency(monthNet, language, currency)}
               </p>
             </div>
             <div className="rounded-lg border border-[#1E2636] bg-[#0F141E] p-2">
@@ -1727,7 +1785,7 @@ export function HomeScreen() {
                 {loading
                   ? "..."
                   : monthProgress.elapsedDays > 0
-                    ? formatCurrency(expenses / monthProgress.elapsedDays, language)
+                    ? formatCurrency(expenses / monthProgress.elapsedDays, language, currency)
                     : "--"}
               </p>
             </div>
@@ -1743,7 +1801,7 @@ export function HomeScreen() {
                 {loading
                   ? "..."
                   : monthProjection
-                    ? formatSignedCurrency(monthProjection.net, language)
+                    ? formatSignedCurrency(monthProjection.net, language, currency)
                     : "--"}
               </p>
             </div>
@@ -1786,7 +1844,7 @@ export function HomeScreen() {
               </p>
               <p className="mt-1 text-[11px] text-[#8B94A6]">
                 {language === "pt" ? "Resumo do mes" : "Month summary"}:{" "}
-                {formatCurrency(totalCategoryAmount, language)}
+                {formatCurrency(totalCategoryAmount, language, currency)}
               </p>
 
               <div className="relative mt-3 grid grid-cols-[1fr_126px] items-center gap-1 overflow-hidden">
@@ -1813,7 +1871,7 @@ export function HomeScreen() {
                         <div className="flex items-center gap-2 text-[11px] text-[#9AA3B2]">
                           <span>{formatPercent(category.percent, language)}</span>
                           <span className="text-[#7F8A9B]">·</span>
-                          <span>{formatCurrency(category.value, language)}</span>
+                          <span>{formatCurrency(category.value, language, currency)}</span>
                         </div>
                       </div>
                     </div>
@@ -1899,7 +1957,7 @@ export function HomeScreen() {
                   stroke="#6E7A8C"
                   tick={{ fill: "#9AA3B2", fontSize: 10 }}
                   axisLine={{ stroke: "#1C2332" }}
-                  tickFormatter={(value) => formatCurrency(value, language)}
+                  tickFormatter={(value) => formatCurrency(value, language, currency)}
                   tickLine={false}
                   width={80}
                 />
@@ -1973,7 +2031,7 @@ export function HomeScreen() {
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-[#E4E7EC]">{account.name}</p>
                     <p className="text-xs text-[#8B94A6]">
-                      {loading ? "..." : formatCurrency(Number(account.balance) || 0, language)}
+                      {loading ? "..." : formatCurrency(Number(account.balance) || 0, language, currency)}
                     </p>
                   </div>
                   <button
@@ -1989,7 +2047,7 @@ export function HomeScreen() {
             </div>
           )}
           <div className="mt-4 border-t border-[#1C2332] pt-3 text-sm font-semibold text-[#C7CEDA]">
-            {t("home.total")} {loading ? "..." : formatCurrency(accountBalanceTotal, language)}
+            {t("home.total")} {loading ? "..." : formatCurrency(accountBalanceTotal, language, currency)}
           </div>
         </div>
 
@@ -2005,7 +2063,7 @@ export function HomeScreen() {
           <div className="rounded-xl border border-[#1C2332] bg-[#0F141E] px-4 py-3">
             <p className="text-xs text-[#8B94A6]">{t("investments.investedValue")}</p>
             <p className="mt-1 text-lg font-semibold text-[#E5E8EF]">
-              {loading ? "..." : formatCurrency(investedTotal, language)}
+              {loading ? "..." : formatCurrency(investedTotal, language, currency)}
             </p>
           </div>
           <div className="mt-4 space-y-3">
@@ -2030,7 +2088,7 @@ export function HomeScreen() {
                     </p>
                   </div>
                   <span className="text-xs font-semibold text-[#A8B2C3]">
-                    {formatCurrency(Number(investment.average_price) || 0, language)}
+                    {formatCurrency(Number(investment.average_price) || 0, language, currency)}
                   </span>
                 </div>
               ))
@@ -2092,17 +2150,18 @@ export function HomeScreen() {
                         : formatCurrency(
                             (Number(card.limit_amount) || 0) - (cardUsedById[card.id] ?? 0),
                             language,
+                            currency,
                           )}
                     </span>
                     <span className="text-[11px] text-[#8B94A6]">
                       {t("home.cardLimitUsed")}{" "}
                       {loading
                         ? "..."
-                        : formatCurrency(cardUsedById[card.id] ?? 0, language)}
+                        : formatCurrency(cardUsedById[card.id] ?? 0, language, currency)}
                     </span>
                     <span className="text-[11px] text-[#8B94A6]">
                       {t("home.cardLimitTotal")}{" "}
-                      {loading ? "..." : formatCurrency(Number(card.limit_amount) || 0, language)}
+                      {loading ? "..." : formatCurrency(Number(card.limit_amount) || 0, language, currency)}
                     </span>
                     <button
                       type="button"
@@ -2179,17 +2238,18 @@ export function HomeScreen() {
                         : formatCurrency(
                             (Number(card.limit_amount) || 0) - (cardUsedById[card.id] ?? 0),
                             language,
+                            currency,
                           )}
                     </span>
                     <span className="text-[11px] text-[#A8D7D1]">
                       {t("home.cardLimitUsed")}{" "}
                       {loading
                         ? "..."
-                        : formatCurrency(cardUsedById[card.id] ?? 0, language)}
+                        : formatCurrency(cardUsedById[card.id] ?? 0, language, currency)}
                     </span>
                     <span className="text-[11px] text-[#A8D7D1]">
                       {t("home.cardLimitTotal")}{" "}
-                      {loading ? "..." : formatCurrency(Number(card.limit_amount) || 0, language)}
+                      {loading ? "..." : formatCurrency(Number(card.limit_amount) || 0, language, currency)}
                     </span>
                     <button
                       type="button"
@@ -2273,7 +2333,7 @@ export function HomeScreen() {
                           isIncome ? "text-[#4FC3A1]" : "text-[#E36B6B]"
                         }`}
                       >
-                        {isIncome ? "+" : "-"} {formatCurrency(tx.displayAmount, language)}
+                        {isIncome ? "+" : "-"} {formatCurrency(tx.displayAmount, language, currency)}
                       </span>
                     </div>
                   );

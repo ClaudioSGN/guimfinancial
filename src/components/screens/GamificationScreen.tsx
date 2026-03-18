@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useLanguage } from "@/lib/language";
+import { useCurrency } from "@/lib/currency";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabaseClient";
 import { getProfileBioLabel } from "@/lib/profileBios";
+import { formatCurrencyValue } from "../../../shared/currency";
 import {
   isGamificationSchemaMissingCached,
   isGamificationSchemaMissingError,
@@ -208,6 +210,7 @@ function getRankingLabel(position: number, language: "pt" | "en") {
 
 export function GamificationScreen() {
   const { language, t } = useLanguage();
+  const { currency } = useCurrency();
   const { user } = useAuth();
   const userId = user?.id ?? null;
 
@@ -344,13 +347,8 @@ export function GamificationScreen() {
   }, [selectedFriendId, userMedals]);
 
   const formatCurrency = useCallback(
-    (value: number) =>
-      new Intl.NumberFormat(language === "pt" ? "pt-BR" : "en-US", {
-        style: "currency",
-        currency: "BRL",
-        minimumFractionDigits: 2,
-      }).format(value),
-    [language],
+    (value: number) => formatCurrencyValue(value, language, currency),
+    [currency, language],
   );
 
   const formatSignedCurrency = useCallback(

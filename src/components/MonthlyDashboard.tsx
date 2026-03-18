@@ -8,6 +8,8 @@ import {
   Pie,
   Tooltip,
 } from "recharts";
+import { useCurrency } from "@/lib/currency";
+import { formatCurrencyValue } from "../../shared/currency";
 
 type CategoryStat = {
   category: string;
@@ -24,20 +26,14 @@ type MonthSummary = {
   categories: CategoryStat[];
 };
 
-function formatCurrency(value: number) {
-  return value.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-  });
-}
-
 // Paleta super neutra
 const RING_TRACK = "#18181b"; // trilha escura
 const RING_GRADIENT_FROM = "#f4f4f5"; // topo do anel
 const RING_GRADIENT_TO = "#d4d4d8"; // base do anel
 
 export function MonthlyDashboard({ months }: { months: MonthSummary[] }) {
+  const { currency } = useCurrency();
+  const formatCurrency = (value: number) => formatCurrencyValue(value, "pt", currency);
   const [selectedKey, setSelectedKey] = useState(
     months[0]?.key ?? null
   );

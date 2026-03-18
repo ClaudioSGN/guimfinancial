@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useCurrency } from "@/lib/currency";
 import { formatCentsFromNumber, formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
+import { formatCurrencyValue } from "../../shared/currency";
 type UiTransaction = {
   id: string;
   description: string;
@@ -24,15 +26,10 @@ type Props = {
   tx: UiTransaction;
 };
 
-function formatCurrency(value: number) {
-  return value.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-  });
-}
-
 export function TransactionRow({ tx }: Props) {
+  const { currency } = useCurrency();
+  const emptyMoneyValue = formatCentsInput("", currency);
+  const formatCurrency = (value: number) => formatCurrencyValue(value, "pt", currency);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const bankName = tx.accountName;
@@ -126,16 +123,21 @@ export function TransactionRow({ tx }: Props) {
   // ---------- EDIÇÃO ----------
   const [editing, setEditing] = useState(false);
   const [editDescription, setEditDescription] = useState(tx.description);
-  const [editValue, setEditValue] = useState(formatCentsFromNumber(tx.value));
+  const [editValue, setEditValue] = useState(formatCentsFromNumber(tx.value, currency));
   const [editDate, setEditDate] = useState(tx.date);
   const [editCategory, setEditCategory] = useState(tx.category ?? "");
   const [editIsPaid, setEditIsPaid] = useState(tx.isPaid);
   const [editError, setEditError] = useState<string | null>(null);
   const [editSaving, setEditSaving] = useState(false);
 
+  useEffect(() => {
+    if (parseCentsInput(editValue) !== 0) return;
+    setEditValue(emptyMoneyValue);
+  }, [editValue, emptyMoneyValue]);
+
   function openEdit() {
     setEditDescription(tx.description);
-    setEditValue(formatCentsFromNumber(tx.value));
+    setEditValue(formatCentsFromNumber(tx.value, currency));
     setEditDate(tx.date);
     setEditCategory(tx.category ?? "");
     setEditIsPaid(tx.isPaid);
@@ -416,11 +418,11 @@ export function TransactionRow({ tx }: Props) {
               {/* valor e data */}
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="space-y-1">
-                  <label className="text-xs text-zinc-400">Valor (R$)</label>
+                  <label className="text-xs text-zinc-400">Valor ({currency})</label>
                   <input
                     type="text"
                     value={editValue}
-                    onChange={(e) => setEditValue(formatCentsInput(e.target.value))}
+                    onChange={(e) => setEditValue(formatCentsInput(e.target.value, currency))}
                     inputMode="numeric"
                     pattern="[0-9]*"
                     className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"

@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/auth";
+import { useCurrency } from "@/lib/currency";
 
 export function NewAccountButton() {
   const { user } = useAuth();
+  const { currency } = useCurrency();
   const [chooserOpen, setChooserOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [accountType, setAccountType] = useState<"bank" | "card">("bank");
@@ -188,7 +190,7 @@ export function NewAccountButton() {
               {accountType === "bank" && (
                 <div className="space-y-1 text-sm">
                   <label className="text-xs text-zinc-400">
-                    Saldo inicial (R$)
+                    Saldo inicial ({currency})
                   </label>
                   <input
                     type="number"

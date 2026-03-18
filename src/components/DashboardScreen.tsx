@@ -17,6 +17,8 @@ import {
   Bar,
   Cell,
 } from "recharts";
+import { useCurrency } from "@/lib/currency";
+import { formatCurrencyValue } from "../../shared/currency";
 import type { AccountStat } from "@/lib/accountTypes";
 type UiTransaction = {
   id: string;
@@ -57,14 +59,6 @@ type Props = {
 
 const CATEGORY_PALETTE = ["#3b82f6", "#22c55e", "#a855f7", "#f97316", "#eab308", "#14b8a6", "#f472b6"];
 
-function formatCurrency(value: number) {
-  return value.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-  });
-}
-
 const TAB_OPTIONS = ["Resumo", "Bancos", "Metas"] as const;
 type TabKey = (typeof TAB_OPTIONS)[number];
 
@@ -74,6 +68,8 @@ export function DashboardScreen({
   accountsForTx,
   goals,
 }: Props) {
+  const { currency } = useCurrency();
+  const formatCurrency = (value: number) => formatCurrencyValue(value, "pt", currency);
   const [active, setActive] = useState<TabKey>("Resumo");
   const [isMobile, setIsMobile] = useState(false);
   const chartsReady = true;
@@ -355,7 +351,12 @@ export function DashboardScreen({
                       tick={{ fill: "#8fa2c5", fontSize: isMobile ? 9 : 10 }}
                       axisLine={false}
                       tickLine={false}
-                      tickFormatter={(v) => `R$ ${v.toFixed(0)}`}
+                      tickFormatter={(v) =>
+                        formatCurrencyValue(Number(v) || 0, "pt", currency, {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 0,
+                        })
+                      }
                       padding={{ left: 4, right: isMobile ? 8 : 12 }}
                     />
                     <YAxis
@@ -383,7 +384,7 @@ export function DashboardScreen({
                         color: "#e2e8f0",
                         fontSize: 12,
                       }}
-                      formatter={(value) => `R$ ${Number(value ?? 0).toFixed(2)}`}
+                      formatter={(value) => formatCurrency(Number(value ?? 0))}
                       labelFormatter={(label) => `${label ?? ""}`}
                     />
                     <Bar

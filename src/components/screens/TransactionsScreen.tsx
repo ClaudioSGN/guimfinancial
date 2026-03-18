@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getMonthShortName } from "../../../shared/i18n";
+import { formatCurrencyValue } from "../../../shared/currency";
 import { useLanguage } from "@/lib/language";
+import { useCurrency } from "@/lib/currency";
+import { formatCentsFromNumber, formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
 import { useAuth } from "@/lib/auth";
 import { AppIcon } from "@/components/AppIcon";
 
@@ -72,12 +75,8 @@ function getMonthOptions(language: "pt" | "en", total = 12) {
   return options;
 }
 
-function formatCurrency(value: number, language: "pt" | "en") {
-  return new Intl.NumberFormat(language === "pt" ? "pt-BR" : "en-US", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-  }).format(value);
+function formatCurrency(value: number, language: "pt" | "en", currency: "BRL" | "EUR") {
+  return formatCurrencyValue(value, language, currency);
 }
 
 const SALARY_CARRYOVER_DAY_LIMIT = 10;
@@ -159,7 +158,9 @@ function formatDate(value: string, language: "pt" | "en") {
 
 export function TransactionsScreen() {
   const { language, t } = useLanguage();
+  const { currency } = useCurrency();
   const { user } = useAuth();
+  const emptyMoneyValue = formatCentsInput("", currency);
   const [loading, setLoading] = useState(true);
   const [baseTransactions, setBaseTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -170,7 +171,7 @@ export function TransactionsScreen() {
   const [installmentSavingId, setInstallmentSavingId] = useState<string | null>(null);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [editDescription, setEditDescription] = useState("");
-  const [editAmount, setEditAmount] = useState("");
+  const [editAmount, setEditAmount] = useState(emptyMoneyValue);
   const [editCategory, setEditCategory] = useState("");
   const [editDate, setEditDate] = useState("");
   const [editSaving, setEditSaving] = useState(false);
@@ -562,7 +563,7 @@ export function TransactionsScreen() {
   function openEdit(tx: Transaction) {
     setEditingTx(tx);
     setEditDescription(tx.description ?? "");
-    setEditAmount(String(Number(tx.amount) || 0));
+    setEditAmount(formatCentsFromNumber(Number(tx.amount) || 0, currency));
     setEditCategory(tx.category ?? "");
     setEditDate(toDateInputValue(tx.date));
     setEditError(null);
@@ -578,7 +579,7 @@ export function TransactionsScreen() {
     if (!editingTx || !user) return;
 
     setEditError(null);
-    const parsedAmount = Number(editAmount);
+    const parsedAmount = parseCentsInput(editAmount);
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       setEditError("Valor invalido.");
       return;
@@ -732,7 +733,7 @@ export function TransactionsScreen() {
           <div>
             <p className="text-xs text-[#8B94A6]">Saldo atual</p>
             <p className="text-sm font-semibold text-[#5DD6C7]">
-              {loading ? "..." : formatCurrency(totalBalance, language)}
+              {loading ? "..." : formatCurrency(totalBalance, language, currency)}
             </p>
           </div>
         </div>
@@ -743,7 +744,7 @@ export function TransactionsScreen() {
           <div>
             <p className="text-xs text-[#8B94A6]">Balanço mensal</p>
             <p className="text-sm font-semibold text-[#5DD6C7]">
-              {loading ? "..." : formatCurrency(monthNet, language)}
+              {loading ? "..." : formatCurrency(monthNet, language, currency)}
             </p>
           </div>
         </div>
@@ -832,7 +833,7 @@ export function TransactionsScreen() {
                       isIncome ? "text-[#5DD6C7]" : "text-[#F59E8B]"
                     }`}
                   >
-                    {isIncome ? "+" : "-"} {formatCurrency(amount, language)}
+                    {isIncome ? "+" : "-"} {formatCurrency(amount, language, currency)}
                   </p>
                   <div className="flex items-center gap-2">
                     {canPayInstallment ? (
@@ -914,13 +915,13 @@ export function TransactionsScreen() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-xs text-[#8B94A6]">Valor (R$)</label>
+                  <label className="text-xs text-[#8B94A6]">Valor ({currency})</label>
                   <input
-                    type="number"
-                    inputMode="decimal"
-                    step="0.01"
+                    type="text"
+                    inputMode="numeric"
                     value={editAmount}
-                    onChange={(event) => setEditAmount(event.target.value)}
+                    onChange={(event) => setEditAmount(formatCentsInput(event.target.value, currency))}
+                    pattern="[0-9]*"
                     className="w-full rounded-xl border border-[#1C2332] bg-[#0F141E] px-3 py-2 text-sm text-[#E4E7EC] outline-none focus:border-[#5DD6C7]"
                   />
                 </div>
