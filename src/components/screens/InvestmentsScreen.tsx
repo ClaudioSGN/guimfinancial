@@ -2651,8 +2651,17 @@ export function InvestmentsScreen() {
       ) : null}
 
       {showModal ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-6">
-          <div className="w-full max-w-lg rounded-3xl border border-[#1E232E] bg-[#0F121A] p-5">
+        <div
+          className="fixed inset-0 z-40 overflow-y-auto bg-black/70 px-4 md:flex md:items-center md:justify-center md:px-6"
+          style={{
+            paddingTop: "max(1rem, env(safe-area-inset-top))",
+            paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
+          }}
+        >
+          <div
+            className="mx-auto w-full max-w-lg overflow-y-auto rounded-3xl border border-[#1E232E] bg-[#0F121A] p-5"
+            style={{ maxHeight: "calc(100dvh - 2rem)" }}
+          >
             {isCreate ? (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
