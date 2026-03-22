@@ -2624,7 +2624,7 @@ export function InvestmentsScreen() {
                 </label>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid min-w-0 gap-3 md:grid-cols-2">
                 {metricConfig.map((metric) => (
                   <div key={`filter-${metric.key}`} className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
                     <p className="text-[11px] text-[#8B94A6]">{metric.label}</p>
@@ -2652,18 +2652,18 @@ export function InvestmentsScreen() {
 
       {showModal ? (
         <div
-          className="fixed inset-0 z-40 overflow-y-auto bg-black/70 px-4 md:flex md:items-center md:justify-center md:px-6"
+          className="fixed inset-0 z-40 overflow-x-hidden overflow-y-auto bg-black/70 px-4 md:flex md:items-center md:justify-center md:px-6"
           style={{
             paddingTop: "max(1rem, env(safe-area-inset-top))",
             paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
           }}
         >
           <div
-            className="mx-auto w-full max-w-lg overflow-y-auto rounded-3xl border border-[#1E232E] bg-[#0F121A] p-5"
+            className="mx-auto w-full max-w-lg overflow-x-hidden overflow-y-auto rounded-3xl border border-[#1E232E] bg-[#0F121A] p-4 sm:p-5"
             style={{ maxHeight: "calc(100dvh - 2rem)" }}
           >
             {isCreate ? (
-              <div className="space-y-4">
+              <div className="min-w-0 space-y-4">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-[#E5E8EF]">
                     {t("investments.addTitle")}
@@ -2677,8 +2677,8 @@ export function InvestmentsScreen() {
                   </button>
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="flex gap-2">
+                <div className="grid min-w-0 gap-3 md:grid-cols-2">
+                  <div className="flex min-w-0 gap-2">
                     <button
                       type="button"
                       onClick={() => {
@@ -2688,7 +2688,7 @@ export function InvestmentsScreen() {
                         setPreviewQuote(null);
                         setCryptoPickerOpen(false);
                       }}
-                      className={`flex-1 rounded-xl border px-3 py-2 text-xs ${
+                      className={`min-w-0 flex-1 rounded-xl border px-3 py-2 text-xs ${
                         type === "b3"
                           ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
                           : "border-[#1C2332] bg-[#0F121A] text-[#DCE3EE]"
@@ -2711,7 +2711,7 @@ export function InvestmentsScreen() {
                         setFeaturedCryptoOptions([]);
                         setCryptoPickerOpen(false);
                       }}
-                      className={`flex-1 rounded-xl border px-3 py-2 text-xs ${
+                      className={`min-w-0 flex-1 rounded-xl border px-3 py-2 text-xs ${
                         type === "crypto"
                           ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
                           : "border-[#1C2332] bg-[#0F121A] text-[#DCE3EE]"
@@ -2734,7 +2734,7 @@ export function InvestmentsScreen() {
                         setFeaturedCryptoOptions([]);
                         setCryptoPickerOpen(false);
                       }}
-                      className={`flex-1 rounded-xl border px-3 py-2 text-xs ${
+                      className={`min-w-0 flex-1 rounded-xl border px-3 py-2 text-xs ${
                         type === "fixed_income"
                           ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
                           : "border-[#1C2332] bg-[#0F121A] text-[#DCE3EE]"
@@ -2751,7 +2751,7 @@ export function InvestmentsScreen() {
                           onClick={() => setCryptoPickerOpen((current) => !current)}
                           className="flex w-full items-center justify-between rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
                         >
-                          <span className="truncate text-left">
+                          <span className="min-w-0 truncate text-left">
                             {selectedCrypto
                               ? `${selectedCrypto.symbol.toUpperCase()} - ${selectedCrypto.name}`
                               : language === "pt"
@@ -2876,7 +2876,7 @@ export function InvestmentsScreen() {
                   <p className="text-[11px] uppercase tracking-[0.18em] text-[#8B94A6]">
                     {t("investments.currency")}
                   </p>
-                  <div className="flex gap-2">
+                  <div className="flex min-w-0 gap-2">
                     {(["BRL", "EUR"] as const).map((option) => {
                       const disabled = !canSelectInvestmentCurrency(type) && option !== "BRL";
                       const active = formCurrency === option;
@@ -2910,11 +2910,11 @@ export function InvestmentsScreen() {
                 </div>
 
                 {type !== "fixed_income" ? (
-                  <div className="flex gap-2">
+                  <div className="flex min-w-0 gap-2">
                     <button
                       type="button"
                       onClick={() => setMode("quantity")}
-                      className={`flex-1 rounded-xl border px-3 py-2 text-xs ${
+                      className={`min-w-0 flex-1 rounded-xl border px-3 py-2 text-xs ${
                         mode === "quantity"
                           ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
                           : "border-[#1C2332] bg-[#0F121A] text-[#DCE3EE]"
@@ -2925,7 +2925,7 @@ export function InvestmentsScreen() {
                     <button
                       type="button"
                       onClick={() => setMode("value")}
-                      className={`flex-1 rounded-xl border px-3 py-2 text-xs ${
+                      className={`min-w-0 flex-1 rounded-xl border px-3 py-2 text-xs ${
                         mode === "value"
                           ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
                           : "border-[#1C2332] bg-[#0F121A] text-[#DCE3EE]"
@@ -2936,7 +2936,7 @@ export function InvestmentsScreen() {
                   </div>
                 ) : null}
 
-                <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid min-w-0 gap-3 md:grid-cols-2">
                   {type === "fixed_income" ? (
                     <>
                       <input
@@ -3020,7 +3020,7 @@ export function InvestmentsScreen() {
                   )}
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid min-w-0 gap-3 md:grid-cols-2">
                   <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
                     <p className="text-[11px] text-[#8B94A6]">
                       {t("investments.total")}
@@ -3145,7 +3145,7 @@ export function InvestmentsScreen() {
                 ) : null}
 
                 {type === "crypto" ? (
-                  <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid min-w-0 gap-3 md:grid-cols-2">
                     <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
                       <p className="text-[11px] text-[#8B94A6]">
                         {language === "pt" ? "Cripto selecionada" : "Selected crypto"}
@@ -3259,7 +3259,7 @@ export function InvestmentsScreen() {
                 </button>
               </div>
             ) : activeAsset ? (
-              <div className="space-y-4">
+              <div className="min-w-0 space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-semibold text-[#E5E8EF]">
@@ -3370,7 +3370,7 @@ export function InvestmentsScreen() {
                     <p className="text-[11px] uppercase tracking-[0.18em] text-[#8B94A6]">
                       {t("investments.currency")}
                     </p>
-                    <div className="flex gap-2">
+                    <div className="flex min-w-0 gap-2">
                       {(["BRL", "EUR"] as const).map((option) => {
                         const disabled =
                           !canSelectInvestmentCurrency(activeAsset.type) && option !== "BRL";
@@ -3430,3 +3430,4 @@ export function InvestmentsScreen() {
     </div>
   );
 }
+
