@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -8,6 +8,11 @@ import {
   hasMissingColumnError,
   isTransientNetworkError,
 } from "@/lib/errorUtils";
+import {
+  formatCentsFromNumber,
+  formatCentsInput,
+  parseCentsInput,
+} from "@/lib/moneyInput";
 import { getMonthShortName } from "../../../shared/i18n";
 import { formatCurrencyValue, type AppCurrency } from "../../../shared/currency";
 import { useLanguage } from "@/lib/language";
@@ -123,6 +128,48 @@ type RawTransfer = Omit<Transfer, "amount"> & {
   amount?: number | string | null;
   value?: number | string | null;
 };
+
+type QuickAddEntryType = "income" | "expense" | "card_expense";
+
+type QuickAddParseResult = {
+  entryType: QuickAddEntryType | "unknown";
+  amount: number | null;
+  description: string | null;
+  category: string | null;
+  date: string | null;
+  accountName: string | null;
+  cardName: string | null;
+  confidence: number;
+  missingFields: string[];
+  source: "ai" | "rules";
+};
+
+type QuickAddFormState = {
+  entryType: QuickAddEntryType;
+  amount: string;
+  description: string;
+  category: string;
+  date: string;
+  accountId: string | null;
+  cardId: string | null;
+};
+
+type SpeechRecognitionResultEvent = Event & {
+  results: ArrayLike<ArrayLike<{ transcript: string }>>;
+};
+
+type BrowserSpeechRecognition = {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onresult: ((event: SpeechRecognitionResultEvent) => void) | null;
+  onerror: ((event: Event & { error?: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type SpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
 
 function isCardOwnershipColumnMissing(error: unknown) {
   return hasMissingColumnError(error, ["owner_type", "friend_name"]);
@@ -244,6 +291,41 @@ function parseLocalDate(value: string) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed;
+}
+
+function getSpeechRecognitionConstructor() {
+  if (typeof window === "undefined") return null;
+  const candidate = window as Window & {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  };
+  return candidate.SpeechRecognition ?? candidate.webkitSpeechRecognition ?? null;
+}
+
+function findEntityByName<T extends { id: string; name: string }>(
+  items: T[],
+  name: string | null | undefined,
+) {
+  const target = normalizeSearchText(name);
+  if (!target) return null;
+  return (
+    items.find((item) => normalizeSearchText(item.name) === target) ??
+    items.find((item) => target.includes(normalizeSearchText(item.name))) ??
+    items.find((item) => normalizeSearchText(item.name).includes(target)) ??
+    null
+  );
+}
+
+function buildEmptyQuickAddForm(currency: AppCurrency) {
+  return {
+    entryType: "expense" as QuickAddEntryType,
+    amount: formatCentsInput("", currency),
+    description: "",
+    category: "",
+    date: toDateString(new Date()),
+    accountId: null,
+    cardId: null,
+  };
 }
 
 function isSameMonth(date: Date, month: Date) {
@@ -392,6 +474,50 @@ function getCardExpenseDueState(tx: Transaction, targetDate: Date) {
   if (!isDueNow || tx.is_paid) return null;
 
   return { pendingAmount: amount };
+}
+
+function getCardExpenseSettlementUpdate(tx: Transaction, targetDate: Date) {
+  if (!isCardLinkedExpense(tx)) return null;
+
+  const amount = Number(tx.amount) || 0;
+  if (amount <= 0) return null;
+
+  const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
+  if (totalInstallments > 0) {
+    const paidInstallments = Math.min(
+      Math.max(Number(tx.installments_paid) || 0, 0),
+      totalInstallments,
+    );
+    const monthOffset = getInstallmentMonthOffset(tx.date, targetDate);
+    const dueInstallments =
+      monthOffset == null
+        ? 0
+        : Math.min(Math.max(monthOffset + 1, 0), totalInstallments);
+    if (dueInstallments <= paidInstallments) return null;
+
+    const perInstallment = amount / totalInstallments;
+    return {
+      update: {
+        installments_paid: dueInstallments,
+        is_paid: dueInstallments >= totalInstallments,
+      },
+      balanceDelta: perInstallment * (dueInstallments - paidInstallments),
+    };
+  }
+
+  const txDate = parseLocalDate(tx.date);
+  const normalizedTxDate = txDate
+    ? new Date(txDate.getFullYear(), txDate.getMonth(), txDate.getDate())
+    : null;
+  const isDueNow = normalizedTxDate ? normalizedTxDate.getTime() <= targetDate.getTime() : true;
+  if (!isDueNow || tx.is_paid) return null;
+
+  return {
+    update: {
+      is_paid: true,
+    },
+    balanceDelta: amount,
+  };
 }
 
 function getSettledCardExpenseAmount(tx: Transaction) {
@@ -648,9 +774,40 @@ export function HomeScreen() {
   const [dismissedCardReminderKeys, setDismissedCardReminderKeys] = useState<Record<string, true>>({});
   const [profile, setProfile] = useState<ProfileSettings>({});
   const [activeCategoryIndex, setActiveCategoryIndex] = useState<number | null>(null);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [quickAddInput, setQuickAddInput] = useState("");
+  const [quickAddParsing, setQuickAddParsing] = useState(false);
+  const [quickAddSaving, setQuickAddSaving] = useState(false);
+  const [quickAddError, setQuickAddError] = useState<string | null>(null);
+  const [quickAddInfo, setQuickAddInfo] = useState<string | null>(null);
+  const [quickAddListening, setQuickAddListening] = useState(false);
+  const [quickAddSpeechSupported, setQuickAddSpeechSupported] = useState(false);
+  const [quickAddResult, setQuickAddResult] = useState<QuickAddParseResult | null>(null);
+  const [quickAddForm, setQuickAddForm] = useState<QuickAddFormState>(() =>
+    buildEmptyQuickAddForm(currency),
+  );
+  const quickAddRecognitionRef = useRef<BrowserSpeechRecognition | null>(null);
 
   useEffect(() => {
     setProfile(loadProfileSettings());
+  }, []);
+
+  useEffect(() => {
+    setQuickAddForm((current) => ({
+      ...current,
+      amount:
+        parseCentsInput(current.amount) > 0
+          ? formatCentsFromNumber(parseCentsInput(current.amount), currency)
+          : formatCentsInput("", currency),
+    }));
+  }, [currency]);
+
+  useEffect(() => {
+    setQuickAddSpeechSupported(Boolean(getSpeechRecognitionConstructor()));
+    return () => {
+      quickAddRecognitionRef.current?.stop();
+      quickAddRecognitionRef.current = null;
+    };
   }, []);
 
   useEffect(() => {
@@ -1314,6 +1471,261 @@ export function HomeScreen() {
   const avatarSrc = (profile.avatarUrl ?? "").trim() || metadataAvatar;
   const initials = useMemo(() => getInitials(displayName), [displayName]);
 
+  function resetQuickAddState() {
+    quickAddRecognitionRef.current?.stop();
+    quickAddRecognitionRef.current = null;
+    setQuickAddListening(false);
+    setQuickAddInput("");
+    setQuickAddParsing(false);
+    setQuickAddSaving(false);
+    setQuickAddError(null);
+    setQuickAddInfo(null);
+    setQuickAddResult(null);
+    setQuickAddForm(buildEmptyQuickAddForm(currency));
+  }
+
+  function openQuickAddModal() {
+    resetQuickAddState();
+    setQuickAddOpen(true);
+  }
+
+  function closeQuickAddModal() {
+    if (quickAddSaving) return;
+    resetQuickAddState();
+    setQuickAddOpen(false);
+  }
+
+  async function updateAccountBalance(accountId: string, delta: number) {
+    if (!user) return;
+    const account = accounts.find((item) => item.id === accountId);
+    if (!account) return;
+    const nextBalance = (Number(account.balance) || 0) + delta;
+    await supabase
+      .from("accounts")
+      .update({ balance: nextBalance })
+      .eq("id", accountId)
+      .eq("user_id", user.id);
+  }
+
+  function applyQuickAddResult(result: QuickAddParseResult) {
+    const matchedAccount = findEntityByName(accounts, result.accountName);
+    const matchedCard = findEntityByName(cards, result.cardName);
+    const nextType =
+      result.entryType === "unknown" ? "expense" : result.entryType;
+
+    setQuickAddResult(result);
+    setQuickAddForm({
+      entryType: nextType,
+      amount:
+        result.amount && result.amount > 0
+          ? formatCentsFromNumber(result.amount, currency)
+          : formatCentsInput("", currency),
+      description: result.description ?? "",
+      category: result.category ?? "",
+      date: result.date ?? toDateString(new Date()),
+      accountId: matchedAccount?.id ?? null,
+      cardId: matchedCard?.id ?? null,
+    });
+  }
+
+  async function handleParseQuickAdd(textOverride?: string) {
+    const rawText = (textOverride ?? quickAddInput).trim();
+    if (!rawText) {
+      setQuickAddError(
+        language === "pt"
+          ? "Digite ou fale o lancamento que voce quer adicionar."
+          : "Type or speak the entry you want to add.",
+      );
+      return;
+    }
+
+    setQuickAddParsing(true);
+    setQuickAddError(null);
+    setQuickAddInfo(null);
+
+    try {
+      const response = await fetch("/api/quick-add-parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: rawText,
+          language,
+          today: toDateString(new Date()),
+          accounts: accounts.map((account) => account.name),
+          cards: cards.map((card) => card.name),
+        }),
+      });
+
+      const payload = (await response.json()) as { result?: QuickAddParseResult; error?: string };
+      if (!response.ok || !payload.result) {
+        throw new Error(payload.error || "parse_failed");
+      }
+
+      applyQuickAddResult(payload.result);
+      setQuickAddInfo(
+        payload.result.source === "ai"
+          ? language === "pt"
+            ? "Interpretado com IA. Confira antes de salvar."
+            : "Interpreted with AI. Please review before saving."
+          : language === "pt"
+            ? "Interpretacao rapida pronta. Confira antes de salvar."
+            : "Quick interpretation ready. Please review before saving.",
+      );
+    } catch (error) {
+      console.error("Quick add parse error:", error);
+      setQuickAddError(
+        language === "pt"
+          ? "Nao consegui interpretar esse lancamento agora."
+          : "I couldn't interpret that entry right now.",
+      );
+    } finally {
+      setQuickAddParsing(false);
+    }
+  }
+
+  function handleStartQuickAddListening() {
+    const Recognition = getSpeechRecognitionConstructor();
+    if (!Recognition) {
+      setQuickAddError(
+        language === "pt"
+          ? "O navegador nao suporta entrada por voz aqui."
+          : "This browser does not support voice input here.",
+      );
+      return;
+    }
+
+    quickAddRecognitionRef.current?.stop();
+
+    const recognition = new Recognition();
+    quickAddRecognitionRef.current = recognition;
+    recognition.lang = language === "pt" ? "pt-BR" : "en-US";
+    recognition.interimResults = false;
+    recognition.continuous = false;
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map((result) => result[0]?.transcript ?? "")
+        .join(" ")
+        .trim();
+
+      setQuickAddListening(false);
+      quickAddRecognitionRef.current = null;
+      if (!transcript) return;
+      setQuickAddInput(transcript);
+      void handleParseQuickAdd(transcript);
+    };
+    recognition.onerror = (event) => {
+      setQuickAddListening(false);
+      quickAddRecognitionRef.current = null;
+      const errorCode = event.error ?? "unknown";
+      let message: string;
+
+      if (errorCode === "not-allowed" || errorCode === "service-not-allowed") {
+        message =
+          language === "pt"
+            ? "Permita o uso do microfone no navegador para falar com o app."
+            : "Allow microphone access in your browser to speak to the app.";
+      } else if (errorCode === "network") {
+        message =
+          language === "pt"
+            ? "A voz falhou por rede ou indisponibilidade do servico. Voce pode digitar normalmente."
+            : "Voice failed due to a network or service issue. You can type normally instead.";
+      } else if (errorCode === "no-speech" || errorCode === "audio-capture") {
+        message =
+          language === "pt"
+            ? "Nao ouvi sua fala. Tente novamente ou digite o lancamento."
+            : "I couldn't hear your speech. Try again or type the entry.";
+      } else if (errorCode === "aborted") {
+        message =
+          language === "pt"
+            ? "A captura de voz foi cancelada."
+            : "Voice capture was cancelled.";
+      } else {
+        message =
+          language === "pt"
+            ? "Nao foi possivel capturar sua voz agora. Voce pode digitar o lancamento."
+            : "I couldn't capture your voice right now. You can type the entry instead.";
+      }
+
+      setQuickAddInfo(null);
+      setQuickAddError(message);
+    };
+    recognition.onend = () => {
+      setQuickAddListening(false);
+      quickAddRecognitionRef.current = null;
+    };
+
+    setQuickAddError(null);
+    setQuickAddInfo(
+      language === "pt" ? "Ouvindo voce..." : "Listening...",
+    );
+    setQuickAddListening(true);
+    recognition.start();
+  }
+
+  async function handleSaveQuickAdd() {
+    if (!user) return;
+
+    const parsedAmount = parseCentsInput(quickAddForm.amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setQuickAddError(t("newEntry.amountError"));
+      return;
+    }
+
+    if (
+      (quickAddForm.entryType === "income" || quickAddForm.entryType === "expense") &&
+      !quickAddForm.accountId
+    ) {
+      setQuickAddError(t("newEntry.selectAccountError"));
+      return;
+    }
+
+    if (quickAddForm.entryType === "card_expense" && !quickAddForm.cardId) {
+      setQuickAddError(t("newEntry.selectCardError"));
+      return;
+    }
+
+    setQuickAddSaving(true);
+    setQuickAddError(null);
+
+    const { error } = await supabase.from("transactions").insert([
+      {
+        user_id: user.id,
+        type: quickAddForm.entryType,
+        account_id:
+          quickAddForm.entryType === "income" || quickAddForm.entryType === "expense"
+            ? quickAddForm.accountId
+            : null,
+        card_id: quickAddForm.entryType === "card_expense" ? quickAddForm.cardId : null,
+        amount: parsedAmount,
+        description: quickAddForm.description.trim() || null,
+        category: quickAddForm.category.trim() || null,
+        date: quickAddForm.date,
+        is_fixed: quickAddForm.entryType !== "income" ? false : null,
+        is_installment: null,
+        installment_total: null,
+        installments_paid: null,
+        is_paid: null,
+      },
+    ]);
+
+    if (error) {
+      console.error("Quick add save error:", error);
+      setQuickAddSaving(false);
+      setQuickAddError(t("newEntry.saveError"));
+      return;
+    }
+
+    if (quickAddForm.entryType === "income" || quickAddForm.entryType === "expense") {
+      const delta = quickAddForm.entryType === "income" ? parsedAmount : -parsedAmount;
+      await updateAccountBalance(quickAddForm.accountId!, delta);
+    }
+
+    setQuickAddSaving(false);
+    closeQuickAddModal();
+    await loadData();
+    window.dispatchEvent(new Event("data-refresh"));
+  }
+
   async function handleRemoveAccount(accountId: string, accountName: string) {
     if (!user) return;
     if (deletingAccountId) return;
@@ -1385,14 +1797,46 @@ export function HomeScreen() {
     setPayingReminderCardId(card.id);
 
     try {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const dueTransactions = cardTransactions
+        .filter((tx) => tx.card_id === card.id)
+        .map((tx) => ({ tx, settlement: getCardExpenseSettlementUpdate(tx, today) }))
+        .filter(
+          (
+            item,
+          ): item is {
+            tx: Transaction;
+            settlement: NonNullable<ReturnType<typeof getCardExpenseSettlementUpdate>>;
+          } => Boolean(item.settlement),
+        );
+
+      for (const item of dueTransactions) {
+        const { error } = await supabase
+          .from("transactions")
+          .update(item.settlement.update)
+          .eq("id", item.tx.id)
+          .eq("user_id", user.id);
+
+        if (error) {
+          throw error;
+        }
+
+        if (item.tx.account_id && Number.isFinite(item.settlement.balanceDelta)) {
+          await updateAccountBalance(item.tx.account_id, -item.settlement.balanceDelta);
+        }
+      }
+
       const nextDismissals = {
         ...dismissedCardReminderKeys,
         [card.dismissKey]: true as const,
       };
       saveCardReminderDismissals(nextDismissals);
       setDismissedCardReminderKeys(nextDismissals);
+      await loadData();
+      window.dispatchEvent(new Event("data-refresh"));
     } catch (error) {
-      console.error("Error dismissing card reminder:", error);
+      console.error("Error marking card reminder paid:", error);
       setErrorMsg(t("home.cardReminderMarkPaidError"));
     } finally {
       setPayingReminderCardId(null);
@@ -1492,27 +1936,410 @@ export function HomeScreen() {
             ) : null}
           </div>
         </div>
-        <Link href="/profile" className="group flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[#1A2230] bg-[#101620] text-xs font-semibold text-[#E2E6ED] transition group-hover:border-[#2B364B]">
-            {avatarSrc ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={avatarSrc}
-                alt="Profile avatar"
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              initials
-            )}
-          </div>
-          <div className="hidden sm:flex flex-col text-right">
-            <span className="text-xs font-semibold text-[#E2E6ED]">{displayName}</span>
-            <span className="text-[10px] text-[#8B94A6]">{profileSecondaryLabel}</span>
-          </div>
-        </Link>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={openQuickAddModal}
+            className="inline-flex items-center gap-2 rounded-full border border-[#245A55] bg-[#123430] px-3 py-2 text-xs font-semibold text-[#7AF0D0] transition hover:border-[#2D7A72] hover:bg-[#15413B]"
+          >
+            <span className="flex h-6 w-6 items-center justify-center rounded-full border border-[#2A8A7D] bg-[#0F141E]">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 4a3 3 0 013 3v5a3 3 0 01-6 0V7a3 3 0 013-3z" />
+                <path d="M19 11a7 7 0 01-14 0" />
+                <path d="M12 18v3" />
+                <path d="M8 21h8" />
+              </svg>
+            </span>
+            <span>{language === "pt" ? "Entrada rapida" : "Quick add"}</span>
+          </button>
+          <Link href="/profile" className="group flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[#1A2230] bg-[#101620] text-xs font-semibold text-[#E2E6ED] transition group-hover:border-[#2B364B]">
+              {avatarSrc ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={avatarSrc}
+                  alt="Profile avatar"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                initials
+              )}
+            </div>
+            <div className="hidden sm:flex flex-col text-right">
+              <span className="text-xs font-semibold text-[#E2E6ED]">{displayName}</span>
+              <span className="text-[10px] text-[#8B94A6]">{profileSecondaryLabel}</span>
+            </div>
+          </Link>
+        </div>
       </div>
 
       {errorMsg ? <p className="text-xs text-red-400">{errorMsg}</p> : null}
+
+      {quickAddOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#060A11]/80 px-3 pb-3 pt-16 backdrop-blur-sm sm:items-center sm:p-6">
+          <div className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-[#1E2A3C] bg-[#0E1420] shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+            <div className="sticky top-0 z-10 border-b border-[#1B2330] bg-[#0E1420]/95 px-5 py-4 backdrop-blur">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-base font-semibold text-[#E7ECF2]">
+                    {language === "pt" ? "Entrada rapida com voz" : "Voice quick add"}
+                  </p>
+                  <p className="mt-1 text-xs text-[#8B94A6]">
+                    {language === "pt"
+                      ? "Fale ou digite um lancamento, revise e salve."
+                      : "Speak or type an entry, review it, and save."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeQuickAddModal}
+                  className="rounded-full border border-[#263043] bg-[#111826] px-3 py-1 text-xs text-[#A8B2C3] transition hover:border-[#344159] hover:text-[#E7ECF2]"
+                >
+                  {t("common.cancel")}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4 px-5 py-5">
+              <div className="rounded-2xl border border-[#1B2433] bg-[#111826] p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7EEAD5]">
+                  {language === "pt" ? "Comando" : "Command"}
+                </p>
+                <p className="mt-1 text-xs text-[#8B94A6]">
+                  {language === "pt"
+                    ? 'Ex.: "adicione uma despesa no cartao nubank de 56 reais do uber ontem"'
+                    : 'Ex.: "add a 56 card expense on Nubank for Uber yesterday"'}
+                </p>
+                <textarea
+                  value={quickAddInput}
+                  onChange={(event) => setQuickAddInput(event.target.value)}
+                  rows={3}
+                  className="mt-3 w-full rounded-2xl border border-[#202A39] bg-[#0B111B] px-4 py-3 text-sm text-[#E7ECF2] outline-none transition placeholder:text-[#627086] focus:border-[#2B8C80]"
+                  placeholder={
+                    language === "pt"
+                      ? "Descreva o lancamento em linguagem natural"
+                      : "Describe the entry in natural language"
+                  }
+                />
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleParseQuickAdd()}
+                    disabled={quickAddParsing || quickAddSaving}
+                    className="rounded-full border border-[#2A8A7D] bg-[#143A34] px-4 py-2 text-xs font-semibold text-[#7AF0D0] transition hover:border-[#35B7A6] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {quickAddParsing
+                      ? language === "pt"
+                        ? "Interpretando..."
+                        : "Interpreting..."
+                      : language === "pt"
+                        ? "Interpretar"
+                        : "Interpret"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleStartQuickAddListening}
+                    disabled={!quickAddSpeechSupported || quickAddListening || quickAddSaving}
+                    className="rounded-full border border-[#2B364B] bg-[#111826] px-4 py-2 text-xs font-semibold text-[#C7D0DD] transition hover:border-[#4A5D79] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {quickAddListening
+                      ? language === "pt"
+                        ? "Ouvindo..."
+                        : "Listening..."
+                      : language === "pt"
+                        ? "Usar voz"
+                        : "Use voice"}
+                  </button>
+                  {!quickAddSpeechSupported ? (
+                    <span className="text-[11px] text-[#8B94A6]">
+                      {language === "pt"
+                        ? "Seu navegador nao liberou voz aqui, mas o texto continua funcionando."
+                        : "Your browser does not support voice here, but text still works."}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+
+              {quickAddError ? (
+                <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                  {quickAddError}
+                </div>
+              ) : null}
+
+              {quickAddInfo ? (
+                <div className="rounded-2xl border border-[#2A8A7D]/35 bg-[#123430]/55 px-4 py-3 text-sm text-[#A9F5E5]">
+                  {quickAddInfo}
+                </div>
+              ) : null}
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="rounded-2xl border border-[#1B2433] bg-[#111826] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-[#E7ECF2]">
+                      {language === "pt" ? "Confirmacao" : "Confirmation"}
+                    </p>
+                    {quickAddResult ? (
+                      <span className="rounded-full border border-[#2B364B] bg-[#0E1420] px-3 py-1 text-[11px] text-[#98A7BC]">
+                        {language === "pt" ? "Confianca" : "Confidence"}{" "}
+                        {Math.round(quickAddResult.confidence * 100)}%
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] uppercase tracking-[0.14em] text-[#8B94A6]">
+                        {language === "pt" ? "Tipo" : "Type"}
+                      </span>
+                      <select
+                        value={quickAddForm.entryType}
+                        onChange={(event) =>
+                          setQuickAddForm((current) => ({
+                            ...current,
+                            entryType: event.target.value as QuickAddEntryType,
+                            accountId:
+                              event.target.value === "card_expense" ? null : current.accountId,
+                            cardId:
+                              event.target.value === "card_expense" ? current.cardId : null,
+                          }))
+                        }
+                        className="w-full rounded-xl border border-[#202A39] bg-[#0B111B] px-4 py-3 text-sm text-[#E7ECF2] outline-none focus:border-[#2B8C80]"
+                      >
+                        <option value="expense">{language === "pt" ? "Despesa" : "Expense"}</option>
+                        <option value="card_expense">
+                          {language === "pt" ? "Despesa no cartao" : "Card expense"}
+                        </option>
+                        <option value="income">{language === "pt" ? "Receita" : "Income"}</option>
+                      </select>
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] uppercase tracking-[0.14em] text-[#8B94A6]">
+                        {language === "pt" ? "Valor" : "Amount"}
+                      </span>
+                      <input
+                        value={quickAddForm.amount}
+                        onChange={(event) =>
+                          setQuickAddForm((current) => ({
+                            ...current,
+                            amount: formatCentsInput(event.target.value, currency),
+                          }))
+                        }
+                        inputMode="decimal"
+                        className="w-full rounded-xl border border-[#202A39] bg-[#0B111B] px-4 py-3 text-sm text-[#E7ECF2] outline-none placeholder:text-[#627086] focus:border-[#2B8C80]"
+                        placeholder={language === "pt" ? "R$ 0,00" : "0.00"}
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] uppercase tracking-[0.14em] text-[#8B94A6]">
+                        {language === "pt" ? "Descricao" : "Description"}
+                      </span>
+                      <input
+                        value={quickAddForm.description}
+                        onChange={(event) =>
+                          setQuickAddForm((current) => ({
+                            ...current,
+                            description: event.target.value,
+                          }))
+                        }
+                        className="w-full rounded-xl border border-[#202A39] bg-[#0B111B] px-4 py-3 text-sm text-[#E7ECF2] outline-none placeholder:text-[#627086] focus:border-[#2B8C80]"
+                        placeholder={language === "pt" ? "Ex.: Uber" : "Ex.: Uber"}
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] uppercase tracking-[0.14em] text-[#8B94A6]">
+                        {language === "pt" ? "Categoria" : "Category"}
+                      </span>
+                      <input
+                        value={quickAddForm.category}
+                        onChange={(event) =>
+                          setQuickAddForm((current) => ({
+                            ...current,
+                            category: event.target.value,
+                          }))
+                        }
+                        className="w-full rounded-xl border border-[#202A39] bg-[#0B111B] px-4 py-3 text-sm text-[#E7ECF2] outline-none placeholder:text-[#627086] focus:border-[#2B8C80]"
+                        placeholder={language === "pt" ? "Opcional" : "Optional"}
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] uppercase tracking-[0.14em] text-[#8B94A6]">
+                        {language === "pt" ? "Data" : "Date"}
+                      </span>
+                      <input
+                        type="date"
+                        value={quickAddForm.date}
+                        onChange={(event) =>
+                          setQuickAddForm((current) => ({
+                            ...current,
+                            date: event.target.value,
+                          }))
+                        }
+                        className="w-full rounded-xl border border-[#202A39] bg-[#0B111B] px-4 py-3 text-sm text-[#E7ECF2] outline-none focus:border-[#2B8C80]"
+                      />
+                    </label>
+
+                    {quickAddForm.entryType === "card_expense" ? (
+                      <label className="block">
+                        <span className="mb-1 block text-[11px] uppercase tracking-[0.14em] text-[#8B94A6]">
+                          {language === "pt" ? "Cartao" : "Card"}
+                        </span>
+                        <select
+                          value={quickAddForm.cardId ?? ""}
+                          onChange={(event) =>
+                            setQuickAddForm((current) => ({
+                              ...current,
+                              cardId: event.target.value || null,
+                            }))
+                          }
+                          className="w-full rounded-xl border border-[#202A39] bg-[#0B111B] px-4 py-3 text-sm text-[#E7ECF2] outline-none focus:border-[#2B8C80]"
+                        >
+                          <option value="">{language === "pt" ? "Selecione um cartao" : "Select a card"}</option>
+                          {cards.map((card) => (
+                            <option key={card.id} value={card.id}>
+                              {card.name}
+                              {card.owner_type === "friend" && card.friend_name
+                                ? ` (${card.friend_name})`
+                                : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : (
+                      <label className="block">
+                        <span className="mb-1 block text-[11px] uppercase tracking-[0.14em] text-[#8B94A6]">
+                          {language === "pt" ? "Conta" : "Account"}
+                        </span>
+                        <select
+                          value={quickAddForm.accountId ?? ""}
+                          onChange={(event) =>
+                            setQuickAddForm((current) => ({
+                              ...current,
+                              accountId: event.target.value || null,
+                            }))
+                          }
+                          className="w-full rounded-xl border border-[#202A39] bg-[#0B111B] px-4 py-3 text-sm text-[#E7ECF2] outline-none focus:border-[#2B8C80]"
+                        >
+                          <option value="">{language === "pt" ? "Selecione uma conta" : "Select an account"}</option>
+                          {accounts.map((account) => (
+                            <option key={account.id} value={account.id}>
+                              {account.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-[#1B2433] bg-[#111826] p-4">
+                  <p className="text-sm font-semibold text-[#E7ECF2]">
+                    {language === "pt" ? "Leitura do comando" : "Command reading"}
+                  </p>
+                  {quickAddResult ? (
+                    <div className="mt-4 space-y-3">
+                      <div className="rounded-xl border border-[#223047] bg-[#0B111B] p-3">
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-[#8B94A6]">
+                          {language === "pt" ? "Entrada detectada" : "Detected entry"}
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-[#E7ECF2]">
+                          {quickAddResult.entryType === "income"
+                            ? language === "pt"
+                              ? "Receita"
+                              : "Income"
+                            : quickAddResult.entryType === "card_expense"
+                              ? language === "pt"
+                                ? "Despesa no cartao"
+                                : "Card expense"
+                              : language === "pt"
+                                ? "Despesa"
+                                : "Expense"}
+                        </p>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-xl border border-[#223047] bg-[#0B111B] p-3">
+                          <p className="text-[11px] text-[#8B94A6]">{language === "pt" ? "Conta" : "Account"}</p>
+                          <p className="mt-1 text-sm text-[#E7ECF2]">
+                            {quickAddResult.accountName || "--"}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-[#223047] bg-[#0B111B] p-3">
+                          <p className="text-[11px] text-[#8B94A6]">{language === "pt" ? "Cartao" : "Card"}</p>
+                          <p className="mt-1 text-sm text-[#E7ECF2]">
+                            {quickAddResult.cardName || "--"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-[#223047] bg-[#0B111B] p-3">
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-[#8B94A6]">
+                          {language === "pt" ? "Campos para revisar" : "Fields to review"}
+                        </p>
+                        {quickAddResult.missingFields.length === 0 ? (
+                          <p className="mt-2 text-sm text-[#A9F5E5]">
+                            {language === "pt"
+                              ? "Tudo essencial foi entendido. Revise e salve."
+                              : "Everything essential was understood. Review and save."}
+                          </p>
+                        ) : (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {quickAddResult.missingFields.map((field) => (
+                              <span
+                                key={field}
+                                className="rounded-full border border-amber-500/35 bg-amber-500/10 px-3 py-1 text-[11px] text-amber-200"
+                              >
+                                {field}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-4 rounded-2xl border border-dashed border-[#283446] bg-[#0B111B] px-4 py-6 text-sm text-[#8B94A6]">
+                      {language === "pt"
+                        ? "Depois de interpretar o comando, os campos aparecem prontos para voce confirmar."
+                        : "After interpreting the command, the fields will be prepared here for confirmation."}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[#1B2330] pt-1">
+                <button
+                  type="button"
+                  onClick={closeQuickAddModal}
+                  className="rounded-full border border-[#263043] bg-[#111826] px-4 py-2 text-sm text-[#A8B2C3] transition hover:border-[#344159] hover:text-[#E7ECF2]"
+                >
+                  {t("common.cancel")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleSaveQuickAdd()}
+                  disabled={quickAddSaving || quickAddParsing}
+                  className="rounded-full border border-[#2A8A7D] bg-[#143A34] px-5 py-2 text-sm font-semibold text-[#7AF0D0] transition hover:border-[#35B7A6] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {quickAddSaving ? t("common.saving") : t("common.save")}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-12">
         <div className="rounded-2xl border border-[#1B2230] bg-[#141A25] p-5 lg:col-span-3">
