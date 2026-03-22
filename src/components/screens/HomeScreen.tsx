@@ -1172,16 +1172,6 @@ export function HomeScreen() {
     return pendingByCard;
   }, [cardTransactions]);
 
-  const ownCards = useMemo(
-    () => cards.filter((card) => (card.owner_type ?? "self") !== "friend"),
-    [cards],
-  );
-
-  const friendCards = useMemo(
-    () => cards.filter((card) => (card.owner_type ?? "self") === "friend"),
-    [cards],
-  );
-
   const cardReminders = useMemo<CardReminder[]>(() => {
     if (!user) return [];
     const now = new Date();
@@ -2037,157 +2027,94 @@ export function HomeScreen() {
               {t("home.closedStatements")}
             </span>
           </div>
-          {ownCards.length === 0 ? (
-            <p className="text-xs text-[#8B94A6]">{t("home.noOwnCards")}</p>
+          {cards.length === 0 ? (
+            <p className="text-xs text-[#8B94A6]">{t("home.noCards")}</p>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
-              {ownCards.map((card) => (
-                <div
-                  key={card.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-[#1C2332] bg-[#0F141E] px-4 py-3"
-                >
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-[#E4E7EC]">{card.name}</p>
-                    <p className="text-xs text-[#8B94A6]">
-                      {t("cards.closes")} {card.closing_day} - {t("cards.due")} {card.due_day}
-                    </p>
-                    <div className="mt-2 h-1.5 rounded-full bg-[#1A2230]">
-                      <div
-                        className="h-1.5 rounded-full bg-[#5DD6C7]"
-                        style={{
-                          width: `${Math.min(
-                            100,
-                            Math.max(
-                              0,
-                              ((cardUsedById[card.id] ?? 0) /
-                                Math.max(Number(card.limit_amount) || 0, 1)) *
-                                100,
-                            ),
-                          )}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-2 text-right">
-                    <span className="text-xs font-semibold text-[#5DD6C7]">
-                      {t("home.cardLimitAvailable")}{" "}
-                      {loading
-                        ? "..."
-                        : formatCurrency(
-                            (Number(card.limit_amount) || 0) - (cardUsedById[card.id] ?? 0),
-                            language,
-                            currency,
-                          )}
-                    </span>
-                    <span className="text-[11px] text-[#8B94A6]">
-                      {t("home.cardLimitUsed")}{" "}
-                      {loading
-                        ? "..."
-                        : formatCurrency(cardUsedById[card.id] ?? 0, language, currency)}
-                    </span>
-                    <span className="text-[11px] text-[#8B94A6]">
-                      {t("home.cardLimitTotal")}{" "}
-                      {loading ? "..." : formatCurrency(Number(card.limit_amount) || 0, language, currency)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveCard(card.id, card.name)}
-                      disabled={deletingCardId === card.id}
-                      className="rounded-full border border-[#2A3140] bg-[#0F141E] px-3 py-1 text-[11px] text-[#8B94A6] hover:border-red-500/60 hover:text-red-400 disabled:opacity-60"
-                    >
-                      {deletingCardId === card.id ? "Removendo..." : "Remover"}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5 sm:col-span-2 lg:col-span-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-[#C7CEDA]">{t("home.friendCardsTitle")}</p>
-              <p className="text-xs text-[#8B94A6]">{t("home.friendCardsSubtitle")}</p>
-            </div>
-            <span className="rounded-full border border-[#263043] bg-[#0F141E] px-3 py-1 text-[11px] text-[#9AA3B2]">
-              {friendCards.length}
-            </span>
-          </div>
-          <p className="mb-4 text-xs text-[#8B94A6]">{t("home.friendCardsInfo")}</p>
-          {friendCards.length === 0 ? (
-            <p className="text-xs text-[#8B94A6]">{t("home.friendCardsEmpty")}</p>
-          ) : (
-            <div className="grid gap-3 md:grid-cols-2">
-              {friendCards.map((card) => (
-                <div
-                  key={card.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-[#25404B] bg-[#10212A] px-4 py-3"
-                >
-                  <div className="flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-semibold text-[#E4E7EC]">{card.name}</p>
-                      <span className="rounded-full border border-[#2E6C79] bg-[#173038] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[#91E6DA]">
-                        {t("cards.ownerBadgeFriend")}
-                      </span>
-                    </div>
-                    {card.friend_name ? (
-                      <p className="mt-1 text-xs text-[#A8D7D1]">
-                        {t("home.friendCardOwner")}: {card.friend_name}
+              {cards.map((card) => {
+                const isFriendCard = (card.owner_type ?? "self") === "friend";
+                return (
+                  <div
+                    key={card.id}
+                    className={`flex items-center justify-between gap-3 rounded-xl px-4 py-3 ${
+                      isFriendCard
+                        ? "border border-[#25404B] bg-[#10212A]"
+                        : "border border-[#1C2332] bg-[#0F141E]"
+                    }`}
+                  >
+                    <div className="flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-[#E4E7EC]">{card.name}</p>
+                        {isFriendCard ? (
+                          <span className="rounded-full border border-[#2E6C79] bg-[#173038] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[#91E6DA]">
+                            {t("cards.ownerBadgeFriend")}
+                          </span>
+                        ) : null}
+                      </div>
+                      {isFriendCard && card.friend_name ? (
+                        <p className="mt-1 text-xs text-[#A8D7D1]">
+                          {t("home.friendCardOwner")}: {card.friend_name}
+                        </p>
+                      ) : null}
+                      <p className="text-xs text-[#8B94A6]">
+                        {t("cards.closes")} {card.closing_day} - {t("cards.due")} {card.due_day}
                       </p>
-                    ) : null}
-                    <p className="mt-1 text-xs text-[#8B94A6]">
-                      {t("cards.closes")} {card.closing_day} - {t("cards.due")} {card.due_day}
-                    </p>
-                    <div className="mt-2 h-1.5 rounded-full bg-[#173038]">
-                      <div
-                        className="h-1.5 rounded-full bg-[#5DD6C7]"
-                        style={{
-                          width: `${Math.min(
-                            100,
-                            Math.max(
-                              0,
-                              ((cardUsedById[card.id] ?? 0) /
-                                Math.max(Number(card.limit_amount) || 0, 1)) *
-                                100,
-                            ),
-                          )}%`,
-                        }}
-                      />
+                      <div className={`mt-2 h-1.5 rounded-full ${isFriendCard ? "bg-[#173038]" : "bg-[#1A2230]"}`}>
+                        <div
+                          className="h-1.5 rounded-full bg-[#5DD6C7]"
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              Math.max(
+                                0,
+                                ((cardUsedById[card.id] ?? 0) /
+                                  Math.max(Number(card.limit_amount) || 0, 1)) *
+                                  100,
+                              ),
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2 text-right">
+                      <span className="text-xs font-semibold text-[#5DD6C7]">
+                        {t("home.cardLimitAvailable")}{" "}
+                        {loading
+                          ? "..."
+                          : formatCurrency(
+                              (Number(card.limit_amount) || 0) - (cardUsedById[card.id] ?? 0),
+                              language,
+                              currency,
+                            )}
+                      </span>
+                      <span className={`text-[11px] ${isFriendCard ? "text-[#A8D7D1]" : "text-[#8B94A6]"}`}>
+                        {t("home.cardLimitUsed")}{" "}
+                        {loading
+                          ? "..."
+                          : formatCurrency(cardUsedById[card.id] ?? 0, language, currency)}
+                      </span>
+                      <span className={`text-[11px] ${isFriendCard ? "text-[#A8D7D1]" : "text-[#8B94A6]"}`}>
+                        {t("home.cardLimitTotal")}{" "}
+                        {loading
+                          ? "..."
+                          : formatCurrency(Number(card.limit_amount) || 0, language, currency)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCard(card.id, card.name)}
+                        disabled={deletingCardId === card.id}
+                        className={`rounded-full bg-[#0F141E] px-3 py-1 text-[11px] disabled:opacity-60 ${
+                          isFriendCard
+                            ? "border border-[#2E6C79] text-[#A8D7D1] hover:border-red-500/60 hover:text-red-300"
+                            : "border border-[#2A3140] text-[#8B94A6] hover:border-red-500/60 hover:text-red-400"
+                        }`}
+                      >
+                        {deletingCardId === card.id ? "Removendo..." : "Remover"}
+                      </button>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-2 text-right">
-                    <span className="text-xs font-semibold text-[#5DD6C7]">
-                      {t("home.cardLimitAvailable")}{" "}
-                      {loading
-                        ? "..."
-                        : formatCurrency(
-                            (Number(card.limit_amount) || 0) - (cardUsedById[card.id] ?? 0),
-                            language,
-                            currency,
-                          )}
-                    </span>
-                    <span className="text-[11px] text-[#A8D7D1]">
-                      {t("home.cardLimitUsed")}{" "}
-                      {loading
-                        ? "..."
-                        : formatCurrency(cardUsedById[card.id] ?? 0, language, currency)}
-                    </span>
-                    <span className="text-[11px] text-[#A8D7D1]">
-                      {t("home.cardLimitTotal")}{" "}
-                      {loading ? "..." : formatCurrency(Number(card.limit_amount) || 0, language, currency)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveCard(card.id, card.name)}
-                      disabled={deletingCardId === card.id}
-                      className="rounded-full border border-[#2E6C79] bg-[#0F141E] px-3 py-1 text-[11px] text-[#A8D7D1] hover:border-red-500/60 hover:text-red-300 disabled:opacity-60"
-                    >
-                      {deletingCardId === card.id ? "Removendo..." : "Remover"}
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
