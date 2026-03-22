@@ -16,10 +16,8 @@ import { useAuth } from "@/lib/auth";
 import { AppIcon } from "@/components/AppIcon";
 import {
   loadProfileSettings,
-  saveProfileSettings,
   type ProfileSettings,
 } from "@/lib/profile";
-import { getProfileBioLabel } from "@/lib/profileBios";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -151,13 +149,6 @@ function normalizeTransferAmounts(rows: RawTransfer[]): Transfer[] {
     amount: row.amount ?? row.value ?? 0,
   }));
 }
-
-type LeagueProfileMini = {
-  display_name: string | null;
-  avatar_url: string | null;
-  bio_code: string | null;
-  serasa_negative: boolean | null;
-};
 
 type DisplayTransaction = Transaction & {
   displayId: string;
@@ -656,60 +647,7 @@ export function HomeScreen() {
   const [payingReminderCardId, setPayingReminderCardId] = useState<string | null>(null);
   const [dismissedCardReminderKeys, setDismissedCardReminderKeys] = useState<Record<string, true>>({});
   const [profile, setProfile] = useState<ProfileSettings>({});
-  const [profileBioCode, setProfileBioCode] = useState<string | null>(null);
-  const [profileSerasaNegative, setProfileSerasaNegative] = useState(false);
   const [activeCategoryIndex, setActiveCategoryIndex] = useState<number | null>(null);
-
-  const syncProfileFromLeague = useCallback(
-    (row: LeagueProfileMini | null) => {
-      const remoteDisplayName = (row?.display_name ?? "").trim();
-      const remoteAvatarUrl = (row?.avatar_url ?? "").trim();
-      setProfileBioCode(row?.bio_code ?? null);
-      setProfileSerasaNegative(Boolean(row?.serasa_negative));
-      if (remoteDisplayName || remoteAvatarUrl) {
-        setProfile((current) => {
-          const nextProfile: ProfileSettings = {
-            name: remoteDisplayName || current.name,
-            avatarUrl: remoteAvatarUrl || current.avatarUrl,
-          };
-          if (
-            nextProfile.name === current.name &&
-            nextProfile.avatarUrl === current.avatarUrl
-          ) {
-            return current;
-          }
-          saveProfileSettings(nextProfile);
-          return nextProfile;
-        });
-      }
-    },
-    [],
-  );
-
-  const loadLeagueProfile = useCallback(async () => {
-    if (!user) return;
-    const profileBioRes = await supabase
-      .from("gamification_profiles")
-      .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (!profileBioRes.error) {
-      const row = (profileBioRes.data as LeagueProfileMini | null) ?? null;
-      syncProfileFromLeague(row);
-      return;
-    }
-
-    const rawError =
-      `${profileBioRes.error.code ?? ""} ${profileBioRes.error.message ?? ""}`.toLowerCase();
-    const missingLeagueTable =
-      profileBioRes.error.code === "42P01" && rawError.includes("gamification_profiles");
-    if (!missingLeagueTable) {
-      console.warn("[home] profile bio load failed:", getErrorMessage(profileBioRes.error));
-    }
-    setProfileBioCode(null);
-    setProfileSerasaNegative(false);
-  }, [syncProfileFromLeague, user]);
 
   useEffect(() => {
     setProfile(loadProfileSettings());
@@ -722,25 +660,17 @@ export function HomeScreen() {
   useEffect(() => {
     function handleProfileUpdate() {
       setProfile(loadProfileSettings());
-      void loadLeagueProfile();
     }
 
     window.addEventListener("profile-updated", handleProfileUpdate);
     return () => window.removeEventListener("profile-updated", handleProfileUpdate);
-  }, [loadLeagueProfile]);
-
-  useEffect(() => {
-    void loadLeagueProfile();
-  }, [loadLeagueProfile]);
+  }, []);
 
   const monthTitle = useMemo(
     () => getMonthTitle(selectedMonth, language),
     [selectedMonth, language],
   );
-  const profileBioLabel = useMemo(
-    () => getProfileBioLabel(profileBioCode, language),
-    [profileBioCode, language],
-  );
+  const profileSecondaryLabel = user?.email || "GuimFinancial";
 
   const loadData = useCallback(async () => {
     if (!user) return;
@@ -1573,11 +1503,7 @@ export function HomeScreen() {
           </div>
         </div>
         <Link href="/profile" className="group flex items-center gap-3">
-          <div
-            className={`flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[#1A2230] bg-[#101620] text-xs font-semibold text-[#E2E6ED] transition group-hover:border-[#2B364B] ${
-              profileSerasaNegative ? "avatar-negative-border" : ""
-            }`}
-          >
+          <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[#1A2230] bg-[#101620] text-xs font-semibold text-[#E2E6ED] transition group-hover:border-[#2B364B]">
             {avatarSrc ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -1591,7 +1517,7 @@ export function HomeScreen() {
           </div>
           <div className="hidden sm:flex flex-col text-right">
             <span className="text-xs font-semibold text-[#E2E6ED]">{displayName}</span>
-            <span className="text-[10px] text-[#8B94A6]">{profileBioLabel}</span>
+            <span className="text-[10px] text-[#8B94A6]">{profileSecondaryLabel}</span>
           </div>
         </Link>
       </div>

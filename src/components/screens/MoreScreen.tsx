@@ -164,11 +164,6 @@ export function MoreScreen() {
     setResettingData(true);
 
     const tables = [
-      "gamification_user_missions",
-      "gamification_user_medals",
-      "gamification_wallet_monthly",
-      "gamification_friendships",
-      "gamification_profiles",
       "investment_purchases",
       "investments",
       "transactions",

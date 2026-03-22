@@ -34,7 +34,6 @@ function getCurrentSectionTitle(
   if (pathname === "/") return t("tabs.home");
   if (pathname.startsWith("/transactions")) return t("tabs.transactions");
   if (pathname.startsWith("/investments")) return t("tabs.investments");
-  if (pathname.startsWith("/gamification")) return t("tabs.gamification");
   if (pathname.startsWith("/more")) return t("tabs.more");
   if (pathname.startsWith("/profile")) return language === "pt" ? "Perfil" : "Profile";
   if (pathname.startsWith("/new-entry")) return language === "pt" ? "Nova entrada" : "New entry";
