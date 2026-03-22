@@ -787,9 +787,9 @@ export function TransactionsScreen() {
             return (
               <div
                 key={item.displayId}
-                className="flex items-center justify-between gap-4 rounded-2xl border border-[#1E232E] bg-[#121621] p-4"
+                className="flex min-w-0 flex-col gap-4 rounded-2xl border border-[#1E232E] bg-[#121621] p-4 sm:flex-row sm:items-center sm:justify-between"
               >
-                <div className="flex-1 space-y-1">
+                <div className="min-w-0 flex-1 space-y-1">
                   <p className="text-sm font-semibold text-[#E4E7EC]">{title}</p>
                   <p className="text-xs text-[#8A93A3]">
                     {formatDate(item.displayDate, language)} ·{" "}
@@ -827,7 +827,7 @@ export function TransactionsScreen() {
                     </span>
                   ) : null}
                 </div>
-                <div className="flex flex-col items-end gap-2 text-right">
+                <div className="min-w-0 flex flex-col gap-2 text-left sm:items-end sm:text-right">
                   <p
                     className={`text-sm font-semibold ${
                       isIncome ? "text-[#5DD6C7]" : "text-[#F59E8B]"
@@ -835,13 +835,13 @@ export function TransactionsScreen() {
                   >
                     {isIncome ? "+" : "-"} {formatCurrency(amount, language, currency)}
                   </p>
-                  <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
                     {canPayInstallment ? (
                       <button
                         type="button"
                         onClick={() => baseTx && handleMarkInstallmentPaid(baseTx)}
                         disabled={installmentSavingId === item.baseId}
-                        className="rounded-full border border-[#2A3140] bg-[#0F141E] px-3 py-1 text-xs text-[#8B94A6] hover:border-emerald-500/60 hover:text-emerald-300 disabled:opacity-60"
+                        className="max-w-full rounded-full border border-[#2A3140] bg-[#0F141E] px-3 py-1 text-xs text-[#8B94A6] hover:border-emerald-500/60 hover:text-emerald-300 disabled:opacity-60"
                       >
                         {installmentSavingId === item.baseId
                           ? t("common.saving")
@@ -853,7 +853,7 @@ export function TransactionsScreen() {
                         type="button"
                         onClick={() => baseTx && handleUndoInstallmentPaid(baseTx)}
                         disabled={!canUndoInstallment || undoSavingId === item.baseId}
-                        className="rounded-full border border-[#2A3140] bg-[#0F141E] px-3 py-1 text-xs text-[#8B94A6] hover:border-amber-500/60 hover:text-amber-300 disabled:opacity-60"
+                        className="max-w-full rounded-full border border-[#2A3140] bg-[#0F141E] px-3 py-1 text-xs text-[#8B94A6] hover:border-amber-500/60 hover:text-amber-300 disabled:opacity-60"
                       >
                         {undoSavingId === item.baseId
                           ? t("common.saving")
@@ -863,7 +863,7 @@ export function TransactionsScreen() {
                     <button
                       type="button"
                       onClick={() => baseTx && openEdit(baseTx)}
-                      className="rounded-full border border-[#2A3140] bg-[#0F141E] px-3 py-1 text-xs text-[#8B94A6] hover:border-[#5DD6C7] hover:text-[#5DD6C7]"
+                      className="max-w-full rounded-full border border-[#2A3140] bg-[#0F141E] px-3 py-1 text-xs text-[#8B94A6] hover:border-[#5DD6C7] hover:text-[#5DD6C7]"
                     >
                       Editar
                     </button>
@@ -871,7 +871,7 @@ export function TransactionsScreen() {
                       type="button"
                       onClick={() => baseTx && handleRemove(baseTx)}
                       disabled={deletingId === item.baseId}
-                      className="rounded-full border border-[#2A3140] bg-[#0F141E] px-3 py-1 text-xs text-[#8B94A6] hover:border-red-500/60 hover:text-red-400 disabled:opacity-60"
+                      className="max-w-full rounded-full border border-[#2A3140] bg-[#0F141E] px-3 py-1 text-xs text-[#8B94A6] hover:border-red-500/60 hover:text-red-400 disabled:opacity-60"
                     >
                       {deletingId === item.baseId
                         ? t("common.saving")
