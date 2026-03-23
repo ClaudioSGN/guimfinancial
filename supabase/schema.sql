@@ -73,6 +73,16 @@ create table if not exists goals (
   created_at timestamptz not null default now()
 );
 
+create table if not exists category_budgets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users (id) on delete cascade,
+  category text not null,
+  amount numeric not null default 0,
+  month_key text not null,
+  created_at timestamptz not null default now(),
+  unique (user_id, month_key, category)
+);
+
 create table if not exists investments (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users (id) on delete cascade,
@@ -102,6 +112,10 @@ create table if not exists investment_purchases (
 );
 
 alter table accounts add column if not exists user_id uuid references auth.users (id) on delete cascade;
+alter table accounts add column if not exists initial_balance numeric not null default 0;
+alter table accounts add column if not exists card_limit numeric;
+alter table accounts add column if not exists closing_day int;
+alter table accounts add column if not exists due_day int;
 alter table credit_cards add column if not exists user_id uuid references auth.users (id) on delete cascade;
 alter table credit_cards add column if not exists owner_type text not null default 'self';
 alter table credit_cards add column if not exists friend_name text;
@@ -111,6 +125,7 @@ alter table transactions add column if not exists user_id uuid references auth.u
 alter table transfers add column if not exists user_id uuid references auth.users (id) on delete cascade;
 alter table reminder_settings add column if not exists user_id uuid references auth.users (id) on delete cascade;
 alter table goals add column if not exists user_id uuid references auth.users (id) on delete cascade;
+alter table category_budgets add column if not exists user_id uuid references auth.users (id) on delete cascade;
 alter table investments add column if not exists user_id uuid references auth.users (id) on delete cascade;
 alter table investment_purchases add column if not exists user_id uuid references auth.users (id) on delete cascade;
 alter table investments add column if not exists cdi_rate_pct numeric;
@@ -125,6 +140,7 @@ alter table transactions alter column user_id set default auth.uid();
 alter table transfers alter column user_id set default auth.uid();
 alter table reminder_settings alter column user_id set default auth.uid();
 alter table goals alter column user_id set default auth.uid();
+alter table category_budgets alter column user_id set default auth.uid();
 alter table investments alter column user_id set default auth.uid();
 alter table investment_purchases alter column user_id set default auth.uid();
 
@@ -134,6 +150,7 @@ alter table transactions enable row level security;
 alter table transfers enable row level security;
 alter table reminder_settings enable row level security;
 alter table goals enable row level security;
+alter table category_budgets enable row level security;
 alter table investments enable row level security;
 alter table investment_purchases enable row level security;
 
@@ -166,6 +183,11 @@ create policy "goals_owner_select" on goals for select using (auth.uid() = user_
 create policy "goals_owner_insert" on goals for insert with check (auth.uid() = user_id);
 create policy "goals_owner_update" on goals for update using (auth.uid() = user_id);
 create policy "goals_owner_delete" on goals for delete using (auth.uid() = user_id);
+
+create policy "category_budgets_owner_select" on category_budgets for select using (auth.uid() = user_id);
+create policy "category_budgets_owner_insert" on category_budgets for insert with check (auth.uid() = user_id);
+create policy "category_budgets_owner_update" on category_budgets for update using (auth.uid() = user_id);
+create policy "category_budgets_owner_delete" on category_budgets for delete using (auth.uid() = user_id);
 
 create policy "investments_owner_select" on investments for select using (auth.uid() = user_id);
 create policy "investments_owner_insert" on investments for insert with check (auth.uid() = user_id);

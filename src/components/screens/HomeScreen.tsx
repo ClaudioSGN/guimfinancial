@@ -98,6 +98,18 @@ type CardReminder = {
   dueDay: number;
 };
 
+type CardInsight = {
+  usedTotal: number;
+  currentStatement: number;
+  nextStatement: number;
+  overdueAmount: number;
+  availableLimit: number;
+  utilizationPercent: number;
+  daysUntilClosing: number;
+  daysUntilDue: number;
+  statementStatus: "open" | "closed";
+};
+
 type Investment = {
   id: string;
   type: "b3" | "crypto" | "fixed_income";
@@ -536,6 +548,32 @@ function getSettledCardExpenseAmount(tx: Transaction) {
   }
 
   return tx.is_paid ? amount : 0;
+}
+
+function getCardChargeTiming(tx: Transaction, card: CreditCard, today: Date) {
+  const txDate = parseLocalDate(tx.date);
+  if (!txDate) return null;
+
+  const closingDay = getSafeDayInMonth(txDate.getFullYear(), txDate.getMonth(), Number(card.closing_day));
+  const closesThisMonth = new Date(txDate.getFullYear(), txDate.getMonth(), closingDay);
+  const statementMonth =
+    txDate.getTime() <= closesThisMonth.getTime()
+      ? new Date(txDate.getFullYear(), txDate.getMonth(), 1)
+      : new Date(txDate.getFullYear(), txDate.getMonth() + 1, 1);
+
+  const currentStatementMonth =
+    today.getDate() <= Number(card.closing_day)
+      ? new Date(today.getFullYear(), today.getMonth(), 1)
+      : new Date(today.getFullYear(), today.getMonth() + 1, 1);
+
+  const monthDelta =
+    (statementMonth.getFullYear() - currentStatementMonth.getFullYear()) * 12 +
+    (statementMonth.getMonth() - currentStatementMonth.getMonth());
+
+  if (monthDelta < 0) return "overdue" as const;
+  if (monthDelta === 0) return "current" as const;
+  if (monthDelta === 1) return "next" as const;
+  return "future" as const;
 }
 
 function computeEffectiveAccountBalance(
@@ -1454,6 +1492,118 @@ export function HomeScreen() {
   const cardUsedTotal = useMemo(
     () => Object.values(cardUsedById).reduce((sum, value) => sum + value, 0),
     [cardUsedById],
+  );
+  const cardInsightsById = useMemo<Record<string, CardInsight>>(() => {
+    const today = new Date();
+    const currentDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const insights: Record<string, CardInsight> = {};
+
+    cards.forEach((card) => {
+      const limitAmount = Number(card.limit_amount) || 0;
+      const closingDay = Number(card.closing_day) || 1;
+      const dueDay = Number(card.due_day) || 1;
+      const currentClosingDate = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth(),
+        getSafeDayInMonth(currentDate.getFullYear(), currentDate.getMonth(), closingDay),
+      );
+      const nextClosingDate =
+        currentDate.getTime() <= currentClosingDate.getTime()
+          ? currentClosingDate
+          : new Date(
+              currentDate.getFullYear(),
+              currentDate.getMonth() + 1,
+              getSafeDayInMonth(currentDate.getFullYear(), currentDate.getMonth() + 1, closingDay),
+            );
+      const currentDueDate = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth(),
+        getSafeDayInMonth(currentDate.getFullYear(), currentDate.getMonth(), dueDay),
+      );
+      const nextDueDate =
+        currentDate.getTime() <= currentDueDate.getTime()
+          ? currentDueDate
+          : new Date(
+              currentDate.getFullYear(),
+              currentDate.getMonth() + 1,
+              getSafeDayInMonth(currentDate.getFullYear(), currentDate.getMonth() + 1, dueDay),
+            );
+
+      const usedTotal = cardUsedById[card.id] ?? 0;
+      let currentStatement = 0;
+      let nextStatement = 0;
+      let overdueAmount = 0;
+
+      cardTransactions.forEach((tx) => {
+        if (!isCardLinkedExpense(tx) || tx.card_id !== card.id) return;
+
+        const amount = Number(tx.amount) || 0;
+        if (amount <= 0) return;
+
+        const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
+        const paidInstallments = Math.min(
+          Math.max(Number(tx.installments_paid) || 0, 0),
+          totalInstallments,
+        );
+
+        if (totalInstallments > 0) {
+          const perInstallment = amount / totalInstallments;
+          const txDate = parseLocalDate(tx.date);
+          if (!txDate) return;
+
+          for (let index = paidInstallments; index < totalInstallments; index += 1) {
+            const installmentDate = new Date(txDate.getFullYear(), txDate.getMonth() + index, txDate.getDate());
+            const installmentTx = {
+              ...tx,
+              date: toDateString(installmentDate),
+              amount: perInstallment,
+              installment_total: null,
+              installments_paid: null,
+              is_paid: false,
+            } satisfies Transaction;
+            const timing = getCardChargeTiming(installmentTx, card, currentDate);
+            if (timing === "overdue") overdueAmount += perInstallment;
+            if (timing === "current") currentStatement += perInstallment;
+            if (timing === "next") nextStatement += perInstallment;
+          }
+          return;
+        }
+
+        if (tx.is_paid) return;
+        const timing = getCardChargeTiming(tx, card, currentDate);
+        if (timing === "overdue") overdueAmount += amount;
+        if (timing === "current") currentStatement += amount;
+        if (timing === "next") nextStatement += amount;
+      });
+
+      insights[card.id] = {
+        usedTotal,
+        currentStatement,
+        nextStatement,
+        overdueAmount,
+        availableLimit: Math.max(limitAmount - usedTotal, 0),
+        utilizationPercent: limitAmount > 0 ? Math.min((usedTotal / limitAmount) * 100, 100) : 0,
+        daysUntilClosing: Math.max(
+          Math.ceil((nextClosingDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24)),
+          0,
+        ),
+        daysUntilDue: Math.max(
+          Math.ceil((nextDueDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24)),
+          0,
+        ),
+        statementStatus: currentStatement + overdueAmount > 0 ? "closed" : "open",
+      };
+    });
+
+    return insights;
+  }, [cards, cardTransactions, cardUsedById]);
+  const openStatementsCount = useMemo(
+    () => cards.filter((card) => (cardInsightsById[card.id]?.statementStatus ?? "open") === "open").length,
+    [cards, cardInsightsById],
+  );
+  const closedStatementsCount = useMemo(
+    () => cards.filter((card) => (cardInsightsById[card.id]?.statementStatus ?? "open") === "closed").length,
+    [cards, cardInsightsById],
   );
   const netWorthBase = usesHistoricalAccountBalances ? accountBalanceTotal : totalBalance;
   const netWorth = netWorthBase + investedTotal;
@@ -2851,10 +3001,10 @@ export function HomeScreen() {
           </div>
           <div className="mb-3 flex flex-wrap gap-2 text-[11px]">
             <span className="rounded-full border border-[#3A8F8A] bg-[#163137] px-3 py-1 text-[#64D1C4]">
-              {t("home.openStatements")}
+              {t("home.openStatements")} {openStatementsCount}
             </span>
             <span className="rounded-full border border-[#263043] bg-[#0F141E] px-3 py-1 text-[#8B94A6]">
-              {t("home.closedStatements")}
+              {t("home.closedStatements")} {closedStatementsCount}
             </span>
           </div>
           {cards.length === 0 ? (
@@ -2863,10 +3013,12 @@ export function HomeScreen() {
             <div className="grid gap-3 md:grid-cols-2">
               {cards.map((card) => {
                 const isFriendCard = (card.owner_type ?? "self") === "friend";
+                const insight = cardInsightsById[card.id];
+                const statementStatus = insight?.statementStatus ?? "open";
                 return (
                   <div
                     key={card.id}
-                    className={`flex items-center justify-between gap-3 rounded-xl px-4 py-3 ${
+                    className={`rounded-xl px-4 py-3 ${
                       isFriendCard
                         ? "border border-[#25404B] bg-[#10212A]"
                         : "border border-[#1C2332] bg-[#0F141E]"
@@ -2875,11 +3027,22 @@ export function HomeScreen() {
                     <div className="flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-sm font-semibold text-[#E4E7EC]">{card.name}</p>
-                        {isFriendCard ? (
+                       {isFriendCard ? (
                           <span className="rounded-full border border-[#2E6C79] bg-[#173038] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[#91E6DA]">
                             {t("cards.ownerBadgeFriend")}
                           </span>
                         ) : null}
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] ${
+                            statementStatus === "closed"
+                              ? "border-amber-500/45 bg-amber-500/10 text-amber-200"
+                              : "border-[#2A8C73] bg-[#163137] text-[#91E6DA]"
+                          }`}
+                        >
+                          {statementStatus === "closed"
+                            ? t("home.closedStatements")
+                            : t("home.openStatements")}
+                        </span>
                       </div>
                       {isFriendCard && card.friend_name ? (
                         <p className="mt-1 text-xs text-[#A8D7D1]">
@@ -2889,58 +3052,86 @@ export function HomeScreen() {
                       <p className="text-xs text-[#8B94A6]">
                         {t("cards.closes")} {card.closing_day} - {t("cards.due")} {card.due_day}
                       </p>
-                      <div className={`mt-2 h-1.5 rounded-full ${isFriendCard ? "bg-[#173038]" : "bg-[#1A2230]"}`}>
-                        <div
-                          className="h-1.5 rounded-full bg-[#5DD6C7]"
-                          style={{
-                            width: `${Math.min(
-                              100,
-                              Math.max(
-                                0,
-                                ((cardUsedById[card.id] ?? 0) /
-                                  Math.max(Number(card.limit_amount) || 0, 1)) *
-                                  100,
-                              ),
-                            )}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 text-right">
-                      <span className="text-xs font-semibold text-[#5DD6C7]">
-                        {t("home.cardLimitAvailable")}{" "}
-                        {loading
-                          ? "..."
-                          : formatCurrency(
-                              (Number(card.limit_amount) || 0) - (cardUsedById[card.id] ?? 0),
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-xl border border-[#1B2230] bg-[#111723] p-3">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
+                            {language === "pt" ? "Fatura atual" : "Current statement"}
+                          </p>
+                          <p className="mt-2 text-2xl font-semibold text-[#E4E7EC]">
+                            {formatCurrency(
+                              (insight?.currentStatement ?? 0) + (insight?.overdueAmount ?? 0),
                               language,
                               currency,
                             )}
-                      </span>
-                      <span className={`text-[11px] ${isFriendCard ? "text-[#A8D7D1]" : "text-[#8B94A6]"}`}>
-                        {t("home.cardLimitUsed")}{" "}
-                        {loading
-                          ? "..."
-                          : formatCurrency(cardUsedById[card.id] ?? 0, language, currency)}
-                      </span>
-                      <span className={`text-[11px] ${isFriendCard ? "text-[#A8D7D1]" : "text-[#8B94A6]"}`}>
-                        {t("home.cardLimitTotal")}{" "}
-                        {loading
-                          ? "..."
-                          : formatCurrency(Number(card.limit_amount) || 0, language, currency)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveCard(card.id, card.name)}
-                        disabled={deletingCardId === card.id}
-                        className={`rounded-full bg-[#0F141E] px-3 py-1 text-[11px] disabled:opacity-60 ${
-                          isFriendCard
-                            ? "border border-[#2E6C79] text-[#A8D7D1] hover:border-red-500/60 hover:text-red-300"
-                            : "border border-[#2A3140] text-[#8B94A6] hover:border-red-500/60 hover:text-red-400"
-                        }`}
-                      >
-                        {deletingCardId === card.id ? "Removendo..." : "Remover"}
-                      </button>
+                          </p>
+                          <p className="mt-1 text-xs text-[#8B94A6]">
+                            {insight && insight.currentStatement + insight.overdueAmount > 0
+                              ? language === "pt"
+                                ? `Vence em ${insight.daysUntilDue} ${getDayWord(insight.daysUntilDue, language)}`
+                                : `Due in ${insight.daysUntilDue} ${getDayWord(insight.daysUntilDue, language)}`
+                              : language === "pt"
+                                ? "Sem fatura pendente"
+                                : "No statement due"}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-[#1B2230] bg-[#111723] p-3">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
+                            {language === "pt" ? "Proxima fatura" : "Next statement"}
+                          </p>
+                          <p className="mt-2 text-2xl font-semibold text-[#E4E7EC]">
+                            {formatCurrency(insight?.nextStatement ?? 0, language, currency)}
+                          </p>
+                          <p className="mt-1 text-xs text-[#8B94A6]">
+                            {language === "pt"
+                              ? `Fecha em ${insight?.daysUntilClosing ?? 0} ${getDayWord(insight?.daysUntilClosing ?? 0, language)}`
+                              : `Closes in ${insight?.daysUntilClosing ?? 0} ${getDayWord(insight?.daysUntilClosing ?? 0, language)}`}
+                          </p>
+                        </div>
+                      </div>
+                      <div className={`mt-4 h-1.5 rounded-full ${isFriendCard ? "bg-[#173038]" : "bg-[#1A2230]"}`}>
+                        <div
+                          className="h-1.5 rounded-full bg-[#5DD6C7]"
+                          style={{
+                            width: `${Math.min(100, Math.max(0, insight?.utilizationPercent ?? 0))}%`,
+                          }}
+                        />
+                      </div>
+                      <div className="mt-4 flex items-end justify-between gap-3">
+                        <div className="grid flex-1 gap-1 text-[11px] sm:grid-cols-3">
+                          <div>
+                            <p className={isFriendCard ? "text-[#A8D7D1]" : "text-[#8B94A6]"}>{t("home.cardLimitAvailable")}</p>
+                            <p className="font-semibold text-[#5DD6C7]">
+                              {loading ? "..." : formatCurrency(insight?.availableLimit ?? 0, language, currency)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className={isFriendCard ? "text-[#A8D7D1]" : "text-[#8B94A6]"}>{t("home.cardLimitUsed")}</p>
+                            <p className="font-semibold text-[#E4E7EC]">
+                              {loading ? "..." : formatCurrency(insight?.usedTotal ?? 0, language, currency)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className={isFriendCard ? "text-[#A8D7D1]" : "text-[#8B94A6]"}>{t("home.cardLimitTotal")}</p>
+                            <p className="font-semibold text-[#E4E7EC]">
+                              {loading
+                                ? "..."
+                                : formatCurrency(Number(card.limit_amount) || 0, language, currency)}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveCard(card.id, card.name)}
+                          disabled={deletingCardId === card.id}
+                          className={`rounded-full bg-[#0F141E] px-3 py-1 text-[11px] disabled:opacity-60 ${
+                            isFriendCard
+                              ? "border border-[#2E6C79] text-[#A8D7D1] hover:border-red-500/60 hover:text-red-300"
+                              : "border border-[#2A3140] text-[#8B94A6] hover:border-red-500/60 hover:text-red-400"
+                          }`}
+                        >
+                          {deletingCardId === card.id ? "Removendo..." : "Remover"}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );

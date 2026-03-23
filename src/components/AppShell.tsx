@@ -10,6 +10,7 @@ import { AppIcon } from "@/components/AppIcon";
 type TabKey =
   | "home"
   | "transactions"
+  | "goals"
   | "investments"
   | "more"
   | "profile";
@@ -20,11 +21,13 @@ type Props = {
 };
 
 export function AppShell({ activeTab, children }: Props) {
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const investmentEntryCounter = useRef(0);
+  const goalsLabel = language === "en" ? "Goals" : "Metas";
 
   const menuItems = useMemo(
     () => [
@@ -40,7 +43,9 @@ export function AppShell({ activeTab, children }: Props) {
   useEffect(() => {
     let timeoutId: number | undefined;
     if (menuOpen) {
-      setMenuVisible(true);
+      timeoutId = window.setTimeout(() => {
+        setMenuVisible(true);
+      }, 0);
     } else if (menuVisible) {
       timeoutId = window.setTimeout(() => {
         setMenuVisible(false);
@@ -53,7 +58,8 @@ export function AppShell({ activeTab, children }: Props) {
 
   function openNewEntry(type: string) {
     if (type === "investment") {
-      router.push(`/investments?new=${Date.now()}`);
+      investmentEntryCounter.current += 1;
+      router.push(`/investments?new=${investmentEntryCounter.current}`);
       setMenuOpen(false);
       return;
     }
@@ -102,6 +108,17 @@ export function AppShell({ activeTab, children }: Props) {
             <span>{t("tabs.investments")}</span>
           </Link>
           <Link
+            href="/goals"
+            className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm ${
+              activeTab === "goals"
+                ? "bg-[#141A25] text-[#5DD6C7]"
+                : "text-[#8B94A6] hover:bg-[#111723] hover:text-[#C7CEDA]"
+            }`}
+          >
+            <AppIcon name="target" size={18} />
+            <span>{goalsLabel}</span>
+          </Link>
+          <Link
             href="/more"
             className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm ${
               activeTab === "more"
@@ -129,7 +146,7 @@ export function AppShell({ activeTab, children }: Props) {
       <div className="fixed bottom-0 left-0 right-0 z-30 flex justify-center lg:hidden">
         <div className="relative w-full max-w-[980px] px-5">
           <div className="h-[84px] w-full rounded-t-3xl border-t border-[#1B2230] bg-[#0D1016] px-2 pb-[calc(0.55rem+env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-10px_30px_rgba(0,0,0,0.4)]">
-            <div className="grid h-full grid-cols-[1fr_1fr_auto_1fr_1fr] items-center gap-0.5 text-[10px] max-[380px]:text-[9px]">
+            <div className="grid h-full grid-cols-[1fr_1fr_1fr_auto_1fr_1fr] items-center gap-0.5 text-[10px] max-[380px]:text-[9px]">
               <Link
                 href="/"
                 className={`flex min-w-0 flex-col items-center gap-0.5 px-0.5 ${
@@ -147,6 +164,15 @@ export function AppShell({ activeTab, children }: Props) {
               >
                 <AppIcon name="list" size={20} />
                 <span className="w-full text-center leading-tight">{t("tabs.transactions")}</span>
+              </Link>
+              <Link
+                href="/goals"
+                className={`flex min-w-0 flex-col items-center gap-0.5 px-0.5 ${
+                  activeTab === "goals" ? "text-[#5DD6C7]" : "text-[#8B94A6]"
+                }`}
+              >
+                <AppIcon name="target" size={20} />
+                <span className="w-full text-center leading-tight">{goalsLabel}</span>
               </Link>
               <button
                 type="button"

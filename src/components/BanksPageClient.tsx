@@ -135,6 +135,7 @@ export function BanksPageClient({
         {
           user_id: user.id,
           name: form.name.trim(),
+          type: "bank",
           initial_balance: initialBalance,
           card_limit: cardLimit,
           closing_day: closingDay,
@@ -154,6 +155,7 @@ export function BanksPageClient({
         .from("accounts")
         .update({
           name: form.name.trim(),
+          type: "bank",
           initial_balance: initialBalance,
           card_limit: cardLimit,
           closing_day: closingDay,
@@ -253,9 +255,7 @@ export function BanksPageClient({
                       <span className="text-zinc-500">
                         Saldo inicial:{" "}
                         <span className="text-zinc-100">
-                          {formatCurrency(
-                            Number(acc.initial_balance ?? 0)
-                          )}
+                          {formatCurrency(Number(acc.initial_balance ?? 0))}
                         </span>
                       </span>
 

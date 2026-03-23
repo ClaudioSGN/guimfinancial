@@ -179,13 +179,13 @@ export function GoalsPageClient({
   return (
     <>
       {/* Header + botão criar */}
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-zinc-400">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="max-w-2xl text-xs text-zinc-400">
           Cria metas para poupar, investir ou pagar dívidas.
         </p>
         <button
           onClick={openCreate}
-          className="rounded-full bg-zinc-100 px-3 py-1.5 text-[11px] font-medium text-black hover:bg-zinc-200"
+          className="w-full rounded-full bg-zinc-100 px-3 py-2 text-[11px] font-medium text-black hover:bg-zinc-200 sm:w-auto"
         >
           Nova meta
         </button>
@@ -215,8 +215,8 @@ export function GoalsPageClient({
                   exit={{ opacity: 0, y: -6 }}
                   className="rounded-2xl border border-zinc-900 bg-zinc-950/80 px-4 py-3"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-col">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex flex-1 flex-col">
                       <span className="text-sm text-zinc-100">
                         {goal.name}
                       </span>
@@ -235,7 +235,7 @@ export function GoalsPageClient({
                       </span>
                     </div>
 
-                    <div className="flex flex-col items-end gap-2 text-[11px]">
+                    <div className="flex flex-col gap-2 text-[11px] sm:items-end">
                       <span
                         className={
                           percent >= 100
@@ -245,7 +245,7 @@ export function GoalsPageClient({
                       >
                         {percent}%
                       </span>
-                      <div className="flex gap-1">
+                      <div className="flex flex-wrap gap-1 sm:justify-end">
                         <button
                           onClick={() => openEdit(goal)}
                           className="rounded-full border border-zinc-700 px-3 py-1 text-[11px] text-zinc-300 hover:border-zinc-500"
@@ -283,10 +283,10 @@ export function GoalsPageClient({
       {/* Modal Create/Edit */}
       {(creating || editingGoal) && (
         <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4"
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4 py-6"
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 p-5 shadow-xl"
+            className="max-h-[min(90vh,720px)] w-full max-w-md overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-950 p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
