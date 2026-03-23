@@ -216,10 +216,15 @@ export function AppShell({ activeTab, children }: Props) {
         className={`fixed inset-0 z-20 transition-opacity duration-150 ${
           menuVisible ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
+        onClick={() => setMenuOpen(false)}
       >
         <div className="absolute inset-0 bg-[#0B0E13]/70" />
         <div className="absolute bottom-[96px] left-1/2 -translate-x-1/2">
-          <div ref={menuRef} className="relative h-[200px] w-[200px]">
+          <div
+            ref={menuRef}
+            className="relative h-[200px] w-[200px]"
+            onClick={(event) => event.stopPropagation()}
+          >
             {menuItems.map((item) => {
               const radius = 88;
               const radians = (item.angle * Math.PI) / 180;

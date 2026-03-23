@@ -3140,7 +3140,7 @@ export function HomeScreen() {
           )}
         </div>
 
-        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-4 sm:col-span-2 lg:col-span-6 sm:p-5">
+        <div className="flex h-full min-h-0 flex-col rounded-2xl border border-[#1B2230] bg-[#111723] p-4 sm:col-span-2 lg:col-span-6 sm:p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm font-semibold text-[#C7CEDA]">{t("transactions.title")}</p>
             <span className="rounded-full border border-[#263043] bg-[#0F141E] px-3 py-1 text-[11px] text-[#9AA3B2]">
@@ -3152,9 +3152,11 @@ export function HomeScreen() {
             <span>{monthTransactions.length}</span>
           </div>
           {monthTransactions.length === 0 ? (
-            <p className="text-xs text-[#8B94A6]">{t("transactions.empty")}</p>
+            <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-[#1C2332] bg-[#0F141E] px-4 py-8">
+              <p className="text-xs text-[#8B94A6]">{t("transactions.empty")}</p>
+            </div>
           ) : (
-            <div className="max-h-[19rem] overflow-y-auto pr-1 sm:max-h-[22rem]">
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
               <div className="divide-y divide-[#1C2332]">
                 {monthTransactions.map((tx) => {
                   const isIncome = tx.type === "income";

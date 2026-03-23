@@ -573,6 +573,19 @@ export function MoreScreen() {
         <p className="text-sm font-semibold text-[#C7CEDA]">{t("more.moreOptions")}</p>
         <div className="space-y-3">
           <Link
+            href="/reports"
+            className="block rounded-2xl border border-[#1C2332] bg-[#0F121A] p-4"
+          >
+            <p className="text-sm font-semibold text-[#E4E7EC]">
+              {language === "pt" ? "Relatorios" : "Reports"}
+            </p>
+            <p className="text-xs text-[#8B94A6]">
+              {language === "pt"
+                ? "Resumo mensal, categorias e comparacoes."
+                : "Monthly summary, categories, and comparisons."}
+            </p>
+          </Link>
+          <Link
             href="/accounts"
             className="block rounded-2xl border border-[#1C2332] bg-[#0F121A] p-4"
           >
