@@ -7,6 +7,8 @@ import { useLanguage } from "@/lib/language";
 import { useCurrency } from "@/lib/currency";
 import { formatCentsFromNumber, formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
 import { hasMissingColumnError } from "@/lib/errorUtils";
+import { BankBrandBadge, BankBrandPicker } from "@/components/BankBrandBadge";
+import { DEFAULT_BANK_BRAND_CODE, type BankBrandCode } from "@/lib/bankBrands";
 
 type CardOwnerType = "self" | "friend";
 type Card = {
@@ -17,6 +19,7 @@ type Card = {
   friend_name: string | null;
   closing_day: number;
   due_day: number;
+  bank_code?: string | null;
 };
 type LegacyCard = Omit<Card, "owner_type" | "friend_name">;
 type Transaction = {
@@ -166,6 +169,7 @@ export default function CardsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const [bankCode, setBankCode] = useState<BankBrandCode>(DEFAULT_BANK_BRAND_CODE);
   const [limitAmount, setLimitAmount] = useState(emptyMoneyValue);
   const [ownerType, setOwnerType] = useState<CardOwnerType>("self");
   const [friendName, setFriendName] = useState("");
@@ -173,6 +177,7 @@ export default function CardsPage() {
   const [dueDay, setDueDay] = useState("");
   const [editing, setEditing] = useState<Card | null>(null);
   const [editName, setEditName] = useState("");
+  const [editBankCode, setEditBankCode] = useState<BankBrandCode>(DEFAULT_BANK_BRAND_CODE);
   const [editLimitAmount, setEditLimitAmount] = useState(emptyMoneyValue);
   const [editOwnerType, setEditOwnerType] = useState<CardOwnerType>("self");
   const [editFriendName, setEditFriendName] = useState("");
@@ -183,11 +188,21 @@ export default function CardsPage() {
   async function loadCards() {
     const result = await supabase
       .from("credit_cards")
-      .select("id,name,limit_amount,owner_type,friend_name,closing_day,due_day")
+      .select("id,name,limit_amount,owner_type,friend_name,closing_day,due_day,bank_code")
       .order("owner_type", { ascending: true })
       .order("name", { ascending: true });
     if (!result.error) return (result.data ?? []) as Card[];
-    if (!isCardOwnershipColumnMissing(result.error)) throw result.error;
+    if (hasMissingColumnError(result.error, ["bank_code"])) {
+      const noBankCode = await supabase
+        .from("credit_cards")
+        .select("id,name,limit_amount,owner_type,friend_name,closing_day,due_day")
+        .order("owner_type", { ascending: true })
+        .order("name", { ascending: true });
+      if (!noBankCode.error) return (noBankCode.data ?? []) as Card[];
+      if (!isCardOwnershipColumnMissing(noBankCode.error)) throw noBankCode.error;
+    } else if (!isCardOwnershipColumnMissing(result.error)) {
+      throw result.error;
+    }
     const legacy = await supabase
       .from("credit_cards")
       .select("id,name,limit_amount,closing_day,due_day")
@@ -370,9 +385,35 @@ export default function CardsPage() {
       friend_name: ownerType === "friend" ? trimmedFriendName : null,
       closing_day: parsedClosing,
       due_day: parsedDue,
+      bank_code: bankCode,
     }]);
-    if (error && isCardOwnershipColumnMissing(error)) {
+    if (error && (isCardOwnershipColumnMissing(error) || hasMissingColumnError(error, ["bank_code"]))) {
       if (ownerType === "friend") {
+        const noBankCode = await supabase.from("credit_cards").insert([{
+          name: name.trim(),
+          limit_amount: parsedLimit,
+          owner_type: ownerType,
+          friend_name: trimmedFriendName,
+          closing_day: parsedClosing,
+          due_day: parsedDue,
+        }]);
+        if (!noBankCode.error) {
+          setName("");
+          setBankCode(DEFAULT_BANK_BRAND_CODE);
+          setLimitAmount(emptyMoneyValue);
+          setOwnerType("self");
+          setFriendName("");
+          setClosingDay("");
+          setDueDay("");
+          setSaving(false);
+          await loadData();
+          window.dispatchEvent(new Event("data-refresh"));
+          return;
+        }
+        if (!isCardOwnershipColumnMissing(noBankCode.error)) {
+          setSaving(false);
+          return setErrorMsg(t("cards.saveError"));
+        }
         setSaving(false);
         return setErrorMsg(t("cards.schemaUpdateRequired"));
       }
@@ -389,6 +430,7 @@ export default function CardsPage() {
       return setErrorMsg(t("cards.saveError"));
     }
     setName("");
+    setBankCode(DEFAULT_BANK_BRAND_CODE);
     setLimitAmount(emptyMoneyValue);
     setOwnerType("self");
     setFriendName("");
@@ -402,6 +444,7 @@ export default function CardsPage() {
   function openEdit(card: Card) {
     setEditing(card);
     setEditName(card.name);
+    setEditBankCode((card.bank_code as BankBrandCode | null) ?? DEFAULT_BANK_BRAND_CODE);
     setEditLimitAmount(formatCentsFromNumber(Number(card.limit_amount) || 0, currency));
     setEditOwnerType(card.owner_type ?? "self");
     setEditFriendName(card.friend_name ?? "");
@@ -433,10 +476,33 @@ export default function CardsPage() {
         friend_name: editOwnerType === "friend" ? trimmedFriendName : null,
         closing_day: parsedClosing,
         due_day: parsedDue,
+        bank_code: editBankCode,
       })
       .eq("id", editing.id);
-    if (error && isCardOwnershipColumnMissing(error)) {
+    if (error && (isCardOwnershipColumnMissing(error) || hasMissingColumnError(error, ["bank_code"]))) {
       if (editOwnerType === "friend") {
+        const noBankCode = await supabase
+          .from("credit_cards")
+          .update({
+            name: editName.trim(),
+            limit_amount: parsedLimit,
+            owner_type: editOwnerType,
+            friend_name: trimmedFriendName,
+            closing_day: parsedClosing,
+            due_day: parsedDue,
+          })
+          .eq("id", editing.id);
+        if (!noBankCode.error) {
+          setEditSaving(false);
+          setEditing(null);
+          await loadData();
+          window.dispatchEvent(new Event("data-refresh"));
+          return;
+        }
+        if (!isCardOwnershipColumnMissing(noBankCode.error)) {
+          setEditSaving(false);
+          return setErrorMsg(t("cards.saveError"));
+        }
         setEditSaving(false);
         return setErrorMsg(t("cards.schemaUpdateRequired"));
       }
@@ -542,6 +608,7 @@ export default function CardsPage() {
                 <button type="button" onClick={() => setOwnerType("friend")} className={`rounded-full border px-3 py-1 text-xs ${ownerType === "friend" ? "border-[#5DD6C7] bg-[#173038] text-[#D7FBF6]" : "border-[#2A3140] bg-[#0F141E] text-[#A8B2C3]"}`}>{t("cards.ownerFriend")}</button>
               </div>
             </div>
+            <BankBrandPicker selected={bankCode} onSelect={setBankCode} />
             <div className="grid gap-3 sm:grid-cols-2">
               <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t("cards.namePlaceholder")} className="w-full rounded-xl border border-[#1E232E] bg-[#0F141E] px-4 py-3 text-sm text-[#E4E7EC]" />
               {ownerType === "friend" ? <input value={friendName} onChange={(event) => setFriendName(event.target.value)} placeholder={t("cards.friendNamePlaceholder")} className="w-full rounded-xl border border-[#1E232E] bg-[#0F141E] px-4 py-3 text-sm text-[#E4E7EC]" /> : null}
@@ -590,6 +657,7 @@ export default function CardsPage() {
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 flex-1 space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
+                        <BankBrandBadge bankCode={item.bank_code} />
                         <p className="text-lg font-semibold text-[#E4E7EC]">{item.name}</p>
                         <span className="rounded-full border border-[#2A3140] bg-[#0F141E] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[#9AA3B2]">
                           {item.owner_type === "friend" ? t("cards.ownerBadgeFriend") : t("cards.ownerBadgeSelf")}
@@ -666,6 +734,7 @@ export default function CardsPage() {
                   <button type="button" onClick={() => setEditOwnerType("friend")} className={`rounded-full border px-3 py-1 text-xs ${editOwnerType === "friend" ? "border-[#5DD6C7] bg-[#173038] text-[#D7FBF6]" : "border-[#2A3140] bg-[#0F141E] text-[#A8B2C3]"}`}>{t("cards.ownerFriend")}</button>
                 </div>
               </div>
+              <BankBrandPicker selected={editBankCode} onSelect={setEditBankCode} />
               <input value={editName} onChange={(event) => setEditName(event.target.value)} placeholder={t("cards.namePlaceholder")} className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]" />
               {editOwnerType === "friend" ? <input value={editFriendName} onChange={(event) => setEditFriendName(event.target.value)} placeholder={t("cards.friendNamePlaceholder")} className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]" /> : null}
               <input value={editLimitAmount} onChange={(event) => setEditLimitAmount(formatCentsInput(event.target.value, currency))} placeholder={t("cards.limitPlaceholder")} inputMode="numeric" pattern="[0-9]*" className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]" />

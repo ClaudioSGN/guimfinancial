@@ -112,11 +112,13 @@ create table if not exists investment_purchases (
 );
 
 alter table accounts add column if not exists user_id uuid references auth.users (id) on delete cascade;
+alter table accounts add column if not exists bank_code text;
 alter table accounts add column if not exists initial_balance numeric not null default 0;
 alter table accounts add column if not exists card_limit numeric;
 alter table accounts add column if not exists closing_day int;
 alter table accounts add column if not exists due_day int;
 alter table credit_cards add column if not exists user_id uuid references auth.users (id) on delete cascade;
+alter table credit_cards add column if not exists bank_code text;
 alter table credit_cards add column if not exists owner_type text not null default 'self';
 alter table credit_cards add column if not exists friend_name text;
 alter table credit_cards drop constraint if exists credit_cards_owner_type_check;

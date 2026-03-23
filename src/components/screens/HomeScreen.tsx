@@ -23,6 +23,7 @@ import {
   loadProfileSettings,
   type ProfileSettings,
 } from "@/lib/profile";
+import { BankBrandBadge } from "@/components/BankBrandBadge";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -65,6 +66,7 @@ type Account = {
   id: string;
   name: string;
   balance: number | string;
+  bank_code?: string | null;
 };
 
 type RawAccount = {
@@ -72,6 +74,7 @@ type RawAccount = {
   name: string;
   balance?: number | string | null;
   initial_balance?: number | string | null;
+  bank_code?: string | null;
 };
 
 type CreditCard = {
@@ -82,6 +85,7 @@ type CreditCard = {
   friend_name: string | null;
   closing_day: number;
   due_day: number;
+  bank_code?: string | null;
 };
 
 type LegacyCreditCard = Omit<CreditCard, "owner_type" | "friend_name">;
@@ -868,7 +872,7 @@ export function HomeScreen() {
     async function loadCardsForDashboard() {
       const cardsResult = await supabase
         .from("credit_cards")
-        .select("id,name,limit_amount,owner_type,friend_name,closing_day,due_day")
+        .select("id,name,limit_amount,owner_type,friend_name,closing_day,due_day,bank_code")
         .eq("user_id", userId)
         .order("owner_type", { ascending: true })
         .order("name", { ascending: true });
@@ -880,7 +884,25 @@ export function HomeScreen() {
         };
       }
 
-      if (!isCardOwnershipColumnMissing(cardsResult.error)) {
+      if (hasMissingColumnError(cardsResult.error, ["bank_code"])) {
+        const noBankCodeCardsResult = await supabase
+          .from("credit_cards")
+          .select("id,name,limit_amount,owner_type,friend_name,closing_day,due_day")
+          .eq("user_id", userId)
+          .order("owner_type", { ascending: true })
+          .order("name", { ascending: true });
+
+        if (!noBankCodeCardsResult.error) {
+          return {
+            data: (noBankCodeCardsResult.data ?? []) as CreditCard[],
+            error: null as unknown,
+          };
+        }
+
+        if (!isCardOwnershipColumnMissing(noBankCodeCardsResult.error)) {
+          return { data: [] as CreditCard[], error: noBankCodeCardsResult.error };
+        }
+      } else if (!isCardOwnershipColumnMissing(cardsResult.error)) {
         return { data: [] as CreditCard[], error: cardsResult.error };
       }
 
@@ -903,7 +925,7 @@ export function HomeScreen() {
     async function loadAccountsForDashboard() {
       const accountsResult = await supabase
         .from("accounts")
-        .select("id,name,balance,initial_balance")
+        .select("id,name,balance,initial_balance,bank_code")
         .eq("user_id", userId)
         .order("name", { ascending: true });
 
@@ -914,13 +936,24 @@ export function HomeScreen() {
         };
       }
 
-      if (!hasMissingColumnError(accountsResult.error, ["initial_balance"])) {
+      if (
+        !hasMissingColumnError(accountsResult.error, ["initial_balance"]) &&
+        !hasMissingColumnError(accountsResult.error, ["bank_code"])
+      ) {
         return { data: [] as RawAccount[], error: accountsResult.error };
       }
 
+      const fallbackAccountSelect =
+        hasMissingColumnError(accountsResult.error, ["bank_code"]) &&
+        hasMissingColumnError(accountsResult.error, ["initial_balance"])
+          ? "id,name,balance"
+          : hasMissingColumnError(accountsResult.error, ["bank_code"])
+            ? "id,name,balance,initial_balance"
+            : "id,name,balance,bank_code";
+
       const legacyAccountsResult = await supabase
         .from("accounts")
-        .select("id,name,balance")
+        .select(fallbackAccountSelect)
         .eq("user_id", userId)
         .order("name", { ascending: true });
 
@@ -929,7 +962,7 @@ export function HomeScreen() {
       }
 
       return {
-        data: (legacyAccountsResult.data ?? []) as RawAccount[],
+        data: (legacyAccountsResult.data ?? []) as unknown as RawAccount[],
         error: null as unknown,
       };
     }
@@ -1108,13 +1141,23 @@ export function HomeScreen() {
       const hasHistoricalAccountBalances =
         accountsResult.data.length > 0 &&
         accountsResult.data.every((account) => account.initial_balance != null);
+      const hasStoredAccountBalances =
+        accountsResult.data.length > 0 &&
+        accountsResult.data.every((account) => account.balance != null);
       const nextAccounts = accountsResult.data.map((account) => {
+        const storedBalance =
+          account.balance != null && Number.isFinite(Number(account.balance))
+            ? Number(account.balance)
+            : null;
         return {
           id: account.id,
           name: account.name,
-          balance: hasHistoricalAccountBalances
-            ? computeEffectiveAccountBalance(account, transactions, transfers)
-            : computePeriodAccountBalance(account.id, monthTx, monthTransfers),
+          bank_code: account.bank_code ?? null,
+          balance:
+            storedBalance ??
+            (hasHistoricalAccountBalances
+              ? computeEffectiveAccountBalance(account, transactions, transfers)
+              : computePeriodAccountBalance(account.id, monthTx, monthTransfers)),
         } satisfies Account;
       });
       const nextCards = (cardsResult.data ?? []) as CreditCard[];
@@ -1136,7 +1179,7 @@ export function HomeScreen() {
 
       setTotalBalance(hasMonthActivity ? monthNet : total);
       setAccountBalanceTotal(total);
-      setUsesHistoricalAccountBalances(hasHistoricalAccountBalances);
+      setUsesHistoricalAccountBalances(!hasStoredAccountBalances && hasHistoricalAccountBalances);
       setIncome(monthIncome);
       setExpenses(monthExpenses);
       setAccounts(nextAccounts);
@@ -2910,11 +2953,14 @@ export function HomeScreen() {
                   key={account.id}
                   className="flex items-center gap-3 rounded-xl border border-[#1C2332] bg-[#0F141E] p-3"
                 >
-                  <span
-                    className={`h-2.5 w-2.5 rounded-full ${
-                      (Number(account.balance) || 0) > 0 ? "bg-[#4FC3A1]" : "bg-[#64748B]"
-                    }`}
-                  />
+                  <div className="relative shrink-0">
+                    <BankBrandBadge bankCode={account.bank_code} size="sm" />
+                    <span
+                      className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border border-[#0F141E] ${
+                        (Number(account.balance) || 0) > 0 ? "bg-[#4FC3A1]" : "bg-[#64748B]"
+                      }`}
+                    />
+                  </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="truncate text-sm font-semibold text-[#E4E7EC]">{account.name}</p>
@@ -2993,8 +3039,9 @@ export function HomeScreen() {
                     }`}
                   >
                     <div className="flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-semibold text-[#E4E7EC]">{card.name}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <BankBrandBadge bankCode={card.bank_code} size="sm" />
+                      <p className="text-sm font-semibold text-[#E4E7EC]">{card.name}</p>
                        {isFriendCard ? (
                           <span className="rounded-full border border-[#2E6C79] bg-[#173038] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[#91E6DA]">
                             {t("cards.ownerBadgeFriend")}

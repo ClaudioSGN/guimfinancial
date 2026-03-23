@@ -7,12 +7,16 @@ import { useLanguage } from "@/lib/language";
 import { useCurrency } from "@/lib/currency";
 import { formatCentsFromNumber, formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
 import { useAuth } from "@/lib/auth";
+import { hasMissingColumnError } from "@/lib/errorUtils";
+import { BankBrandBadge, BankBrandPicker } from "@/components/BankBrandBadge";
+import { DEFAULT_BANK_BRAND_CODE, type BankBrandCode } from "@/lib/bankBrands";
 
 type Account = {
   id: string;
   name: string;
   type: string;
   balance: number | string;
+  bank_code?: string | null;
 };
 
 export default function AccountsPage() {
@@ -23,12 +27,14 @@ export default function AccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [name, setName] = useState("");
   const [type, setType] = useState("");
+  const [bankCode, setBankCode] = useState<BankBrandCode>(DEFAULT_BANK_BRAND_CODE);
   const [balance, setBalance] = useState(emptyMoneyValue);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [editing, setEditing] = useState<Account | null>(null);
   const [editName, setEditName] = useState("");
   const [editType, setEditType] = useState("");
+  const [editBankCode, setEditBankCode] = useState<BankBrandCode>(DEFAULT_BANK_BRAND_CODE);
   const [editBalance, setEditBalance] = useState(emptyMoneyValue);
   const [editSaving, setEditSaving] = useState(false);
   const typeOptions = [
@@ -40,11 +46,22 @@ export default function AccountsPage() {
     if (!user) return;
     const { data, error } = await supabase
       .from("accounts")
-      .select("id,name,type,balance")
+      .select("id,name,type,balance,bank_code")
       .eq("user_id", user.id)
       .order("name", { ascending: true });
     if (!error) {
       setAccounts((data ?? []) as Account[]);
+      return;
+    }
+    if (hasMissingColumnError(error, ["bank_code"])) {
+      const fallback = await supabase
+        .from("accounts")
+        .select("id,name,type,balance")
+        .eq("user_id", user.id)
+        .order("name", { ascending: true });
+      if (!fallback.error) {
+        setAccounts((fallback.data ?? []) as Account[]);
+      }
     }
   }
 
@@ -76,14 +93,27 @@ export default function AccountsPage() {
     }
 
     setSaving(true);
-    const { error } = await supabase.from("accounts").insert([
+    let { error } = await supabase.from("accounts").insert([
       {
         user_id: user.id,
         name: name.trim(),
         type: type.trim(),
         balance: parsedBalance,
+        bank_code: bankCode,
       },
     ]);
+
+    if (error && hasMissingColumnError(error, ["bank_code"])) {
+      const legacy = await supabase.from("accounts").insert([
+        {
+          user_id: user.id,
+          name: name.trim(),
+          type: type.trim(),
+          balance: parsedBalance,
+        },
+      ]);
+      error = legacy.error;
+    }
 
     if (error) {
       console.error("Supabase accounts insert error:", error);
@@ -94,6 +124,7 @@ export default function AccountsPage() {
 
     setName("");
     setType("");
+    setBankCode(DEFAULT_BANK_BRAND_CODE);
     setBalance(emptyMoneyValue);
     setSaving(false);
     loadAccounts();
@@ -104,6 +135,7 @@ export default function AccountsPage() {
     setEditing(account);
     setEditName(account.name);
     setEditType(account.type);
+    setEditBankCode((account.bank_code as BankBrandCode | null) ?? DEFAULT_BANK_BRAND_CODE);
     setEditBalance(formatCentsFromNumber(Number(account.balance) || 0, currency));
     setErrorMsg(null);
   }
@@ -128,15 +160,29 @@ export default function AccountsPage() {
     }
 
     setEditSaving(true);
-    const { error } = await supabase
+    let { error } = await supabase
       .from("accounts")
       .update({
         name: editName.trim(),
         type: editType.trim(),
         balance: parsedBalance,
+        bank_code: editBankCode,
       })
       .eq("id", editing.id)
       .eq("user_id", user.id);
+
+    if (error && hasMissingColumnError(error, ["bank_code"])) {
+      const legacy = await supabase
+        .from("accounts")
+        .update({
+          name: editName.trim(),
+          type: editType.trim(),
+          balance: parsedBalance,
+        })
+        .eq("id", editing.id)
+        .eq("user_id", user.id);
+      error = legacy.error;
+    }
     setEditSaving(false);
 
     if (error) {
@@ -167,6 +213,7 @@ export default function AccountsPage() {
         </div>
 
         <div className="space-y-3">
+          <BankBrandPicker selected={bankCode} onSelect={setBankCode} />
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
@@ -220,9 +267,12 @@ export default function AccountsPage() {
               key={item.id}
               className="flex items-center justify-between rounded-2xl border border-[#1E232E] bg-[#121621] p-4"
             >
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-[#E4E7EC]">{item.name}</p>
-                <p className="text-xs text-[#8A93A3]">{item.type}</p>
+              <div className="flex items-center gap-3">
+                <BankBrandBadge bankCode={item.bank_code} />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-[#E4E7EC]">{item.name}</p>
+                  <p className="text-xs text-[#8A93A3]">{item.type}</p>
+                </div>
               </div>
               <div className="flex items-center gap-3">
                 <p className="text-sm font-semibold text-[#C7CEDA]">
@@ -263,6 +313,7 @@ export default function AccountsPage() {
               </button>
             </div>
             <div className="space-y-3">
+              <BankBrandPicker selected={editBankCode} onSelect={setEditBankCode} />
               <input
                 value={editName}
                 onChange={(event) => setEditName(event.target.value)}
