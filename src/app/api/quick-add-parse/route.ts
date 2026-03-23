@@ -288,6 +288,10 @@ async function parseWithOpenAI(body: Required<Pick<ParseRequestBody, "text" | "l
   }
 }
 
+type QuickAddParseInput = Required<
+  Pick<ParseRequestBody, "text" | "language" | "today" | "accounts" | "cards">
+>;
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as ParseRequestBody;
@@ -297,7 +301,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "missing_text" }, { status: 400 });
     }
 
-    const input = {
+    const input: QuickAddParseInput = {
       text,
       language: body.language === "en" ? "en" : "pt",
       today: body.today ?? toDateString(new Date()),

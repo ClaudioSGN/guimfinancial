@@ -1891,7 +1891,7 @@ export function HomeScreen() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-3">
           <div>
             <p className="text-lg font-semibold text-[#E2E6ED]">{monthTitle}</p>
@@ -1936,11 +1936,11 @@ export function HomeScreen() {
             ) : null}
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-3 sm:justify-end">
           <button
             type="button"
             onClick={openQuickAddModal}
-            className="inline-flex items-center gap-2 rounded-full border border-[#245A55] bg-[#123430] px-3 py-2 text-xs font-semibold text-[#7AF0D0] transition hover:border-[#2D7A72] hover:bg-[#15413B]"
+            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-[#245A55] bg-[#123430] px-3 py-2 text-xs font-semibold text-[#7AF0D0] transition hover:border-[#2D7A72] hover:bg-[#15413B]"
           >
             <span className="flex h-6 w-6 items-center justify-center rounded-full border border-[#2A8A7D] bg-[#0F141E]">
               <svg
@@ -1960,7 +1960,10 @@ export function HomeScreen() {
                 <path d="M8 21h8" />
               </svg>
             </span>
-            <span>{language === "pt" ? "Entrada rapida" : "Quick add"}</span>
+            <span className="sm:hidden">{language === "pt" ? "Voz" : "Voice"}</span>
+            <span className="hidden sm:inline">
+              {language === "pt" ? "Entrada rapida" : "Quick add"}
+            </span>
           </button>
           <Link href="/profile" className="group flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[#1A2230] bg-[#101620] text-xs font-semibold text-[#E2E6ED] transition group-hover:border-[#2B364B]">
