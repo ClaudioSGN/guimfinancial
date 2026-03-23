@@ -14,6 +14,11 @@ type AuthErrorLike = {
   status?: number;
 };
 
+type AuthFeedback = {
+  tone: "error" | "info";
+  message: string;
+};
+
 function isEmailRateLimitError(error: AuthErrorLike) {
   const normalizedMessage = (error.message ?? "").toLowerCase();
   return (
@@ -23,23 +28,50 @@ function isEmailRateLimitError(error: AuthErrorLike) {
   );
 }
 
-function formatAuthError(error: unknown): string {
+function isEmailNotConfirmedError(error: AuthErrorLike) {
+  const normalizedMessage = (error.message ?? "").toLowerCase();
+  return (
+    error.code === "email_not_confirmed" ||
+    normalizedMessage.includes("email not confirmed")
+  );
+}
+
+function formatAuthFeedback(error: unknown): AuthFeedback {
   if (error && typeof error === "object") {
     const authError = error as AuthErrorLike;
+    if (isEmailNotConfirmedError(authError)) {
+      return {
+        tone: "info",
+        message: "Por favor, confirme o seu endereco de e-mail.",
+      };
+    }
     if (isEmailRateLimitError(authError)) {
-      return "Muitas tentativas de envio de e-mail. Aguarde alguns minutos e tente novamente. Se a conta ja existir, entre com seu e-mail e senha.";
+      return {
+        tone: "error",
+        message:
+          "Muitas tentativas de envio de e-mail. Aguarde alguns minutos e tente novamente. Se a conta ja existir, entre com seu e-mail e senha.",
+      };
     }
     const message = authError.message ?? "Authentication failed.";
     if (message === "Database error querying schema") {
-      return "Supabase auth error: database schema query failed. Check Supabase Authentication logs/hooks.";
+      return {
+        tone: "error",
+        message:
+          "Supabase auth error: database schema query failed. Check Supabase Authentication logs/hooks.",
+      };
     }
     const details: string[] = [];
     if (authError.code) details.push(`code=${authError.code}`);
     if (typeof authError.status === "number") details.push(`status=${authError.status}`);
-    return details.length > 0 ? `${message} (${details.join(", ")})` : message;
+    return {
+      tone: "error",
+      message: details.length > 0 ? `${message} (${details.join(", ")})` : message,
+    };
   }
-  if (typeof error === "string") return error;
-  return "Authentication failed.";
+  if (typeof error === "string") {
+    return { tone: "error", message: error };
+  }
+  return { tone: "error", message: "Authentication failed." };
 }
 
 function getPasswordRecoveryRedirectUrl() {
@@ -52,10 +84,9 @@ function getPasswordRecoveryRedirectUrl() {
   }
 
   if (typeof window === "undefined") return undefined;
-  const { origin, hostname, protocol } = window.location;
+  const { origin, hostname } = window.location;
   const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-  const isTauriProtocol = protocol.startsWith("tauri");
-  if (isLocalHost || isTauriProtocol) {
+  if (isLocalHost) {
     // Let Supabase use the project Site URL/Redirect URLs instead of localhost.
     return undefined;
   }
@@ -78,6 +109,7 @@ export default function LoginPage() {
   const [recoveryMsg, setRecoveryMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [errorTone, setErrorTone] = useState<"error" | "info">("error");
   const [signupCooldown, setSignupCooldown] = useState(0);
 
   useEffect(() => {
@@ -109,6 +141,7 @@ export default function LoginPage() {
 
   async function handleSubmit() {
     setErrorMsg(null);
+    setErrorTone("error");
     setRecoveryMsg(null);
     if (mode === "signup" && signupCooldown > 0) {
       setErrorMsg(`Aguarde ${signupCooldown}s para tentar criar conta novamente.`);
@@ -139,7 +172,9 @@ export default function LoginPage() {
         if (mode === "signup" && isEmailRateLimitError(error as AuthErrorLike)) {
           setSignupCooldown(60);
         }
-        setErrorMsg(formatAuthError(error));
+        const feedback = formatAuthFeedback(error);
+        setErrorTone(feedback.tone);
+        setErrorMsg(feedback.message);
         return;
       }
       if (mode === "login") {
@@ -148,7 +183,9 @@ export default function LoginPage() {
       }
       router.replace("/");
     } catch (error) {
-      setErrorMsg(formatAuthError(error));
+      const feedback = formatAuthFeedback(error);
+      setErrorTone(feedback.tone);
+      setErrorMsg(feedback.message);
     } finally {
       setSaving(false);
     }
@@ -164,18 +201,23 @@ export default function LoginPage() {
 
     setSaving(true);
     setErrorMsg(null);
+    setErrorTone("error");
     try {
       const { error } = await supabase.auth.mfa.challengeAndVerify({
         factorId: mfaFactorId,
         code,
       });
       if (error) {
-        setErrorMsg(formatAuthError(error));
+        const feedback = formatAuthFeedback(error);
+        setErrorTone(feedback.tone);
+        setErrorMsg(feedback.message);
         return;
       }
       router.replace("/");
     } catch (error) {
-      setErrorMsg(formatAuthError(error));
+      const feedback = formatAuthFeedback(error);
+      setErrorTone(feedback.tone);
+      setErrorMsg(feedback.message);
     } finally {
       setSaving(false);
     }
@@ -205,12 +247,12 @@ export default function LoginPage() {
       const redirectTo = getPasswordRecoveryRedirectUrl();
       const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, { redirectTo });
       if (error) {
-        setRecoveryMsg(formatAuthError(error));
+        setRecoveryMsg(formatAuthFeedback(error).message);
         return;
       }
       setRecoveryMsg("Se o email existir, enviaremos um link para redefinir a senha.");
     } catch (error) {
-      setRecoveryMsg(formatAuthError(error));
+      setRecoveryMsg(formatAuthFeedback(error).message);
     } finally {
       setRecoveryLoading(false);
     }
@@ -238,7 +280,11 @@ export default function LoginPage() {
               inputMode="numeric"
               className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
             />
-            {errorMsg ? <p className="text-xs text-red-400">{errorMsg}</p> : null}
+            {errorMsg ? (
+              <p className={errorTone === "info" ? "text-xs text-[#8B94A6]" : "text-xs text-red-400"}>
+                {errorMsg}
+              </p>
+            ) : null}
             <button
               type="button"
               onClick={handleVerifyMfa}
@@ -325,7 +371,11 @@ export default function LoginPage() {
                 {recoveryMsg ? <p className="text-xs text-[#8B94A6]">{recoveryMsg}</p> : null}
               </div>
             ) : null}
-            {errorMsg ? <p className="text-xs text-red-400">{errorMsg}</p> : null}
+            {errorMsg ? (
+              <p className={errorTone === "info" ? "text-xs text-[#8B94A6]" : "text-xs text-red-400"}>
+                {errorMsg}
+              </p>
+            ) : null}
             {mode === "signup" && signupCooldown > 0 ? (
               <p className="text-xs text-[#8B94A6]">
                 Proxima tentativa de cadastro em {signupCooldown}s.
@@ -356,6 +406,7 @@ export default function LoginPage() {
               setShowRecovery(false);
               setRecoveryMsg(null);
               setErrorMsg(null);
+              setErrorTone("error");
               setMode(mode === "login" ? "signup" : "login");
             }}
           >

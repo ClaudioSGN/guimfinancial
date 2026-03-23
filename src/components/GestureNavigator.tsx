@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import React, { useRef, useState, TouchEvent } from "react";
 
-const ROUTES = ["/", "/transactions", "/banks"];
+const ROUTES = ["/", "/transactions", "/accounts", "/cards"];
 
 // Config do gesto
 const SWIPE_THRESHOLD = 60; // mínimo de px pra considerar swipe

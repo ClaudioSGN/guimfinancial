@@ -1,5 +1,4 @@
 import { createClient } from "@supabase/supabase-js";
-import { processLock } from "@supabase/auth-js";
 import { getErrorMessage } from "@/lib/errorUtils";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -65,15 +64,6 @@ export function setRememberLoginPreference(remember: boolean) {
   window.localStorage.setItem(REMEMBER_LOGIN_KEY, remember ? "true" : "false");
 }
 
-function isTauriRuntime() {
-  if (typeof window === "undefined") return false;
-  const w = window as unknown as { __TAURI__?: unknown; __TAURI_INTERNALS__?: unknown };
-  const hasTauriGlobals = Boolean(w.__TAURI__ || w.__TAURI_INTERNALS__);
-  const hasTauriUserAgent =
-    typeof navigator !== "undefined" && /tauri/i.test(navigator.userAgent);
-  return hasTauriGlobals || hasTauriUserAgent;
-}
-
 const safeFetch: typeof fetch = async (input, init) => {
   try {
     return await fetch(input, init);
@@ -122,12 +112,10 @@ function clearExpiredStoredSession(storageKey: string) {
   }
 }
 
-if (isTauriRuntime()) {
-  if (getRememberLoginPreference()) {
-    clearExpiredStoredSession(authStorageKey);
-  } else {
-    removeStoredSession(authStorageKey);
-  }
+if (getRememberLoginPreference()) {
+  clearExpiredStoredSession(authStorageKey);
+} else {
+  removeStoredSession(authStorageKey);
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -135,9 +123,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     fetch: safeFetch,
   },
   auth: {
-    autoRefreshToken: !isTauriRuntime(),
+    autoRefreshToken: true,
     detectSessionInUrl: true,
     storageKey: authStorageKey,
-    lock: isTauriRuntime() ? (name, _acquireTimeout, fn) => processLock(name, -1, fn) : undefined,
   },
 });

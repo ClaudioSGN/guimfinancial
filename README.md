@@ -1,25 +1,15 @@
-GuimFinancial is a Tauri + Next.js desktop app.
+GuimFinancial is a web app built with Next.js.
 
 ## Getting Started
-
-Run the web dev server (for UI development):
 
 ```bash
 npm run dev
 ```
 
-Run the desktop app in dev mode:
+## Build
 
 ```bash
-npm run tauri:dev
-```
-
-## Build (MSI)
-
-The production build uses static export (`out/`) and bundles an MSI via Tauri:
-
-```bash
-npm run tauri:build
+npm run build
 ```
 
 ## Auth Redirects (Password Recovery)
@@ -32,15 +22,8 @@ Set one of these env vars:
 - or `NEXT_PUBLIC_APP_URL=https://your-public-domain.com`
 
 The app will use `<your-url>/reset-password` as the recovery redirect target.
-If neither is set and the app runs on localhost/Tauri, Supabase falls back to your
+If neither is set and the app runs on localhost, Supabase falls back to your
 project Auth Site URL and configured Redirect URLs.
-
-## Updater (Signing)
-
-To generate updater artifacts (`bundle.createUpdaterArtifacts: true`), set:
-
-- `TAURI_SIGNING_PRIVATE_KEY` = path to your private key file (keep it secret)
-- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` = your key password (if any)
 
 ## Learn More
 

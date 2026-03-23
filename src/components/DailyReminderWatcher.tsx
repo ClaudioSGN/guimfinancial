@@ -18,22 +18,16 @@ type CreditCardReminder = {
   dueDay: number | null;
 };
 
-const POLL_INTERVAL_MS = 30_000; // checa a cada 30s
-const REMINDER_SETTINGS_ID = "00000000-0000-0000-0000-000000000001";
-type TauriNotificationApi = {
-  isPermissionGranted?: () => Promise<boolean>;
-  requestPermission?: () => Promise<"granted" | "denied" | "prompt">;
-  sendNotification?: (payload: { title: string; body: string }) => void;
+type FixedBillReminder = {
+  id: string;
+  name: string;
+  dueDay: number | null;
+  amount: number;
 };
 
-function getTauriNotificationApi(): TauriNotificationApi | null {
-  if (typeof window === "undefined") return null;
-  const tauri = (window as { __TAURI__?: { notification?: TauriNotificationApi } })
-    .__TAURI__;
-  return tauri?.notification ?? null;
-}
+const POLL_INTERVAL_MS = 30_000;
+const REMINDER_SETTINGS_ID = "00000000-0000-0000-0000-000000000001";
 
-// chave pra marcar que já notificou hoje
 function getDateKey(date: Date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -102,54 +96,57 @@ async function fetchCreditCards(): Promise<CreditCardReminder[]> {
   }
 }
 
-async function ensureNotificationPermission(enabled: boolean) {
-  if (typeof window === "undefined") return;
-  if (!enabled) return;
-  const tauriNotification = getTauriNotificationApi();
-  if (tauriNotification?.isPermissionGranted && tauriNotification.requestPermission) {
-    try {
-      const granted = await tauriNotification.isPermissionGranted();
-      if (!granted) {
-        await tauriNotification.requestPermission();
-      }
-    } catch (e) {
-      console.error("Erro ao pedir permissao de notificacao:", e);
-    }
-    return;
-  }
-  if (!("Notification" in window)) return;
+async function fetchFixedBills(): Promise<FixedBillReminder[]> {
+  try {
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("id,description,category,date,amount,is_fixed,type")
+      .eq("is_fixed", true)
+      .in("type", ["expense", "card_expense"]);
 
-  // já tem permissão decidida
+    if (error) {
+      logReminderLoadError("erro ao carregar contas fixas", error);
+      return [];
+    }
+
+    return (data ?? []).map((item) => {
+      const rawDate = typeof item.date === "string" ? item.date : "";
+      const match = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      const dueDay = match ? Number(match[3]) : null;
+      return {
+        id: item.id,
+        name: item.description || item.category || "Conta fixa",
+        dueDay: Number.isFinite(dueDay) ? dueDay : null,
+        amount: Number(item.amount) || 0,
+      };
+    });
+  } catch (error) {
+    logReminderLoadError("falha ao carregar contas fixas", error);
+    return [];
+  }
+}
+
+async function ensureNotificationPermission(enabled: boolean) {
+  if (typeof window === "undefined" || !enabled || !("Notification" in window)) return;
+
   if (Notification.permission === "granted" || Notification.permission === "denied") {
     return;
   }
 
-  // evita ficar pedindo toda hora
   const requested = localStorage.getItem("daily-reminder-permission-requested");
   if (requested === "yes") return;
 
   try {
     const result = await Notification.requestPermission();
     localStorage.setItem("daily-reminder-permission-requested", "yes");
-    console.log("Permissão de notificação:", result);
-  } catch (e) {
-    console.error("Erro ao pedir permissão de notificação:", e);
+    console.log("Permissao de notificacao:", result);
+  } catch (error) {
+    console.error("Erro ao pedir permissao de notificacao:", error);
   }
 }
 
 function notify(title: string, body: string, tag: string) {
-  if (typeof window === "undefined") return;
-  const tauriNotification = getTauriNotificationApi();
-  if (tauriNotification?.sendNotification) {
-    try {
-      tauriNotification.sendNotification({ title, body });
-    } catch (e) {
-      console.error("Erro ao enviar notificacao:", e);
-    }
-    return;
-  }
-
-  if (!("Notification" in window)) return;
+  if (typeof window === "undefined" || !("Notification" in window)) return;
   if (Notification.permission !== "granted") return;
 
   new Notification(title, {
@@ -181,9 +178,9 @@ function getValidDay(date: Date, day: number) {
 function maybeShowNotifications(
   settings: ReminderSettings,
   cards: CreditCardReminder[],
+  fixedBills: FixedBillReminder[],
 ) {
-  if (typeof window === "undefined") return;
-  if (!settings.enabled) return;
+  if (typeof window === "undefined" || !settings.enabled) return;
 
   const now = new Date();
   if (!isWithinReminderWindow(now, settings)) return;
@@ -243,12 +240,38 @@ function maybeShowNotifications(
       }
     }
   });
+
+  fixedBills.forEach((bill) => {
+    if (!bill.dueDay) return;
+
+    const dueDate = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      getValidDay(now, bill.dueDay),
+    );
+    const reminderDate = new Date(dueDate);
+    reminderDate.setDate(dueDate.getDate() - 1);
+
+    if (matchesDate(today, reminderDate)) {
+      const dueKey = getReminderKey("fixed-bill-due", dateKey, bill.id);
+      if (localStorage.getItem(dueKey) !== "yes") {
+        notify(
+          `Conta fixa vence amanha: ${bill.name}`,
+          `Lembrete para ${bill.name} (${bill.amount.toFixed(2)}).`,
+          `guim-fixed-bill-${bill.id}`,
+        );
+        localStorage.setItem(dueKey, "yes");
+      }
+    }
+  });
 }
+
 export function DailyReminderWatcher() {
   const { user, loading } = useAuth();
   const userId = user?.id;
   const [settings, setSettings] = useState<ReminderSettings | null>(null);
   const [cards, setCards] = useState<CreditCardReminder[]>([]);
+  const [fixedBills, setFixedBills] = useState<FixedBillReminder[]>([]);
 
   useEffect(() => {
     if (loading || !userId) return;
@@ -257,7 +280,7 @@ export function DailyReminderWatcher() {
 
     async function init() {
       const s = await fetchSettingsFromSupabase();
-      const c = await fetchCreditCards();
+      const [c, bills] = await Promise.all([fetchCreditCards(), fetchFixedBills()]);
       if (!mounted) return;
 
       if (s) {
@@ -265,13 +288,16 @@ export function DailyReminderWatcher() {
         await ensureNotificationPermission(s.enabled);
       }
       setCards(c);
+      setFixedBills(bills);
     }
 
     init();
 
     function handleRefresh() {
-      fetchCreditCards().then((next) => {
-        if (mounted) setCards(next);
+      Promise.all([fetchCreditCards(), fetchFixedBills()]).then(([nextCards, nextBills]) => {
+        if (!mounted) return;
+        setCards(nextCards);
+        setFixedBills(nextBills);
       });
     }
 
@@ -287,15 +313,13 @@ export function DailyReminderWatcher() {
     if (!settings) return;
 
     const id = setInterval(() => {
-      maybeShowNotifications(settings, cards);
+      maybeShowNotifications(settings, cards, fixedBills);
     }, POLL_INTERVAL_MS);
 
     return () => {
       clearInterval(id);
     };
-  }, [settings, cards]);
+  }, [settings, cards, fixedBills]);
 
-  // componente “fantasma”: só cuida de notificações
   return null;
 }
-

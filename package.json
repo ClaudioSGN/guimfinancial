@@ -7,16 +7,10 @@
         "build": "next build",
         "start": "next start",
         "lint": "eslint",
-        "test": "vitest run",
-        "postinstall": "node scripts/patch-next-workerthreads.js",
-        "tauri:dev": "tauri dev",
-        "tauri:build": "tauri build"
+        "test": "vitest run"
     },
     "dependencies": {
         "@supabase/supabase-js": "^2.81.1",
-        "@tauri-apps/api": "~2.9.0",
-        "@tauri-apps/plugin-notification": "^2.0.0",
-        "@tauri-apps/plugin-updater": "~2.9.0",
         "big.js": "^6.2.1",
         "framer-motion": "^12.23.24",
         "next": "^16.0.10",
@@ -27,7 +21,6 @@
     },
     "devDependencies": {
         "@tailwindcss/postcss": "^4.1.17",
-        "@tauri-apps/cli": "~2.9.6",
         "@types/node": "^20",
         "@types/react": "^19.2.7",
         "@types/react-dom": "^19.2.3",

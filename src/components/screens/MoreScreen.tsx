@@ -8,7 +8,6 @@ import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { supabase } from "@/lib/supabaseClient";
 import { getErrorMessage } from "@/lib/errorUtils";
-import { CheckForUpdatesCard } from "@/components/CheckForUpdatesCard";
 
 const STORAGE_KEYS = {
   enabled: "dailyReminderEnabled",
@@ -171,14 +170,16 @@ export function MoreScreen() {
       "credit_cards",
       "accounts",
       "reminder_settings",
+      "category_budgets",
       "goals",
     ] as const;
+    type ResettableTable = (typeof tables)[number];
 
     const errors: string[] = [];
 
     for (const table of tables) {
       // Some installations may not have optional tables (ex: goals) yet.
-      const { error } = await (supabase.from(table as any) as any)
+      const { error } = await supabase.from(table as ResettableTable)
         .delete()
         .eq("user_id", user.id);
       if (!error) continue;
@@ -592,8 +593,6 @@ export function MoreScreen() {
             <p className="text-sm font-semibold text-[#E4E7EC]">{t("more.export")}</p>
             <p className="text-xs text-[#8B94A6]">{t("more.exportHint")}</p>
           </Link>
-
-          <CheckForUpdatesCard />
 
           {user ? (
             <div className="space-y-2">
