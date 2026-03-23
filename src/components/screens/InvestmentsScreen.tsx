@@ -862,6 +862,33 @@ function getInvestmentCategory(asset: Investment): InvestmentCategory {
   return "other";
 }
 
+function getInvestmentPrincipal(asset: Investment) {
+  if (asset.type === "fixed_income") return Number(asset.quantity) || 0;
+  return (Number(asset.quantity) || 0) * (Number(asset.average_price) || 0);
+}
+
+function getInvestmentCurrentValue(
+  asset: Investment,
+  quote: Quote | undefined,
+  fixedSnapshot: FixedIncomeSnapshot | undefined,
+) {
+  if (asset.type === "fixed_income") {
+    return fixedSnapshot?.currentValue ?? getInvestmentPrincipal(asset);
+  }
+
+  if (quote?.price != null) {
+    return quote.price * (Number(asset.quantity) || 0);
+  }
+
+  return getInvestmentPrincipal(asset);
+}
+
+function getInvestmentTypeLabel(asset: Investment, language: "pt" | "en") {
+  if (asset.type === "b3") return "B3";
+  if (asset.type === "crypto") return language === "pt" ? "Cripto" : "Crypto";
+  return language === "pt" ? "Renda fixa" : "Fixed income";
+}
+
 function formatCurrency(
   value: number,
   language: "pt" | "en",
@@ -2237,6 +2264,113 @@ export function InvestmentsScreen() {
     return map;
   }, [metricConfig]);
 
+  const portfolioSummaryByCurrency = useMemo(() => {
+    const buckets = new Map<SupportedInvestmentCurrency, {
+      currency: SupportedInvestmentCurrency;
+      invested: number;
+      current: number;
+      profit: number;
+      assets: number;
+    }>();
+
+    assets.forEach((asset) => {
+      const assetCurrency = getAssetCurrency(asset);
+      const quote = allQuotes[getAssetQuoteKey(asset)];
+      const fixedSnapshot = fixedSnapshotByAssetId[asset.id];
+      const invested = getInvestmentPrincipal(asset);
+      const current = getInvestmentCurrentValue(asset, quote, fixedSnapshot);
+      const existing = buckets.get(assetCurrency) ?? {
+        currency: assetCurrency,
+        invested: 0,
+        current: 0,
+        profit: 0,
+        assets: 0,
+      };
+
+      existing.invested += invested;
+      existing.current += current;
+      existing.profit += current - invested;
+      existing.assets += 1;
+      buckets.set(assetCurrency, existing);
+    });
+
+    return Array.from(buckets.values()).sort((a, b) => a.currency.localeCompare(b.currency));
+  }, [allQuotes, assets, fixedSnapshotByAssetId]);
+
+  const portfolioTotals = useMemo(() => {
+    return {
+      assets: assets.length,
+      categories: new Set(assets.map((asset) => getInvestmentCategory(asset))).size,
+      positiveResults: assets.filter((asset) => {
+        const quote = allQuotes[getAssetQuoteKey(asset)];
+        const fixedSnapshot = fixedSnapshotByAssetId[asset.id];
+        const invested = getInvestmentPrincipal(asset);
+        const current = getInvestmentCurrentValue(asset, quote, fixedSnapshot);
+        return current > invested;
+      }).length,
+    };
+  }, [allQuotes, assets, fixedSnapshotByAssetId]);
+
+  const categoryAllocation = useMemo(() => {
+    const totalValue = assets.reduce((sum, asset) => {
+      const quote = allQuotes[getAssetQuoteKey(asset)];
+      const fixedSnapshot = fixedSnapshotByAssetId[asset.id];
+      return sum + getInvestmentCurrentValue(asset, quote, fixedSnapshot);
+    }, 0);
+
+    const rows = Object.entries(
+      assets.reduce<Record<InvestmentCategory, number>>((acc, asset) => {
+        const key = getInvestmentCategory(asset);
+        const quote = allQuotes[getAssetQuoteKey(asset)];
+        const fixedSnapshot = fixedSnapshotByAssetId[asset.id];
+        acc[key] = (acc[key] ?? 0) + getInvestmentCurrentValue(asset, quote, fixedSnapshot);
+        return acc;
+      }, {
+        fii: 0,
+        etf: 0,
+        stock: 0,
+        bdr: 0,
+        crypto: 0,
+        fixed: 0,
+        other: 0,
+      }),
+    )
+      .filter(([, value]) => value > 0)
+      .map(([key, value]) => ({
+        key: key as InvestmentCategory,
+        label: categoryLabelByKey[key as InvestmentCategory],
+        value,
+        share: totalValue > 0 ? (value / totalValue) * 100 : 0,
+      }))
+      .sort((a, b) => b.value - a.value);
+
+    return rows;
+  }, [allQuotes, assets, categoryLabelByKey, fixedSnapshotByAssetId]);
+
+  const topHoldings = useMemo(() => {
+    return assets
+      .map((asset) => {
+        const quote = allQuotes[getAssetQuoteKey(asset)];
+        const fixedSnapshot = fixedSnapshotByAssetId[asset.id];
+        const invested = getInvestmentPrincipal(asset);
+        const current = getInvestmentCurrentValue(asset, quote, fixedSnapshot);
+        const profit = current - invested;
+        const assetCurrency = getAssetCurrency(asset);
+
+        return {
+          id: asset.id,
+          name: getAssetDisplayName(asset),
+          typeLabel: getInvestmentTypeLabel(asset, language),
+          currency: assetCurrency,
+          current,
+          invested,
+          profit,
+        };
+      })
+      .sort((a, b) => b.current - a.current)
+      .slice(0, 5);
+  }, [allQuotes, assets, fixedSnapshotByAssetId, language]);
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between">
@@ -2272,6 +2406,173 @@ export function InvestmentsScreen() {
           </p>
         </div>
       ) : null}
+
+      <div className="grid gap-4 xl:grid-cols-[1.45fr_1fr]">
+        <div className="rounded-2xl border border-[#1E232E] bg-[#121621] p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-[#E5E8EF]">
+                {language === "pt" ? "Resumo da carteira" : "Portfolio summary"}
+              </p>
+              <p className="text-xs text-[#8B94A6]">
+                {language === "pt"
+                  ? "Visao consolidada por moeda dos teus investimentos."
+                  : "Consolidated view by currency of your investments."}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-[11px]">
+              <span className="rounded-full border border-[#2A3344] bg-[#0F121A] px-3 py-1 text-[#9AA3B2]">
+                {portfolioTotals.assets} {language === "pt" ? "ativos" : "assets"}
+              </span>
+              <span className="rounded-full border border-[#2A3344] bg-[#0F121A] px-3 py-1 text-[#9AA3B2]">
+                {portfolioTotals.categories} {language === "pt" ? "categorias" : "categories"}
+              </span>
+              <span className="rounded-full border border-[#235245] bg-[#10241E] px-3 py-1 text-[#7FE3BB]">
+                {portfolioTotals.positiveResults} {language === "pt" ? "no lucro" : "in profit"}
+              </span>
+            </div>
+          </div>
+
+          {portfolioSummaryByCurrency.length === 0 ? (
+            <div className="mt-4 rounded-2xl border border-dashed border-[#2A3445] bg-[#0F121A] p-5 text-sm text-[#8B94A6]">
+              {t("investments.empty")}
+            </div>
+          ) : (
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {portfolioSummaryByCurrency.map((bucket) => {
+                const tone =
+                  bucket.profit >= 0
+                    ? "text-emerald-300 border-emerald-500/25 bg-emerald-500/5"
+                    : "text-rose-300 border-rose-500/25 bg-rose-500/5";
+                return (
+                  <div
+                    key={`summary-${bucket.currency}`}
+                    className="rounded-2xl border border-[#1C2332] bg-[#0F121A] p-4"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-[#E5E8EF]">{bucket.currency}</p>
+                      <span className="rounded-full border border-[#2A3344] bg-[#111723] px-2.5 py-1 text-[11px] text-[#9AA3B2]">
+                        {bucket.assets} {language === "pt" ? "ativos" : "assets"}
+                      </span>
+                    </div>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl border border-[#1C2332] bg-[#111723] p-3">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
+                          {language === "pt" ? "Investido" : "Invested"}
+                        </p>
+                        <p className="mt-2 text-lg font-semibold text-[#E5E8EF]">
+                          {formatCurrency(bucket.invested, language, bucket.currency)}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-[#1C2332] bg-[#111723] p-3">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
+                          {language === "pt" ? "Valor atual" : "Current value"}
+                        </p>
+                        <p className="mt-2 text-lg font-semibold text-[#E5E8EF]">
+                          {formatCurrency(bucket.current, language, bucket.currency)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`mt-3 rounded-xl border p-3 ${tone}`}>
+                      <p className="text-[11px] uppercase tracking-[0.18em] opacity-80">
+                        {language === "pt" ? "Resultado" : "Result"}
+                      </p>
+                      <p className="mt-1 text-sm font-semibold">
+                        {bucket.profit >= 0 ? "+" : "-"}
+                        {formatCurrency(Math.abs(bucket.profit), language, bucket.currency)}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-[#1E232E] bg-[#121621] p-5">
+          <div>
+            <p className="text-sm font-semibold text-[#E5E8EF]">
+              {language === "pt" ? "Distribuicao por categoria" : "Allocation by category"}
+            </p>
+            <p className="text-xs text-[#8B94A6]">
+              {language === "pt"
+                ? "Onde a carteira esta mais concentrada agora."
+                : "Where the portfolio is most concentrated right now."}
+            </p>
+          </div>
+
+          {categoryAllocation.length === 0 ? (
+            <p className="mt-4 text-sm text-[#8B94A6]">{t("investments.empty")}</p>
+          ) : (
+            <div className="mt-4 space-y-3">
+              {categoryAllocation.slice(0, 6).map((row) => (
+                <div key={`allocation-${row.key}`} className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-3 text-xs">
+                    <span className="font-medium text-[#E5E8EF]">{row.label}</span>
+                    <span className="text-[#8B94A6]">
+                      {formatPercent(row.share, language)}
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-[#0F121A]">
+                    <div
+                      className="h-2 rounded-full bg-[#5DD6C7]"
+                      style={{ width: `${Math.max(4, Math.min(row.share, 100))}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-[#1E232E] bg-[#121621] p-5">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-[#E5E8EF]">
+              {language === "pt" ? "Maiores posicoes" : "Top holdings"}
+            </p>
+            <p className="text-xs text-[#8B94A6]">
+              {language === "pt"
+                ? "Os ativos com maior peso dentro da carteira."
+                : "Assets with the biggest weight in the portfolio."}
+            </p>
+          </div>
+        </div>
+        {topHoldings.length === 0 ? (
+          <p className="text-sm text-[#8B94A6]">{t("investments.empty")}</p>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            {topHoldings.map((asset) => (
+              <div
+                key={`top-${asset.id}`}
+                className="rounded-2xl border border-[#1C2332] bg-[#0F121A] p-4"
+              >
+                <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
+                  {asset.typeLabel}
+                </p>
+                <p className="mt-2 text-sm font-semibold text-[#E5E8EF]">{asset.name}</p>
+                <p className="mt-3 text-lg font-semibold text-[#E5E8EF]">
+                  {formatCurrency(asset.current, language, asset.currency)}
+                </p>
+                <p className="mt-1 text-xs text-[#8B94A6]">
+                  {language === "pt" ? "Investido" : "Invested"}:{" "}
+                  {formatCurrency(asset.invested, language, asset.currency)}
+                </p>
+                <p
+                  className={`mt-2 text-xs font-semibold ${
+                    asset.profit >= 0 ? "text-emerald-300" : "text-rose-300"
+                  }`}
+                >
+                  {language === "pt" ? "Resultado" : "Result"}:{" "}
+                  {asset.profit >= 0 ? "+" : "-"}
+                  {formatCurrency(Math.abs(asset.profit), language, asset.currency)}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-xs text-[#8B94A6]">{t("investments.organizeByLabel")}</p>

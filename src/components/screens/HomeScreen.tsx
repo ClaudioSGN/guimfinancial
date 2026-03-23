@@ -110,15 +110,6 @@ type CardInsight = {
   statementStatus: "open" | "closed";
 };
 
-type Investment = {
-  id: string;
-  type: "b3" | "crypto" | "fixed_income";
-  symbol: string;
-  name: string | null;
-  quantity: number | string;
-  average_price: number | string;
-};
-
 type FlowRow = {
   day: number;
   date: Date;
@@ -802,8 +793,6 @@ export function HomeScreen() {
   const [cards, setCards] = useState<CreditCard[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [cardTransactions, setCardTransactions] = useState<Transaction[]>([]);
-  const [investments, setInvestments] = useState<Investment[]>([]);
-  const [investedTotal, setInvestedTotal] = useState(0);
   const [showBalance, setShowBalance] = useState(true);
   const [monthOpen, setMonthOpen] = useState(false);
   const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
@@ -1072,23 +1061,12 @@ export function HomeScreen() {
         cardTransactionsResult,
         cardsResult,
         transfersResult,
-        investmentsResult,
-        purchasesResult,
       ] = await Promise.all([
         loadAccountsForDashboard(),
         loadTransactionsForDashboard(),
         loadCardTransactionsForDashboard(),
         loadCardsForDashboard(),
         loadTransfersForDashboard(),
-        supabase
-          .from("investments")
-          .select("id,type,symbol,name,quantity,average_price")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("investment_purchases")
-          .select("total_invested")
-          .eq("user_id", userId),
       ]);
 
       if (
@@ -1096,18 +1074,14 @@ export function HomeScreen() {
         transactionsResult.error ||
         cardTransactionsResult.error ||
         cardsResult.error ||
-        transfersResult.error ||
-        investmentsResult.error ||
-        purchasesResult.error
+        transfersResult.error
       ) {
         const error =
           accountsResult.error ||
           transactionsResult.error ||
           cardTransactionsResult.error ||
           cardsResult.error ||
-          transfersResult.error ||
-          investmentsResult.error ||
-          purchasesResult.error;
+          transfersResult.error;
         if (isTransientNetworkError(error)) {
           console.warn("[home] supabase load error:", getErrorMessage(error));
         } else {
@@ -1144,10 +1118,6 @@ export function HomeScreen() {
         } satisfies Account;
       });
       const nextCards = (cardsResult.data ?? []) as CreditCard[];
-      const nextInvestments = (investmentsResult.data ?? []) as Investment[];
-      const nextInvestedTotal = (purchasesResult.data ?? []).reduce((sum, item) => {
-        return sum + (Number(item.total_invested) || 0);
-      }, 0);
 
       const total = nextAccounts.reduce(
         (sum, account) => sum + (Number(account.balance) || 0),
@@ -1173,8 +1143,6 @@ export function HomeScreen() {
       setCards(nextCards);
       setTransactions(transactions);
       setCardTransactions(nextCardTransactions);
-      setInvestments(nextInvestments);
-      setInvestedTotal(nextInvestedTotal);
       setLoading(false);
     } catch (error) {
       if (isTransientNetworkError(error)) {
@@ -1605,10 +1573,20 @@ export function HomeScreen() {
     () => cards.filter((card) => (cardInsightsById[card.id]?.statementStatus ?? "open") === "closed").length,
     [cards, cardInsightsById],
   );
-  const netWorthBase = usesHistoricalAccountBalances ? accountBalanceTotal : totalBalance;
-  const netWorth = netWorthBase + investedTotal;
-  const investedShare = netWorth > 0 ? (investedTotal / netWorth) * 100 : 0;
-
+  const positiveAccountsCount = useMemo(
+    () => accounts.filter((account) => (Number(account.balance) || 0) > 0).length,
+    [accounts],
+  );
+  const averageAccountBalance = useMemo(
+    () => (accounts.length ? accountBalanceTotal / accounts.length : 0),
+    [accountBalanceTotal, accounts.length],
+  );
+  const largestAccount = useMemo(() => {
+    if (!accounts.length) return null;
+    return [...accounts].sort(
+      (a, b) => (Number(b.balance) || 0) - (Number(a.balance) || 0),
+    )[0] ?? null;
+  }, [accounts]);
   const displayName =
     (user?.user_metadata?.username as string | undefined) ||
     profile.name ||
@@ -2516,26 +2494,6 @@ export function HomeScreen() {
           <p className="mt-3 text-xs text-[#8D96A6]">
             {t("home.total")} {loading ? "..." : formatCurrency(totalBalance, language, currency)}
           </p>
-          <div className="mt-4 rounded-xl border border-[#1E2636] bg-[#0F141E] p-3">
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] uppercase tracking-[0.12em] text-[#8D96A6]">
-                {language === "pt" ? "Patrimonio total" : "Net worth"}
-              </p>
-              <p className="text-xs font-semibold text-[#E7ECF2]">
-                {loading ? "..." : formatCurrency(netWorth, language, currency)}
-              </p>
-            </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#111827]">
-              <div
-                className="h-1.5 rounded-full bg-[#5DD6C7]"
-                style={{ width: `${Math.max(0, Math.min(investedShare, 100))}%` }}
-              />
-            </div>
-            <p className="mt-2 text-[11px] text-[#8D96A6]">
-              {language === "pt" ? "Investido" : "Invested"}:{" "}
-              {loading ? "..." : formatCurrency(investedTotal, language, currency)}
-            </p>
-          </div>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <div className="rounded-lg border border-[#1E2636] bg-[#0F141E] p-2">
               <p className="text-[10px] uppercase tracking-[0.12em] text-[#8D96A6]">
@@ -2910,24 +2868,73 @@ export function HomeScreen() {
 
         </div>
 
-        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5 sm:col-span-2 lg:col-span-3">
+        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5 sm:col-span-2 lg:col-span-6">
           <div className="mb-4 flex items-center justify-between">
             <p className="text-sm font-semibold text-[#C7CEDA]">{t("home.accounts")}</p>
             <span className="flex h-8 w-8 items-center justify-center rounded-full border border-[#1A2230] bg-[#101620]">
               <AppIcon name="wallet" size={16} color="#92A0B7" />
             </span>
           </div>
+          <div className="mb-4 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-[#1C2332] bg-[#0F141E] p-3">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
+                {language === "pt" ? "Saldo total" : "Total balance"}
+              </p>
+              <p className="mt-2 text-lg font-semibold text-[#E5E8EF]">
+                {loading ? "..." : formatCurrency(accountBalanceTotal, language, currency)}
+              </p>
+            </div>
+            <div className="rounded-xl border border-[#1C2332] bg-[#0F141E] p-3">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
+                {language === "pt" ? "Contas positivas" : "Positive accounts"}
+              </p>
+              <p className="mt-2 text-lg font-semibold text-[#5DD6C7]">
+                {positiveAccountsCount}/{accounts.length}
+              </p>
+            </div>
+            <div className="rounded-xl border border-[#1C2332] bg-[#0F141E] p-3">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
+                {language === "pt" ? "Media por conta" : "Average per account"}
+              </p>
+              <p className="mt-2 text-lg font-semibold text-[#E5E8EF]">
+                {loading ? "..." : formatCurrency(averageAccountBalance, language, currency)}
+              </p>
+            </div>
+          </div>
           {accounts.length === 0 ? (
             <p className="text-xs text-[#8B94A6]">{t("home.noAccounts")}</p>
           ) : (
-            <div className="space-y-3">
+            <div className="grid gap-3 lg:grid-cols-2">
               {accounts.map((account) => (
-                <div key={account.id} className="flex items-center gap-3">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#4FC3A1]" />
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-[#E4E7EC]">{account.name}</p>
-                    <p className="text-xs text-[#8B94A6]">
+                <div
+                  key={account.id}
+                  className="flex items-center gap-3 rounded-xl border border-[#1C2332] bg-[#0F141E] p-3"
+                >
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full ${
+                      (Number(account.balance) || 0) > 0 ? "bg-[#4FC3A1]" : "bg-[#64748B]"
+                    }`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-semibold text-[#E4E7EC]">{account.name}</p>
+                      {largestAccount?.id === account.id ? (
+                        <span className="rounded-full border border-[#2E6C79] bg-[#173038] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[#91E6DA]">
+                          {language === "pt" ? "Maior saldo" : "Top balance"}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="text-lg font-semibold text-[#E5E8EF]">
                       {loading ? "..." : formatCurrency(Number(account.balance) || 0, language, currency)}
+                    </p>
+                    <p className="text-xs text-[#8B94A6]">
+                      {usesHistoricalAccountBalances
+                        ? language === "pt"
+                          ? "Saldo atual da conta"
+                          : "Current account balance"
+                        : language === "pt"
+                          ? "Movimento do mes selecionado"
+                          : "Selected month movement"}
                     </p>
                   </div>
                   <button
@@ -2942,55 +2949,16 @@ export function HomeScreen() {
               ))}
             </div>
           )}
-          <div className="mt-4 border-t border-[#1C2332] pt-3 text-sm font-semibold text-[#C7CEDA]">
-            {t("home.total")} {loading ? "..." : formatCurrency(accountBalanceTotal, language, currency)}
+          <div className="mt-4 flex items-center justify-between border-t border-[#1C2332] pt-3 text-sm">
+            <span className="text-[#8B94A6]">
+              {language === "pt" ? "Resumo das contas" : "Accounts summary"}
+            </span>
+            <span className="font-semibold text-[#C7CEDA]">
+              {t("home.total")} {loading ? "..." : formatCurrency(accountBalanceTotal, language, currency)}
+            </span>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5 sm:col-span-2 lg:col-span-3">
-          <div className="mb-4 flex items-center justify-between">
-            <p className="text-sm font-semibold text-[#C7CEDA]">
-              {t("investments.title")}
-            </p>
-            <span className="rounded-full border border-[#263043] bg-[#0F141E] px-3 py-1 text-[11px] text-[#9AA3B2]">
-              {t("investments.total")} {investments.length}
-            </span>
-          </div>
-          <div className="rounded-xl border border-[#1C2332] bg-[#0F141E] px-4 py-3">
-            <p className="text-xs text-[#8B94A6]">{t("investments.investedValue")}</p>
-            <p className="mt-1 text-lg font-semibold text-[#E5E8EF]">
-              {loading ? "..." : formatCurrency(investedTotal, language, currency)}
-            </p>
-          </div>
-          <div className="mt-4 space-y-3">
-            {investments.length === 0 ? (
-              <p className="text-xs text-[#8B94A6]">{t("investments.empty")}</p>
-            ) : (
-              investments.slice(0, 4).map((investment) => (
-                <div key={investment.id} className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-[#E4E7EC]">
-                      {(investment.name || investment.symbol).toUpperCase()}
-                    </p>
-                    <p className="text-xs text-[#8B94A6]">
-                      {investment.type === "b3"
-                        ? "B3"
-                        : investment.type === "crypto"
-                          ? "Cripto"
-                          : language === "pt"
-                            ? "Renda fixa"
-                            : "Fixed income"} ·{" "}
-                      {t("investments.quantity")} {investment.quantity}
-                    </p>
-                  </div>
-                  <span className="text-xs font-semibold text-[#A8B2C3]">
-                    {formatCurrency(Number(investment.average_price) || 0, language, currency)}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
 
         <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5 sm:col-span-2 lg:col-span-6">
           <div className="mb-4 flex items-center justify-between">
@@ -3310,3 +3278,5 @@ export function HomeScreen() {
     </div>
   );
 }
+
+
