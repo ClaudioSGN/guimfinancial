@@ -27,7 +27,6 @@ import {
 import {
   canSelectInvestmentCurrency,
   DEFAULT_INVESTMENT_CURRENCY,
-  getCoinGeckoCurrency,
   normalizeInvestmentCurrency,
   type SupportedInvestmentCurrency,
 } from "../../../shared/investmentCurrency";
@@ -110,6 +109,14 @@ type InvestmentFilterSettings = {
   limits: Record<InvestmentMetricKey, string>;
 };
 
+type StoredInvestmentFilter = {
+  enabled?: boolean;
+  showOnlyAbove?: boolean;
+  limits?: Partial<Record<InvestmentMetricKey, string>>;
+  view?: string;
+  threshold?: string;
+};
+
 type InvestmentOrganizer = "alphabetical" | "category";
 type InvestmentCategory = "fii" | "etf" | "stock" | "bdr" | "crypto" | "fixed" | "other";
 
@@ -125,7 +132,6 @@ type FixedIncomeSnapshot = {
   estimatedDailyProfit: number;
 };
 
-const BRAPI_KEY = process.env.NEXT_PUBLIC_BRAPI_KEY;
 const B3_SUFFIX = ".SA";
 const FEATURED_CRYPTO_IDS = [
   "bitcoin",
@@ -151,37 +157,6 @@ const DEFAULT_INVESTMENT_FILTER: InvestmentFilterSettings = {
     vacancyPct: "10",
   },
 };
-const BRAPI_DEFAULT_HEADERS = {
-  Accept: "application/json,text/plain,*/*",
-};
-const BRAPI_BACKOFF_MS = 30 * 1000;
-const BRAPI_PERMANENT_SYMBOL_CODES = new Set([
-  "INVALID_STOCK",
-  "INVALID_SYMBOL",
-  "SYMBOL_NOT_FOUND",
-  "QUOTE_NOT_FOUND",
-  "NO_RESULTS",
-  "NOT_FOUND",
-]);
-let brapiBlockedUntil = 0;
-const badB3Symbols = new Set<string>();
-let brapiUseToken = Boolean(BRAPI_KEY);
-let brapiHistoryRange = "1y";
-const INVESTIDOR10_PROXY_PREFIXES = [
-  "https://api.codetabs.com/v1/proxy/?quest=",
-  "https://api.allorigins.win/raw?url=",
-];
-const investidor10FundamentalsCache = new Map<string, Partial<Quote> | null>();
-
-function toPoints(entries: Array<{ time: number; price: number }> | PricePoint[]) {
-  return entries
-    .map((entry) => ({
-      time: Number(entry?.time ?? 0),
-      price: Number(entry?.price ?? 0),
-    }))
-    .filter((entry) => entry.time && entry.price)
-    .sort((a, b) => a.time - b.time);
-}
 
 function isLikelyB3Symbol(value: string) {
   return /^[A-Z0-9]{4,8}$/.test(value);
@@ -189,500 +164,6 @@ function isLikelyB3Symbol(value: string) {
 
 function isLikelyCryptoId(value: string) {
   return /^[a-z0-9-]{2,64}$/.test(value);
-}
-
-function isBrapiBlocked() {
-  return Date.now() < brapiBlockedUntil;
-}
-
-function pickSupportedBrapiRange(message?: string) {
-  if (!message) return null;
-  const fromMessage = message.match(/Ranges permitidos:\s*([^\n]+)/i)?.[1];
-  if (!fromMessage) return null;
-  const available = fromMessage
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-  const preferredOrder = ["1y", "3mo", "1mo", "5d", "1d"];
-  return preferredOrder.find((range) => available.includes(range)) ?? null;
-}
-
-function extractBrapiErrorDetails(payload: any) {
-  const codeCandidates = [
-    payload?.code,
-    payload?.errorCode,
-    payload?.error?.code,
-    payload?.errors?.[0]?.code,
-  ];
-  const messageCandidates = [
-    payload?.message,
-    payload?.error_description,
-    payload?.error?.message,
-    typeof payload?.error === "string" ? payload.error : undefined,
-    payload?.errors?.[0]?.message,
-  ];
-  const code = codeCandidates.find((value) => typeof value === "string");
-  const message = messageCandidates.find((value) => typeof value === "string");
-  return {
-    code: code ? String(code) : undefined,
-    message: message ? String(message) : undefined,
-  };
-}
-
-function isPermanentB3SymbolError(code?: string, message?: string) {
-  if (code && BRAPI_PERMANENT_SYMBOL_CODES.has(code.toUpperCase())) {
-    return true;
-  }
-  if (!message) return false;
-  const lower = message.toLowerCase();
-  return (
-    (lower.includes("symbol") && lower.includes("invalid")) ||
-    lower.includes("symbol not found") ||
-    lower.includes("nao encontrado")
-  );
-}
-
-function parseNumberish(value: unknown) {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : null;
-  }
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const withoutPercent = trimmed.replace(/%/g, "").replace(/\s+/g, "");
-  const commaCount = (withoutPercent.match(/,/g) ?? []).length;
-  const dotCount = (withoutPercent.match(/\./g) ?? []).length;
-  let normalized = withoutPercent;
-  if (commaCount > 0 && dotCount > 0) {
-    normalized = withoutPercent.replace(/\./g, "").replace(/,/g, ".");
-  } else if (commaCount > 0) {
-    normalized = withoutPercent.replace(/,/g, ".");
-  } else if (dotCount > 1) {
-    normalized = withoutPercent.replace(/\./g, "");
-  }
-  const cleaned = normalized.replace(/[^0-9+-.]/g, "");
-  if (!cleaned || cleaned === "." || cleaned === "+" || cleaned === "-") return null;
-  const parsed = Number(cleaned);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function normalizePercentValue(value: unknown) {
-  const numeric = parseNumberish(value);
-  if (numeric == null) return null;
-  if (numeric > -1 && numeric < 1 && numeric !== 0) return numeric * 100;
-  return numeric;
-}
-
-function parseNumberWithScale(value: unknown) {
-  if (typeof value !== "string") {
-    return parseNumberish(value);
-  }
-  const numeric = parseNumberish(value);
-  if (numeric == null) return null;
-  const normalizedText = value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-  if (normalizedText.includes("trilh")) return numeric * 1_000_000_000_000;
-  if (normalizedText.includes("bilh")) return numeric * 1_000_000_000;
-  if (normalizedText.includes("milh")) return numeric * 1_000_000;
-  if (/\bmil\b/.test(normalizedText)) return numeric * 1_000;
-  return numeric;
-}
-
-function extractRegexValue(content: string, pattern: RegExp) {
-  const match = content.match(pattern);
-  return match?.[1]?.trim() ?? null;
-}
-
-function extractInvestidor10CardValue(content: string, title: string) {
-  return extractRegexValue(
-    content,
-    new RegExp(
-      `<span[^>]*title=["']${title}["'][^>]*>[\\s\\S]*?<\\/span>[\\s\\S]*?<div[^>]*class=["'][^"']*_card-body[^"']*["'][^>]*>[\\s\\S]*?<span>\\s*([^<]+?)\\s*<\\/span>`,
-      "i",
-    ),
-  );
-}
-
-function extractInvestidor10InfoValue(content: string, labelPattern: string) {
-  return extractRegexValue(
-    content,
-    new RegExp(
-      `<span[^>]*class=["'][^"']*name[^"']*["'][^>]*>[\\s\\S]*?${labelPattern}[\\s\\S]*?<\\/span>[\\s\\S]*?<div[^>]*class=["'][^"']*value[^"']*["'][^>]*>[\\s\\S]*?<span>\\s*([^<]+?)\\s*<\\/span>`,
-      "i",
-    ),
-  );
-}
-
-function parseInvestidor10FiiFundamentals(content: string) {
-  const dyText =
-    extractInvestidor10CardValue(content, "Dividend Yield") ??
-    extractRegexValue(content, /DY\s*\(12M\)\s*:\s*([0-9.,]+%)/i);
-  const pvpText =
-    extractInvestidor10CardValue(content, "P\/VP") ??
-    extractRegexValue(content, /P\/VP\s*:\s*([0-9.,]+)/i);
-  const sharesText =
-    extractInvestidor10InfoValue(content, "COTAS\\s+EMITIDAS") ??
-    extractRegexValue(
-      content,
-      /content--info--item--title[^>]*>\s*N[U\u00da]MERO DE COTAS\s*<\/span>[\s\S]*?content--info--item--value[^>]*>\s*([^<]+?)\s*<\/span>/i,
-    );
-  const bookValueText =
-    extractInvestidor10InfoValue(content, "VALOR\\s+PATRIMONIAL") ??
-    extractRegexValue(
-      content,
-      /content--info--item--title[^>]*>\s*VALOR PATRIMONIAL\s*<\/span>[\s\S]*?content--info--item--value[^>]*>\s*([^<]+?)\s*<\/span>/i,
-    );
-  const vacancyText = extractInvestidor10InfoValue(content, "VAC[\\u00c2A]NCIA");
-
-  const parsed: Partial<Quote> = {};
-  const dyValue = normalizePercentValue(dyText);
-  const pvpValue = parseNumberish(pvpText);
-  const sharesValue = parseNumberWithScale(sharesText);
-  const bookValue = parseNumberWithScale(bookValueText);
-  const vacancyValue = normalizePercentValue(vacancyText);
-
-  if (dyValue != null) parsed.dyPct = dyValue;
-  if (pvpValue != null) parsed.pVp = pvpValue;
-  if (sharesValue != null) parsed.sharesOutstanding = sharesValue;
-  if (bookValue != null) parsed.bookValue = bookValue;
-  if (vacancyValue != null) parsed.vacancyPct = vacancyValue;
-
-  return Object.keys(parsed).length ? parsed : null;
-}
-
-async function fetchTextWithTimeout(url: string, timeoutMs: number) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, {
-      cache: "no-store",
-      signal: controller.signal,
-    });
-    if (!response.ok) return null;
-    return await response.text();
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function fetchFiiFundamentalsFallback(normalized: string) {
-  if (investidor10FundamentalsCache.has(normalized)) {
-    return investidor10FundamentalsCache.get(normalized) ?? null;
-  }
-
-  const target = `https://investidor10.com.br/fiis/${normalized.toLowerCase()}/`;
-  for (const proxyPrefix of INVESTIDOR10_PROXY_PREFIXES) {
-    const proxyUrl = `${proxyPrefix}${encodeURIComponent(target)}`;
-    const html = await fetchTextWithTimeout(proxyUrl, 12000);
-    if (!html) continue;
-    const parsed = parseInvestidor10FiiFundamentals(html);
-    if (parsed) {
-      investidor10FundamentalsCache.set(normalized, parsed);
-      return parsed;
-    }
-  }
-
-  investidor10FundamentalsCache.set(normalized, null);
-  return null;
-}
-
-function shouldUseFiiFallback(normalized: string, longName: unknown) {
-  const companyName = typeof longName === "string" ? longName.toLowerCase() : "";
-  return (
-    companyName.includes("fundo de investimento imobiliario") ||
-    companyName.includes("fii") ||
-    /11$/.test(normalized)
-  );
-}
-
-function handleBrapiFailure(
-  status: number,
-  normalizedSymbol?: string,
-  usedToken?: boolean,
-  code?: string,
-  message?: string,
-) {
-  if (status === 400 && code?.toUpperCase() === "INVALID_RANGE") {
-    const nextRange = pickSupportedBrapiRange(message);
-    if (nextRange) {
-      brapiHistoryRange = nextRange;
-    } else if (brapiHistoryRange === "1y") {
-      brapiHistoryRange = "3mo";
-    }
-    return;
-  }
-  if (
-    (status === 400 || status === 404) &&
-    normalizedSymbol &&
-    isPermanentB3SymbolError(code, message)
-  ) {
-    badB3Symbols.add(normalizedSymbol);
-    return;
-  }
-  if ((status === 401 || status === 403) && usedToken) {
-    brapiUseToken = false;
-    return;
-  }
-  if (status === 429 || status >= 500 || status === 0) {
-    brapiBlockedUntil = Date.now() + BRAPI_BACKOFF_MS;
-  }
-}
-
-async function fetchSingleB3Quote(
-  normalized: string,
-  options: { includeFundamentalsFallback?: boolean } = {},
-): Promise<Quote | null> {
-  if (isBrapiBlocked()) return null;
-  if (!isLikelyB3Symbol(normalized) || badB3Symbols.has(normalized)) return null;
-  const { includeFundamentalsFallback = true } = options;
-
-  const requestQuote = async (useToken: boolean): Promise<Quote | null> => {
-    const tokenParam = useToken && BRAPI_KEY ? `?token=${encodeURIComponent(BRAPI_KEY)}` : "";
-    const res = await fetch(
-      `https://brapi.dev/api/quote/${encodeURIComponent(normalized)}${tokenParam}`,
-      { cache: "no-store", headers: BRAPI_DEFAULT_HEADERS },
-    );
-    if (!res.ok) {
-      let errorCode: string | undefined;
-      let errorMessage: string | undefined;
-      try {
-        const json = await res.json();
-        const details = extractBrapiErrorDetails(json);
-        errorCode = details.code;
-        errorMessage = details.message;
-      } catch {
-        // ignore json parse for error body
-      }
-      handleBrapiFailure(res.status, normalized, useToken, errorCode, errorMessage);
-      return null;
-    }
-    const json = await res.json();
-    const item = (json?.results ?? []).find(
-      (result: any) =>
-        result?.symbol &&
-        normalizeB3Symbol(String(result.symbol)) === normalized,
-    );
-    if (item?.regularMarketPrice == null) return null;
-    const rawDy =
-      item?.dividendYield ??
-      item?.dividend_yield ??
-      item?.regularMarketDividendYield ??
-      item?.trailingAnnualDividendYield;
-    const rawPvp =
-      item?.priceToBook ??
-      item?.priceToBookRatio ??
-      item?.pvp;
-    const rawSharesOutstanding =
-      item?.sharesOutstanding ??
-      item?.totalShares ??
-      item?.shares;
-    const rawBookValue =
-      item?.bookValue ??
-      item?.netWorth ??
-      item?.patrimonialValue;
-    const rawVacancy =
-      item?.vacancy ??
-      item?.vacancia ??
-      item?.vacancyRate;
-    const quote: Quote = {
-      price: Number(item.regularMarketPrice) || 0,
-      changePct:
-        item.regularMarketChangePercent != null
-          ? Number(item.regularMarketChangePercent)
-          : null,
-      logoUrl:
-        typeof item?.logourl === "string"
-          ? item.logourl
-          : typeof item?.logoUrl === "string"
-            ? item.logoUrl
-            : typeof item?.logo === "string"
-              ? item.logo
-              : null,
-      assetName:
-        typeof item?.longName === "string"
-          ? item.longName
-          : typeof item?.shortName === "string"
-            ? item.shortName
-            : null,
-      dyPct: normalizePercentValue(rawDy),
-      pVp: parseNumberish(rawPvp),
-      sharesOutstanding: parseNumberish(rawSharesOutstanding),
-      bookValue: parseNumberish(rawBookValue),
-      vacancyPct: normalizePercentValue(rawVacancy),
-    };
-
-    const hasMissingFundamentals =
-      quote.dyPct == null ||
-      quote.pVp == null ||
-      quote.sharesOutstanding == null ||
-      quote.bookValue == null ||
-      quote.vacancyPct == null;
-
-    if (
-      includeFundamentalsFallback &&
-      hasMissingFundamentals &&
-      shouldUseFiiFallback(normalized, item?.longName)
-    ) {
-      const fallback = await fetchFiiFundamentalsFallback(normalized);
-      if (fallback) {
-        quote.dyPct = quote.dyPct ?? fallback.dyPct ?? null;
-        quote.pVp = quote.pVp ?? fallback.pVp ?? null;
-        quote.sharesOutstanding =
-          quote.sharesOutstanding ?? fallback.sharesOutstanding ?? null;
-        quote.bookValue = quote.bookValue ?? fallback.bookValue ?? null;
-        quote.vacancyPct = quote.vacancyPct ?? fallback.vacancyPct ?? null;
-      }
-    }
-
-    return quote;
-  };
-
-  try {
-    const useToken = brapiUseToken && Boolean(BRAPI_KEY);
-    const withPreferredMode = await requestQuote(useToken);
-    if (withPreferredMode) {
-      return withPreferredMode;
-    }
-    if (useToken && !isBrapiBlocked()) {
-      return await requestQuote(false);
-    }
-    return null;
-  } catch {
-    handleBrapiFailure(0, normalized, brapiUseToken && Boolean(BRAPI_KEY));
-    return null;
-  }
-}
-
-async function fetchB3History(symbol: string): Promise<PricePoint[]> {
-  const normalized = normalizeB3Symbol(symbol);
-  if (isBrapiBlocked()) return [];
-  if (!isLikelyB3Symbol(normalized) || badB3Symbols.has(normalized)) return [];
-
-  const requestHistory = async (
-    useToken: boolean,
-    range: string,
-  ): Promise<{ points: PricePoint[]; invalidRange: boolean }> => {
-    const query = new URLSearchParams({
-      range,
-      interval: "1d",
-    });
-    if (useToken && BRAPI_KEY) {
-      query.set("token", BRAPI_KEY);
-    }
-    const res = await fetch(
-      `https://brapi.dev/api/quote/${encodeURIComponent(
-        normalized,
-      )}?${query.toString()}`,
-      { cache: "no-store", headers: BRAPI_DEFAULT_HEADERS },
-    );
-    if (!res.ok) {
-      let errorCode: string | undefined;
-      let errorMessage: string | undefined;
-      try {
-        const json = await res.json();
-        const details = extractBrapiErrorDetails(json);
-        errorCode = details.code;
-        errorMessage = details.message;
-      } catch {
-        // ignore json parse for error body
-      }
-      handleBrapiFailure(res.status, normalized, useToken, errorCode, errorMessage);
-      return {
-        points: [],
-        invalidRange: res.status === 400 && errorCode?.toUpperCase() === "INVALID_RANGE",
-      };
-    }
-    const json = await res.json();
-    const item = (json?.results ?? []).find(
-      (result: any) =>
-        result?.symbol &&
-        normalizeB3Symbol(String(result.symbol)) === normalized,
-    );
-    const history =
-      item?.historicalDataPrice ?? item?.historicalData ?? item?.prices ?? [];
-    const points = history
-      .map((entry: any) => {
-        const rawDate =
-          entry?.date ?? entry?.timestamp ?? entry?.time ?? entry?.datetime;
-        let time = 0;
-        if (typeof rawDate === "number") {
-          time = rawDate > 1e12 ? rawDate : rawDate * 1000;
-        } else if (typeof rawDate === "string") {
-          const parsed = Date.parse(rawDate);
-          if (!Number.isNaN(parsed)) {
-            time = parsed;
-          }
-        }
-        const price = Number(
-          entry?.close ??
-            entry?.adjustedClose ??
-            entry?.price ??
-            entry?.value ??
-            0,
-        );
-        if (!time || !price) return null;
-        return { time, price };
-      })
-      .filter(Boolean) as PricePoint[];
-    return { points: points.length ? toPoints(points) : [], invalidRange: false };
-  };
-
-  try {
-    const useToken = brapiUseToken && Boolean(BRAPI_KEY);
-    let historyRange = brapiHistoryRange;
-    let withPreferredMode = await requestHistory(useToken, historyRange);
-    if (!withPreferredMode.points.length && withPreferredMode.invalidRange && !isBrapiBlocked()) {
-      historyRange = brapiHistoryRange;
-      withPreferredMode = await requestHistory(useToken, historyRange);
-    }
-    if (withPreferredMode.points.length) {
-      return withPreferredMode.points;
-    }
-    if (useToken && !isBrapiBlocked()) {
-      let withoutToken = await requestHistory(false, historyRange);
-      if (!withoutToken.points.length && withoutToken.invalidRange && !isBrapiBlocked()) {
-        historyRange = brapiHistoryRange;
-        withoutToken = await requestHistory(false, historyRange);
-      }
-      if (withoutToken.points.length) return withoutToken.points;
-    }
-  } catch {
-    handleBrapiFailure(0, normalized, brapiUseToken && Boolean(BRAPI_KEY));
-  }
-  return [];
-}
-
-async function fetchCryptoHistory(
-  symbol: string,
-  currency: SupportedInvestmentCurrency,
-): Promise<PricePoint[]> {
-  const id = normalizeCryptoId(symbol);
-  const vsCurrency = getCoinGeckoCurrency(currency, "crypto");
-
-  try {
-    const res = await fetch(
-      `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(
-        id,
-      )}/market_chart?vs_currency=${vsCurrency}&days=365`,
-      { cache: "no-store" },
-    );
-
-    if (!res.ok) return [];
-    const json = await res.json();
-    const prices = json?.prices ?? [];
-    const points = prices.map((entry: [number, number]) => ({
-      time: Number(entry[0]),
-      price: Number(entry[1]),
-    }));
-    return points.length ? toPoints(points) : [];
-  } catch (err) {
-    console.error(err);
-    return [];
-  }
 }
 
 function normalizeB3Symbol(value: string) {
@@ -693,117 +174,78 @@ function normalizeCryptoId(value: string) {
   return value.toLowerCase().trim().replace(/\s+/g, "");
 }
 
+async function fetchJson<T>(url: string): Promise<T | null> {
+  try {
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) return null;
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchSingleB3Quote(
+  normalized: string,
+  options: { includeFundamentalsFallback?: boolean } = {},
+): Promise<Quote | null> {
+  const query = new URLSearchParams({ symbol: normalized });
+  if (options.includeFundamentalsFallback === false) {
+    query.set("includeFundamentalsFallback", "0");
+  }
+  const payload = await fetchJson<{ quote?: Quote | null }>(
+    `/api/investments/b3/quote?${query.toString()}`,
+  );
+  return payload?.quote ?? null;
+}
+
+async function fetchB3History(symbol: string): Promise<PricePoint[]> {
+  const query = new URLSearchParams({ symbol: normalizeB3Symbol(symbol) });
+  const payload = await fetchJson<{ history?: PricePoint[] }>(
+    `/api/investments/b3/history?${query.toString()}`,
+  );
+  return payload?.history ?? [];
+}
+
+async function fetchCryptoHistory(
+  symbol: string,
+  currency: SupportedInvestmentCurrency,
+): Promise<PricePoint[]> {
+  const query = new URLSearchParams({
+    symbol: normalizeCryptoId(symbol),
+    currency,
+  });
+  const payload = await fetchJson<{ history?: PricePoint[] }>(
+    `/api/investments/crypto/history?${query.toString()}`,
+  );
+  return payload?.history ?? [];
+}
+
 async function fetchCryptoMarketSnapshot(
   id: string,
   currency: SupportedInvestmentCurrency,
 ): Promise<CryptoMarketSnapshot | null> {
-  const vsCurrency = getCoinGeckoCurrency(currency, "crypto");
-  try {
-    const res = await fetch(
-      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=${vsCurrency}&ids=${encodeURIComponent(
-        id,
-      )}&price_change_percentage=24h`,
-      { cache: "no-store" },
-    );
-    if (!res.ok) return null;
-    const json = await res.json();
-    const first = Array.isArray(json) ? json[0] : null;
-    if (!first || first.current_price == null) return null;
-    return {
-      id: String(first.id ?? id),
-      symbol: String(first.symbol ?? ""),
-      name: String(first.name ?? id),
-      image: typeof first.image === "string" ? first.image : null,
-      rank:
-        first.market_cap_rank != null && Number.isFinite(Number(first.market_cap_rank))
-          ? Number(first.market_cap_rank)
-          : null,
-      price: Number(first.current_price) || 0,
-      changePct24h:
-        first.price_change_percentage_24h != null
-          ? Number(first.price_change_percentage_24h)
-          : null,
-      marketCap:
-        first.market_cap != null && Number.isFinite(Number(first.market_cap))
-          ? Number(first.market_cap)
-          : null,
-      volume24h:
-        first.total_volume != null && Number.isFinite(Number(first.total_volume))
-          ? Number(first.total_volume)
-          : null,
-      high24h:
-        first.high_24h != null && Number.isFinite(Number(first.high_24h))
-          ? Number(first.high_24h)
-          : null,
-      low24h:
-        first.low_24h != null && Number.isFinite(Number(first.low_24h))
-          ? Number(first.low_24h)
-          : null,
-    };
-  } catch (error) {
-    return null;
-  }
+  const query = new URLSearchParams({
+    id: normalizeCryptoId(id),
+    currency,
+  });
+  const payload = await fetchJson<{ snapshot?: CryptoMarketSnapshot | null }>(
+    `/api/investments/crypto/market?${query.toString()}`,
+  );
+  return payload?.snapshot ?? null;
 }
 
 async function fetchFeaturedCryptoOptions(
   ids = FEATURED_CRYPTO_IDS,
   currency: SupportedInvestmentCurrency = DEFAULT_INVESTMENT_CURRENCY,
 ) {
-  const normalizedIds = ids.map((id) => normalizeCryptoId(id)).filter(Boolean);
-  if (!normalizedIds.length) return [];
-  const vsCurrency = getCoinGeckoCurrency(currency, "crypto");
-  try {
-    const res = await fetch(
-      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=${vsCurrency}&ids=${encodeURIComponent(
-        normalizedIds.join(","),
-      )}&price_change_percentage=24h`,
-      { cache: "no-store" },
-    );
-    if (!res.ok) return [];
-    const json = await res.json();
-    const entries = (Array.isArray(json) ? json : [])
-      .map((item: any) => {
-        if (!item || item.current_price == null || !item.id) return null;
-        return {
-          id: String(item.id),
-          symbol: String(item.symbol ?? ""),
-          name: String(item.name ?? item.id),
-          image: typeof item.image === "string" ? item.image : null,
-          rank:
-            item.market_cap_rank != null && Number.isFinite(Number(item.market_cap_rank))
-              ? Number(item.market_cap_rank)
-              : null,
-          price: Number(item.current_price) || 0,
-          changePct24h:
-            item.price_change_percentage_24h != null
-              ? Number(item.price_change_percentage_24h)
-              : null,
-          marketCap:
-            item.market_cap != null && Number.isFinite(Number(item.market_cap))
-              ? Number(item.market_cap)
-              : null,
-          volume24h:
-            item.total_volume != null && Number.isFinite(Number(item.total_volume))
-              ? Number(item.total_volume)
-              : null,
-          high24h:
-            item.high_24h != null && Number.isFinite(Number(item.high_24h))
-              ? Number(item.high_24h)
-              : null,
-          low24h:
-            item.low_24h != null && Number.isFinite(Number(item.low_24h))
-              ? Number(item.low_24h)
-              : null,
-        } satisfies CryptoMarketSnapshot;
-      })
-      .filter((entry): entry is CryptoMarketSnapshot => entry != null);
-    const byId = new Map(entries.map((entry) => [entry.id, entry]));
-    return normalizedIds
-      .map((id) => byId.get(id))
-      .filter((entry): entry is CryptoMarketSnapshot => Boolean(entry));
-  } catch (error) {
-    return [];
-  }
+  const query = new URLSearchParams({
+    ids: ids.map((id) => normalizeCryptoId(id)).join(","),
+    currency,
+  });
+  const payload = await fetchJson<{ options?: CryptoMarketSnapshot[] }>(
+    `/api/investments/crypto/featured?${query.toString()}`,
+  );
+  return payload?.options ?? [];
 }
 
 function normalizeSymbol(type: InvestmentType, value: string) {
@@ -1260,7 +702,15 @@ export function InvestmentsScreen() {
         return;
       }
 
-      const normalizedFallback = (fallback.data ?? []).map((asset: any) => ({
+      const normalizedFallback = (fallback.data ?? []).map((asset: {
+        id: string;
+        type: InvestmentType;
+        symbol: string;
+        name: string | null;
+        quantity: number;
+        average_price: number;
+        created_at: string | null;
+      }) => ({
         ...asset,
         currency: normalizeInvestmentCurrency(appCurrency, asset.type),
         cdi_rate_pct: null,
@@ -1312,7 +762,7 @@ export function InvestmentsScreen() {
         setInvestmentFilter(DEFAULT_INVESTMENT_FILTER);
         return;
       }
-      const parsed = JSON.parse(raw) as any;
+      const parsed = JSON.parse(raw) as StoredInvestmentFilter;
       const hasLimitsObject =
         parsed && typeof parsed === "object" && parsed.limits && typeof parsed.limits === "object";
 
@@ -1408,7 +858,7 @@ export function InvestmentsScreen() {
     const b3Symbols = Array.from(new Set(assets
       .filter((asset) => asset.type === "b3")
       .map((asset) => normalizeB3Symbol(asset.symbol))
-      .filter((symbol) => isLikelyB3Symbol(symbol) && !badB3Symbols.has(symbol))));
+      .filter((symbol) => isLikelyB3Symbol(symbol))));
     const cryptoIdsByCurrency = assets.reduce(
       (map, asset) => {
         if (asset.type !== "crypto") return map;
@@ -1428,62 +878,42 @@ export function InvestmentsScreen() {
     let hadFailures = false;
 
     if (b3Symbols.length) {
-      if (isBrapiBlocked()) {
+      const responses = await Promise.all(
+        b3Symbols.map(async (normalized) => {
+          const quote = await fetchSingleB3Quote(normalized);
+          return { normalized, quote };
+        }),
+      );
+      responses.forEach(({ normalized, quote }) => {
+        if (!quote) return;
+        nextQuotes[normalized] = quote;
+      });
+      const hasAtLeastOneB3Quote = b3Symbols.some((symbol) => nextQuotes[symbol]);
+      if (!hasAtLeastOneB3Quote) {
         hadFailures = true;
-      } else {
-        const [firstSymbol, ...restSymbols] = b3Symbols;
-        const firstQuote = await fetchSingleB3Quote(firstSymbol);
-        if (firstQuote) {
-          nextQuotes[firstSymbol] = firstQuote;
-        }
-        if (!isBrapiBlocked() && restSymbols.length) {
-          const responses = await Promise.all(
-            restSymbols.map(async (normalized) => {
-              const quote = await fetchSingleB3Quote(normalized);
-              return { normalized, quote };
-            }),
-          );
-          responses.forEach(({ normalized, quote }) => {
-            if (!quote) return;
-            nextQuotes[normalized] = quote;
-          });
-        }
-        const hasAtLeastOneB3Quote = b3Symbols.some((symbol) => nextQuotes[symbol]);
-        if (!hasAtLeastOneB3Quote) {
-          hadFailures = true;
-        }
       }
     }
 
     for (const assetCurrency of ["BRL", "EUR"] as const) {
       const cryptoIds = Array.from(cryptoIdsByCurrency[assetCurrency]);
       if (!cryptoIds.length) continue;
-      const vsCurrency = getCoinGeckoCurrency(assetCurrency, "crypto");
-      try {
-        const url = `https://api.coingecko.com/api/v3/simple/price?ids=${cryptoIds.join(
-          ",",
-        )}&vs_currencies=${vsCurrency}&include_24hr_change=true`;
-        const res = await fetch(url);
-        if (!res.ok) {
-          hadFailures = true;
-          continue;
-        }
-        const json = await res.json();
-        cryptoIds.forEach((id) => {
-          const entry = json?.[id];
-          const price = entry?.[vsCurrency];
-          if (price == null) return;
-          nextQuotes[`${id}:${assetCurrency}`] = {
-            price: Number(price) || 0,
-            changePct:
-              entry?.[`${vsCurrency}_24h_change`] != null
-                ? Number(entry[`${vsCurrency}_24h_change`])
-                : null,
-          };
-        });
-      } catch {
+      const query = new URLSearchParams({
+        ids: cryptoIds.join(","),
+        currency: assetCurrency,
+      });
+      const payload = await fetchJson<{ quotes?: Record<string, Quote> }>(
+        `/api/investments/crypto/simple?${query.toString()}`,
+      );
+      const quotesById = payload?.quotes ?? {};
+      if (!Object.keys(quotesById).length) {
         hadFailures = true;
+        continue;
       }
+      cryptoIds.forEach((id) => {
+        const quote = quotesById[id];
+        if (!quote) return;
+        nextQuotes[`${id}:${assetCurrency}`] = quote;
+      });
     }
 
     setQuotes(nextQuotes);
@@ -1507,10 +937,6 @@ export function InvestmentsScreen() {
       historyFetchRef.current = requestId;
       const entries: Array<readonly [string, PricePoint[]]> = [];
       for (const asset of assets) {
-        if (asset.type === "b3" && isBrapiBlocked()) {
-          entries.push([asset.id, []]);
-          continue;
-        }
         const history = await fetchHistoryForAsset(asset);
         entries.push([asset.id, history]);
       }
@@ -3731,4 +3157,3 @@ export function InvestmentsScreen() {
     </div>
   );
 }
-
