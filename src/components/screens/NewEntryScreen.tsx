@@ -66,6 +66,7 @@ export function NewEntryScreen({ entryType }: Props) {
   const isCardExpense = entryType === "card_expense";
   const needsAccount = entryType === "income" || entryType === "expense";
   const isExpenseEntry = entryType === "expense" || entryType === "card_expense";
+  const canBeFixedEntry = entryType === "income" || isExpenseEntry;
 
   const emptyMoneyValue = formatCentsInput("", currency);
   const [amount, setAmount] = useState(emptyMoneyValue);
@@ -240,7 +241,7 @@ export function NewEntryScreen({ entryType }: Props) {
           description: description || null,
           category: category || null,
           date,
-          is_fixed: isExpenseEntry ? isFixed : null,
+          is_fixed: canBeFixedEntry ? isFixed : null,
           is_installment: isCardExpense ? isInstallment || null : null,
           installment_total: isCardExpense ? totalInstallments : null,
           installments_paid: isCardExpense && isInstallment ? 0 : null,
@@ -256,8 +257,8 @@ export function NewEntryScreen({ entryType }: Props) {
         setErrorMsg(
           missingFixedColumn
             ? language === "pt"
-              ? "Atualize o banco com supabase/schema.sql para usar a opcao de despesa fixa."
-              : "Update your database with supabase/schema.sql to use the fixed expense option."
+              ? "Atualize o banco com supabase/schema.sql para usar a opcao de transacao fixa."
+              : "Update your database with supabase/schema.sql to use the fixed transaction option."
             : t("newEntry.saveError"),
         );
         setSaving(false);
@@ -513,7 +514,7 @@ export function NewEntryScreen({ entryType }: Props) {
             </div>
           ) : null}
 
-          {isExpenseEntry ? (
+          {canBeFixedEntry ? (
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm text-[#C7CEDA]">
                 <input
@@ -522,7 +523,7 @@ export function NewEntryScreen({ entryType }: Props) {
                   onChange={(event) => setIsFixed(event.target.checked)}
                   className="h-4 w-4 rounded border-[#2A3140] bg-[#0F141E] text-[#5DD6C7]"
                 />
-                <span>{t("newEntry.fixedExpense")}</span>
+                <span>{entryType === "income" ? t("newEntry.fixedIncome") : t("newEntry.fixedExpense")}</span>
               </label>
             </div>
           ) : null}

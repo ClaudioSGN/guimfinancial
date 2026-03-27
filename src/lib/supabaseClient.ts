@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getErrorMessage } from "@/lib/errorUtils";
+import type { User } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -47,6 +48,27 @@ function parseSessionExpiryMs(rawSession: string): number | null {
       return numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
     }
     return null;
+  } catch {
+    return null;
+  }
+}
+
+export function getStoredSessionUser(): User | null {
+  if (typeof window === "undefined") return null;
+  const raw = window.localStorage.getItem(authStorageKey);
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as
+      | {
+          currentSession?: { user?: User | null };
+          session?: { user?: User | null };
+          user?: User | null;
+        }
+      | null;
+
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed.currentSession?.user ?? parsed.session?.user ?? parsed.user ?? null;
   } catch {
     return null;
   }
