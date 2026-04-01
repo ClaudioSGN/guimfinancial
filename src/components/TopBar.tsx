@@ -16,7 +16,7 @@ type Props<T extends string> = {
 function getInitials(name?: string) {
   if (!name) return "GF";
   const parts = name.trim().split(" ").filter(Boolean);
-  const initials = parts.slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "");
+  const initials = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "");
   return initials.join("") || "GF";
 }
 
@@ -24,7 +24,7 @@ export function TopBar<T extends string>({
   tabs,
   activeTab,
   onTabChange,
-  userName = "Usuário",
+  userName = "Usuario",
   role = "Admin",
   monthLabel,
   onPrevMonth,
@@ -49,7 +49,7 @@ export function TopBar<T extends string>({
     const file = event.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      alert("Envie uma imagem válida (png, jpg, svg...).");
+      alert("Envie uma imagem valida (png, jpg, svg...).");
       return;
     }
     const url = URL.createObjectURL(file);
@@ -57,47 +57,48 @@ export function TopBar<T extends string>({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-[#1d253d] bg-[#0d1427] px-4 py-3 shadow-lg shadow-black/30">
-      {monthLabel && (
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
-            Mês em gestão
+    <div className="app-surface app-card glass-highlight flex flex-col gap-4 p-4 sm:p-5">
+      {monthLabel ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="app-eyebrow">Mes em gestao</p>
+            <p className="mt-1 text-base font-semibold text-[#122033]">{monthLabel}</p>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={onPrevMonth}
               disabled={!onPrevMonth}
-              className="rounded-full border border-[#1f2a45] bg-[#0b1226] px-3 py-1 text-[11px] text-slate-300 transition hover:text-white disabled:opacity-40"
+              className="app-button app-button-secondary h-10 w-10 text-sm"
             >
               ←
             </button>
-            <div className="rounded-full border border-[#1f2a45] bg-[#0b1226] px-4 py-1 text-[11px] text-slate-100">
+            <div className="app-pill px-4 py-2 text-xs font-semibold text-[#39516f]">
               {monthLabel}
             </div>
             <button
               onClick={onNextMonth}
               disabled={!onNextMonth}
-              className="rounded-full border border-[#1f2a45] bg-[#0b1226] px-3 py-1 text-[11px] text-slate-300 transition hover:text-white disabled:opacity-40"
+              className="app-button app-button-secondary h-10 w-10 text-sm"
             >
               →
             </button>
           </div>
         </div>
-      )}
+      ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-1 justify-center">
-          <div className="flex items-center gap-1 rounded-full border border-[#1f2a45] bg-[#0b1226] p-1 text-sm text-slate-100 shadow-inner shadow-black/30">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="app-surface app-card-soft glass-tint flex flex-wrap items-center gap-2 rounded-full p-1">
             {tabs.map((tab) => {
               const isActive = tab === activeTab;
               return (
                 <button
                   key={tab}
                   onClick={() => onTabChange(tab)}
-                  className={`rounded-full px-4 py-1.5 transition ${
+                  className={`rounded-full px-4 py-2 text-sm font-medium transition ${
                     isActive
-                      ? "bg-white text-[#0f172a] shadow"
-                      : "text-slate-300 hover:text-white"
+                      ? "bg-white/90 text-[#204a87] shadow-[0_10px_24px_rgba(129,151,178,0.18)]"
+                      : "text-[#617287] hover:bg-white/45 hover:text-[#122033]"
                   }`}
                 >
                   {tab}
@@ -107,22 +108,18 @@ export function TopBar<T extends string>({
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 self-end lg:self-auto">
           <div
             role="button"
-            aria-label="Alterar foto do usuário"
+            aria-label="Alterar foto do usuario"
             onClick={handleAvatarClick}
-            className="relative h-11 w-11 overflow-hidden rounded-full border border-[#1f2a45] bg-[#0b1226] ring-1 ring-transparent transition hover:ring-[#3b82f6]"
+            className="app-surface glass-highlight relative h-12 w-12 overflow-hidden rounded-full ring-1 ring-transparent transition hover:ring-[#8db7ff]"
           >
             {avatarPreview ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={avatarPreview}
-                alt="Avatar do usuário"
-                className="h-full w-full object-cover"
-              />
+              <img src={avatarPreview} alt="Avatar do usuario" className="h-full w-full object-cover" />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-white">
+              <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-[#18304e]">
                 {initials}
               </div>
             )}
@@ -134,9 +131,10 @@ export function TopBar<T extends string>({
               onChange={handleFileChange}
             />
           </div>
-          <div className="hidden sm:flex flex-col leading-tight">
-            <span className="text-xs font-semibold text-white">{userName}</span>
-            <span className="text-[10px] text-slate-500">{role}</span>
+
+          <div className="min-w-0 text-right">
+            <p className="truncate text-sm font-semibold text-[#122033]">{userName}</p>
+            <p className="text-xs text-[#6a7890]">{role}</p>
           </div>
         </div>
       </div>

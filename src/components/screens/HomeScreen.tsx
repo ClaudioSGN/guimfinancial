@@ -235,14 +235,38 @@ function getMonthTitle(date: Date, language: "pt" | "en") {
   return `${getMonthShortName(language, month)} ${year}`;
 }
 
-function getMonthOptions(language: "pt" | "en", total = 12) {
-  const options: { label: string; value: Date }[] = [];
-  const now = new Date();
-  for (let i = 0; i < total; i += 1) {
-    const value = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    options.push({ label: getMonthTitle(value, language), value });
+function getMonthKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+function getMonthDateFromKey(monthKey: string) {
+  const [yearText, monthText] = monthKey.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return null;
   }
-  return options;
+
+  return new Date(year, month - 1, 1);
+}
+
+function collectActivityMonthKeys(transactions: Transaction[]) {
+  const monthKeys = new Set<string>();
+
+  transactions.forEach((tx) => {
+    if (tx.type !== "income" && tx.type !== "expense" && tx.type !== "card_expense") {
+      return;
+    }
+
+    const date = parseLocalDate(tx.date);
+    if (!date) return;
+    monthKeys.add(getMonthKey(date));
+  });
+
+  return Array.from(monthKeys).sort((left, right) => right.localeCompare(left));
 }
 
 function formatCurrency(
@@ -799,6 +823,7 @@ export function HomeScreen() {
   const [cardTransactions, setCardTransactions] = useState<Transaction[]>([]);
   const [showBalance, setShowBalance] = useState(true);
   const [monthOpen, setMonthOpen] = useState(false);
+  const [availableMonthKeys, setAvailableMonthKeys] = useState<string[]>([]);
   const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
   const [payingReminderCardId, setPayingReminderCardId] = useState<string | null>(null);
@@ -1186,6 +1211,15 @@ export function HomeScreen() {
       setCards(nextCards);
       setTransactions(transactions);
       setCardTransactions(nextCardTransactions);
+      setAvailableMonthKeys((current) => {
+        const nextKeys = collectActivityMonthKeys(transactions);
+        if (nextKeys.length === 0) {
+          return current.length > 0 ? current : [getMonthKey(new Date())];
+        }
+
+        const mergedKeys = new Set([...current, ...nextKeys]);
+        return Array.from(mergedKeys).sort((left, right) => right.localeCompare(left));
+      });
       setLoading(false);
     } catch (error) {
       if (isTransientNetworkError(error)) {
@@ -1211,10 +1245,32 @@ export function HomeScreen() {
     return () => window.removeEventListener("data-refresh", handleRefresh);
   }, [loadData]);
 
-  const monthOptions = useMemo(
-    () => getMonthOptions(language),
-    [language],
-  );
+  useEffect(() => {
+    if (availableMonthKeys.length === 0) return;
+    const selectedMonthKey = getMonthKey(selectedMonth);
+    if (availableMonthKeys.includes(selectedMonthKey)) return;
+
+    const fallbackMonth = getMonthDateFromKey(availableMonthKeys[0]);
+    if (fallbackMonth) {
+      setSelectedMonth(fallbackMonth);
+    }
+  }, [availableMonthKeys, selectedMonth]);
+
+  const monthOptions = useMemo(() => {
+    const monthKeys =
+      availableMonthKeys.length > 0 ? availableMonthKeys : [getMonthKey(new Date())];
+
+    return monthKeys
+      .map((monthKey) => {
+        const value = getMonthDateFromKey(monthKey);
+        if (!value) return null;
+        return {
+          label: getMonthTitle(value, language),
+          value,
+        };
+      })
+      .filter((option): option is { label: string; value: Date } => option !== null);
+  }, [availableMonthKeys, language]);
 
   const monthTransactions = useMemo(
     () => buildMonthTransactions(transactions, selectedMonth),
@@ -2062,27 +2118,19 @@ export function HomeScreen() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div>
-            <p className="text-lg font-semibold text-[#E2E6ED]">{monthTitle}</p>
-            <p className="text-xs text-[#9098A6]">
-              {selectedMonth.toLocaleDateString(language === "pt" ? "pt-BR" : "en-US", {
-                month: "short",
-                year: "numeric",
-              })}
-            </p>
-          </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-end">
+        <div className="flex items-center justify-between gap-3 sm:justify-end">
           <div className="relative">
             <button
               type="button"
               onClick={() => setMonthOpen((value) => !value)}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-[#1A2230] bg-[#111723]"
+              className="glass-dark-pill flex h-10 items-center gap-2 px-3 text-xs text-[#D7E3F7]"
             >
-              <AppIcon name="chevron-down" size={18} color="#A3ABB9" />
+              <span>{monthTitle}</span>
+              <AppIcon name="chevron-down" size={16} color="#A3ABB9" />
             </button>
             {monthOpen ? (
-              <div className="absolute left-0 top-11 z-20 w-44 rounded-2xl border border-[#1B2230] bg-[#111723] p-2 text-xs text-[#C7CEDA] shadow-xl">
+              <div className="absolute left-0 top-12 z-20 w-44 rounded-2xl border border-[#1B2230] bg-[#111723] p-2 text-xs text-[#C7CEDA] shadow-xl">
                 {monthOptions.map((option) => (
                   <button
                     key={option.label}
@@ -2516,13 +2564,13 @@ export function HomeScreen() {
       ) : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-12">
-        <div className="rounded-2xl border border-[#1B2230] bg-[#141A25] p-5 lg:col-span-3">
+        <div className="glass-dark glass-dark-card p-5 lg:col-span-3">
           <div className="flex items-center justify-between">
             <p className="text-xs text-[#8D96A6]">{t("home.balanceLabel")}</p>
             <button
               type="button"
               onClick={() => setShowBalance((value) => !value)}
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-[#1C2332] bg-[#0F141E]"
+              className="glass-dark-pill flex h-8 w-8 items-center justify-center"
             >
               <AppIcon
                 name={showBalance ? "eye-off" : "eye"}
@@ -2538,13 +2586,13 @@ export function HomeScreen() {
             {t("home.total")} {loading ? "..." : formatCurrency(totalBalance, language, currency)}
           </p>
           <div className="mt-3 grid grid-cols-2 gap-2">
-            <div className="rounded-lg border border-[#1E2636] bg-[#0F141E] p-2">
+            <div className="glass-dark-inner rounded-[18px] p-2.5">
               <p className="text-[10px] uppercase tracking-[0.12em] text-[#8D96A6]">
                 {language === "pt" ? "Contas ativas" : "Active accounts"}
               </p>
               <p className="mt-1 text-sm font-semibold text-[#E7ECF2]">{accounts.length}</p>
             </div>
-            <div className="rounded-lg border border-[#1E2636] bg-[#0F141E] p-2">
+            <div className="glass-dark-inner rounded-[18px] p-2.5">
               <p className="text-[10px] uppercase tracking-[0.12em] text-[#8D96A6]">
                 {language === "pt" ? "Em cartoes" : "Card usage"}
               </p>
@@ -2555,13 +2603,13 @@ export function HomeScreen() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5 lg:col-span-6">
+        <div className="glass-dark glass-dark-card p-5 lg:col-span-6">
           <div className="mb-4 flex items-center justify-between">
             <p className="text-sm font-semibold text-[#E3E9F1]">{t("home.inflowVsOutflow")}</p>
             <span className="text-[11px] text-[#8D96A6]">{t("home.vsLastMonth")}</span>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-[#1E2636] bg-[#0F141E] p-3">
+            <div className="glass-dark-inner rounded-[22px] p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#48C59F]">
@@ -2603,7 +2651,7 @@ export function HomeScreen() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-[#1E2636] bg-[#0F141E] p-3">
+            <div className="glass-dark-inner rounded-[22px] p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#E46E6E]">
@@ -2650,7 +2698,7 @@ export function HomeScreen() {
             {loading ? "..." : formatCurrency(monthNet, language, currency)}
           </p>
           <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
-            <div className="rounded-lg border border-[#1E2636] bg-[#0F141E] p-2">
+            <div className="glass-dark-inner rounded-[18px] p-2.5">
               <p className="text-[10px] uppercase tracking-[0.12em] text-[#8D96A6]">
                 {language === "pt" ? "Resultado do mes" : "Month result"}
               </p>
@@ -2662,7 +2710,7 @@ export function HomeScreen() {
                 {loading ? "..." : formatSignedCurrency(monthNet, language, currency)}
               </p>
             </div>
-            <div className="rounded-lg border border-[#1E2636] bg-[#0F141E] p-2">
+            <div className="glass-dark-inner rounded-[18px] p-2.5">
               <p className="text-[10px] uppercase tracking-[0.12em] text-[#8D96A6]">
                 {language === "pt" ? "Taxa de poupanca" : "Savings rate"}
               </p>
@@ -2674,7 +2722,7 @@ export function HomeScreen() {
                     : formatPercent(savingsRate, language)}
               </p>
             </div>
-            <div className="rounded-lg border border-[#1E2636] bg-[#0F141E] p-2">
+            <div className="glass-dark-inner rounded-[18px] p-2.5">
               <p className="text-[10px] uppercase tracking-[0.12em] text-[#8D96A6]">
                 {language === "pt" ? "Media desp./dia" : "Avg exp./day"}
               </p>
@@ -2686,7 +2734,7 @@ export function HomeScreen() {
                     : "--"}
               </p>
             </div>
-            <div className="rounded-lg border border-[#1E2636] bg-[#0F141E] p-2">
+            <div className="glass-dark-inner rounded-[18px] p-2.5">
               <p className="text-[10px] uppercase tracking-[0.12em] text-[#8D96A6]">
                 {language === "pt" ? "Projecao do mes" : "Month projection"}
               </p>
@@ -2703,7 +2751,7 @@ export function HomeScreen() {
               </p>
             </div>
           </div>
-          <div className="mt-3 rounded-xl border border-[#1E2636] bg-[#0F141E] p-3">
+          <div className="glass-dark-inner mt-3 rounded-[22px] p-3">
             <div className="flex items-center justify-between gap-3 text-[11px] text-[#8D96A6]">
               <span>{language === "pt" ? "Pressao de despesas" : "Expense pressure"}</span>
               <span>
@@ -2723,7 +2771,7 @@ export function HomeScreen() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5 lg:col-span-3">
+        <div className="glass-dark glass-dark-card p-5 lg:col-span-3">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-sm font-semibold text-[#C7CEDA]">{t("home.categories")}</p>
             <span className="text-[11px] text-[#8B94A6]">
@@ -2733,7 +2781,7 @@ export function HomeScreen() {
           {categoryChartData.length === 0 ? (
             <p className="text-xs text-[#8B94A6]">{t("transactions.empty")}</p>
           ) : (
-            <div className="rounded-xl border border-[#1E2636] bg-[#0F141E] p-3">
+            <div className="glass-dark-inner rounded-[22px] p-3">
               <p className="text-xs font-semibold text-[#D7DDEA]">
                 {language === "pt"
                   ? "Principais categorias de despesas"
@@ -2820,7 +2868,7 @@ export function HomeScreen() {
             </div>
           )}
         </div>
-        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5 sm:col-span-2 lg:col-span-6">
+        <div className="glass-dark glass-dark-card p-5 sm:col-span-2 lg:col-span-6">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-[#E4E7EC]">
@@ -2828,7 +2876,7 @@ export function HomeScreen() {
               </p>
               <p className="text-xs text-[#8B94A6]">{t("home.inflowVsOutflow")}</p>
             </div>
-            <div className="rounded-full border border-[#263043] bg-[#0F141E] px-3 py-1 text-[11px] text-[#9AA3B2]">
+            <div className="glass-dark-pill px-3 py-1 text-[11px] text-[#9AA3B2]">
               {t("home.last30Days")}
             </div>
           </div>
@@ -2911,15 +2959,15 @@ export function HomeScreen() {
 
         </div>
 
-        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5 sm:col-span-2 lg:col-span-6">
+        <div className="glass-dark glass-dark-card p-5 sm:col-span-2 lg:col-span-6">
           <div className="mb-4 flex items-center justify-between">
             <p className="text-sm font-semibold text-[#C7CEDA]">{t("home.accounts")}</p>
-            <span className="flex h-8 w-8 items-center justify-center rounded-full border border-[#1A2230] bg-[#101620]">
+            <span className="glass-dark-pill flex h-8 w-8 items-center justify-center">
               <AppIcon name="wallet" size={16} color="#92A0B7" />
             </span>
           </div>
           <div className="mb-4 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border border-[#1C2332] bg-[#0F141E] p-3">
+            <div className="glass-dark-inner rounded-[22px] p-3">
               <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
                 {language === "pt" ? "Saldo total" : "Total balance"}
               </p>
@@ -2927,7 +2975,7 @@ export function HomeScreen() {
                 {loading ? "..." : formatCurrency(accountBalanceTotal, language, currency)}
               </p>
             </div>
-            <div className="rounded-xl border border-[#1C2332] bg-[#0F141E] p-3">
+            <div className="glass-dark-inner rounded-[22px] p-3">
               <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
                 {language === "pt" ? "Contas positivas" : "Positive accounts"}
               </p>
@@ -2935,7 +2983,7 @@ export function HomeScreen() {
                 {positiveAccountsCount}/{accounts.length}
               </p>
             </div>
-            <div className="rounded-xl border border-[#1C2332] bg-[#0F141E] p-3">
+            <div className="glass-dark-inner rounded-[22px] p-3">
               <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
                 {language === "pt" ? "Media por conta" : "Average per account"}
               </p>
@@ -2951,7 +2999,7 @@ export function HomeScreen() {
               {accounts.map((account) => (
                 <div
                   key={account.id}
-                  className="flex items-center gap-3 rounded-xl border border-[#1C2332] bg-[#0F141E] p-3"
+                  className="glass-dark-inner flex items-center gap-3 rounded-[22px] p-3"
                 >
                   <div className="relative shrink-0">
                     <BankBrandBadge bankCode={account.bank_code} size="sm" />
@@ -2987,7 +3035,7 @@ export function HomeScreen() {
                     type="button"
                     onClick={() => handleRemoveAccount(account.id, account.name)}
                     disabled={deletingAccountId === account.id}
-                    className="rounded-full border border-[#2A3140] bg-[#0F141E] px-3 py-1 text-[11px] text-[#8B94A6] hover:border-red-500/60 hover:text-red-400 disabled:opacity-60"
+                    className="glass-dark-pill px-3 py-1 text-[11px] text-[#8B94A6] hover:border-red-500/60 hover:text-red-400 disabled:opacity-60"
                   >
                     {deletingAccountId === account.id ? "Removendo..." : "Remover"}
                   </button>
@@ -3006,10 +3054,10 @@ export function HomeScreen() {
         </div>
 
 
-        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5 sm:col-span-2 lg:col-span-6">
+        <div className="glass-dark glass-dark-card p-5 sm:col-span-2 lg:col-span-6">
           <div className="mb-4 flex items-center justify-between">
             <p className="text-sm font-semibold text-[#C7CEDA]">{t("home.creditCards")}</p>
-            <span className="flex h-8 w-8 items-center justify-center rounded-full border border-[#1A2230] bg-[#101620]">
+            <span className="glass-dark-pill flex h-8 w-8 items-center justify-center">
               <AppIcon name="credit-card" size={16} color="#92A0B7" />
             </span>
           </div>
@@ -3017,7 +3065,7 @@ export function HomeScreen() {
             <span className="rounded-full border border-[#3A8F8A] bg-[#163137] px-3 py-1 text-[#64D1C4]">
               {t("home.openStatements")} {openStatementsCount}
             </span>
-            <span className="rounded-full border border-[#263043] bg-[#0F141E] px-3 py-1 text-[#8B94A6]">
+            <span className="glass-dark-pill px-3 py-1 text-[#8B94A6]">
               {t("home.closedStatements")} {closedStatementsCount}
             </span>
           </div>
@@ -3035,7 +3083,7 @@ export function HomeScreen() {
                     className={`min-w-0 rounded-xl px-4 py-3 ${
                       isFriendCard
                         ? "border border-[#25404B] bg-[#10212A]"
-                        : "border border-[#1C2332] bg-[#0F141E]"
+                        : "glass-dark-inner border border-white/10 bg-white/[0.03]"
                     }`}
                   >
                     <div className="min-w-0">
@@ -3068,7 +3116,7 @@ export function HomeScreen() {
                         {t("cards.closes")} {card.closing_day} - {t("cards.due")} {card.due_day}
                       </p>
                       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <div className="min-w-0 rounded-xl border border-[#1B2230] bg-[#111723] p-3">
+                        <div className="glass-dark-inner min-w-0 rounded-[22px] p-3">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
                             {language === "pt" ? "Fatura atual" : "Current statement"}
                           </p>
@@ -3089,7 +3137,7 @@ export function HomeScreen() {
                                 : "No statement due"}
                           </p>
                         </div>
-                        <div className="min-w-0 rounded-xl border border-[#1B2230] bg-[#111723] p-3">
+                        <div className="glass-dark-inner min-w-0 rounded-[22px] p-3">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
                             {language === "pt" ? "Proxima fatura" : "Next statement"}
                           </p>
@@ -3138,7 +3186,7 @@ export function HomeScreen() {
                           type="button"
                           onClick={() => handleRemoveCard(card.id, card.name)}
                           disabled={deletingCardId === card.id}
-                          className={`self-start rounded-full bg-[#0F141E] px-3 py-1 text-[11px] disabled:opacity-60 lg:self-auto ${
+                          className={`glass-dark-pill self-start px-3 py-1 text-[11px] disabled:opacity-60 lg:self-auto ${
                             isFriendCard
                               ? "border border-[#2E6C79] text-[#A8D7D1] hover:border-red-500/60 hover:text-red-300"
                               : "border border-[#2A3140] text-[#8B94A6] hover:border-red-500/60 hover:text-red-400"
@@ -3155,10 +3203,10 @@ export function HomeScreen() {
           )}
         </div>
 
-        <div className="flex h-full min-h-0 flex-col rounded-2xl border border-[#1B2230] bg-[#111723] p-4 sm:col-span-2 lg:col-span-6 sm:p-5">
+        <div className="glass-dark glass-dark-card flex h-full min-h-0 flex-col p-4 sm:col-span-2 lg:col-span-6 sm:p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm font-semibold text-[#C7CEDA]">{t("transactions.title")}</p>
-            <span className="rounded-full border border-[#263043] bg-[#0F141E] px-3 py-1 text-[11px] text-[#9AA3B2]">
+            <span className="glass-dark-pill px-3 py-1 text-[11px] text-[#9AA3B2]">
               {t("transactions.monthSummary")}
             </span>
           </div>
@@ -3167,7 +3215,7 @@ export function HomeScreen() {
             <span>{monthTransactions.length}</span>
           </div>
           {monthTransactions.length === 0 ? (
-            <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-[#1C2332] bg-[#0F141E] px-4 py-8">
+            <div className="glass-dark-inner flex flex-1 items-center justify-center rounded-[22px] border border-dashed border-white/12 px-4 py-8">
               <p className="text-xs text-[#8B94A6]">{t("transactions.empty")}</p>
             </div>
           ) : (
@@ -3234,7 +3282,7 @@ export function HomeScreen() {
           )}
         </div>
 
-        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5 sm:col-span-2 lg:col-span-12">
+        <div className="glass-dark glass-dark-card p-5 sm:col-span-2 lg:col-span-12">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-[#C7CEDA]">
@@ -3244,7 +3292,7 @@ export function HomeScreen() {
                 {t("home.cardReminderSubtitle")}
               </p>
             </div>
-            <span className="rounded-full border border-[#263043] bg-[#0F141E] px-3 py-1 text-[11px] text-[#9AA3B2]">
+            <span className="glass-dark-pill px-3 py-1 text-[11px] text-[#9AA3B2]">
               {cardReminders.length}
             </span>
           </div>

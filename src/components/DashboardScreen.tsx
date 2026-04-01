@@ -200,10 +200,7 @@ export function DashboardScreen({
     const openExpenseTotal = filteredTransactions.reduce((sum, t) => {
       if (t.type !== "expense") return sum;
       if (t.isInstallment && t.installmentTotal && t.installmentTotal > 0) {
-        const per = t.value / t.installmentTotal;
-        const remaining = t.installmentTotal - t.installmentsPaid;
-        if (remaining <= 0) return sum;
-        return sum + per * remaining;
+        return t.isPaid ? sum : sum + t.value;
       }
       if (!t.isPaid) return sum + t.value;
       return sum;
@@ -247,7 +244,7 @@ export function DashboardScreen({
     "Sem mes";
 
   return (
-    <div className="relative flex flex-1 flex-col gap-6 rounded-3xl border border-[#121a30] bg-[#0a1224] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.38)] md:p-8">
+    <div className="relative flex flex-1 flex-col gap-6 rounded-[34px] p-1 md:p-2">
       <TopBar
         tabs={TAB_OPTIONS}
         activeTab={active}
@@ -266,45 +263,45 @@ export function DashboardScreen({
       {active === "Resumo" && (
         <div className="space-y-6">
           <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-2xl border border-[#1a243c] bg-[#0d1427] p-4 shadow-lg shadow-black/30">
-              <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+            <div className="app-surface app-card-soft p-5">
+              <p className="app-eyebrow">
                 Saldo total
               </p>
-              <p className="mt-2 text-2xl font-semibold text-white">
+              <p className="app-stat-value mt-3">
                 {formatCurrency(monthSummary.totalIncome - monthSummary.totalExpense)}
               </p>
-              <p className="text-xs text-emerald-400">Atualizado com contas</p>
+              <p className="mt-2 text-xs text-[#5c738f]">Atualizado com contas</p>
             </div>
-            <div className="rounded-2xl border border-[#1a243c] bg-[#0d1427] p-4 shadow-lg shadow-black/30">
-              <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+            <div className="app-surface app-card-soft p-5">
+              <p className="app-eyebrow">
                 Entradas
               </p>
-              <p className="mt-2 text-2xl font-semibold text-white">
+              <p className="app-stat-value tone-income mt-3">
                 {formatCurrency(monthSummary.totalIncome)}
               </p>
-              <p className="text-xs text-emerald-400">
+              <p className="mt-2 text-xs text-[#5c738f]">
                 Com base nas transações
               </p>
             </div>
-            <div className="rounded-2xl border border-[#1a243c] bg-[#0d1427] p-4 shadow-lg shadow-black/30">
-              <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+            <div className="app-surface app-card-soft p-5">
+              <p className="app-eyebrow">
                 Saídas
               </p>
-              <p className="mt-2 text-2xl font-semibold text-white">
+              <p className="app-stat-value tone-expense mt-3">
                 {formatCurrency(monthSummary.totalExpense)}
               </p>
-              <p className="text-xs text-red-400">Inclui parcelas</p>
+              <p className="mt-2 text-xs text-[#5c738f]">Inclui parcelas</p>
             </div>
           </div>
 
 
-<div className="rounded-2xl border border-[#121a30] bg-[#0b1326] p-4 shadow-lg shadow-black/30 sm:p-5">
+<div className="app-surface app-card p-4 sm:p-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-col gap-1">
-                <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
+                <p className="app-eyebrow">
                   Categorias
                 </p>
-                <p className="text-sm text-slate-300">
+                <p className="text-sm text-[#5c738f]">
                   Distribuição por categoria ({categoryMode})
                 </p>
               </div>
@@ -315,8 +312,8 @@ export function DashboardScreen({
                     onClick={() => setCategoryMode(mode)}
                     className={`rounded-full border px-3 py-1 transition ${
                       categoryMode === mode
-                        ? "border-[#3b82f6] bg-[#12203c] text-slate-100"
-                        : "border-[#1f2a45] bg-[#0b1226] text-slate-400 hover:text-white"
+                        ? "border-[#99bcff] bg-white/85 text-[#2559a6] shadow-[0_10px_24px_rgba(134,153,181,0.14)]"
+                        : "border-white/55 bg-white/35 text-[#617287] hover:text-[#122033]"
                     }`}
                   >
                     {mode === "mixed" ? "Mista" : mode === "expense" ? "Despesas" : "Receitas"}
@@ -341,14 +338,14 @@ export function DashboardScreen({
                     barGap={isMobile ? 6 : 10}
                   >
                     <CartesianGrid
-                      stroke="#101a30"
+                      stroke="#d5deea"
                       strokeDasharray="2 6"
                       vertical={false}
                     />
                     <XAxis
                       type="number"
-                      stroke="#64748b"
-                      tick={{ fill: "#8fa2c5", fontSize: isMobile ? 9 : 10 }}
+                      stroke="#8ea0b7"
+                      tick={{ fill: "#73849a", fontSize: isMobile ? 9 : 10 }}
                       axisLine={false}
                       tickLine={false}
                       tickFormatter={(v) =>
@@ -362,9 +359,9 @@ export function DashboardScreen({
                     <YAxis
                       type="category"
                       dataKey="category"
-                      stroke="#64748b"
+                      stroke="#8ea0b7"
                       tick={{
-                        fill: "#cbd5e1",
+                        fill: "#44566e",
                         fontSize: isMobile ? 10 : 11,
                       }}
                       tickFormatter={(label: string) =>
@@ -378,11 +375,13 @@ export function DashboardScreen({
                     />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: "#0b1226",
-                        border: "1px solid #1f2a45",
+                        backgroundColor: "rgba(255,255,255,0.88)",
+                        border: "1px solid rgba(255,255,255,0.7)",
                         borderRadius: 12,
-                        color: "#e2e8f0",
+                        color: "#122033",
                         fontSize: 12,
+                        boxShadow: "0 16px 38px rgba(142,160,184,0.18)",
+                        backdropFilter: "blur(12px)",
                       }}
                       formatter={(value) => formatCurrency(Number(value ?? 0))}
                       labelFormatter={(label) => `${label ?? ""}`}
@@ -399,7 +398,7 @@ export function DashboardScreen({
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="flex h-full items-center justify-center rounded-xl bg-[#0b0f1a] text-xs text-slate-500">
+                <div className="flex h-full items-center justify-center rounded-[22px] bg-white/35 text-xs text-[#6a7890]">
                   {chartsReady
                     ? `Ainda não há registros para ${selectedMonthLabel}.`
                     : "Carregando gráfico..."}
@@ -409,10 +408,10 @@ export function DashboardScreen({
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-2xl border border-[#1a243c] bg-[#0d1427] p-5 shadow-lg shadow-black/30">
+            <div className="app-surface app-card p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-col gap-1">
-                <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
+                <p className="app-eyebrow">
                   Transações
                 </p>
               </div>
@@ -427,20 +426,20 @@ export function DashboardScreen({
                     <TransactionRow key={tx.id} tx={tx} />
                   ))
                 ) : (
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-[#6a7890]">
                     Nenhuma transação neste mês. Adicione a primeira.
                   </p>
                 )}
               </div>
             </div>
 
-            <div className="rounded-2xl border border-[#1a243c] bg-[#0d1427] p-5 shadow-lg shadow-black/30">
+            <div className="app-surface app-card p-5">
               <div className="flex items-center justify-between">
                 <div className="flex flex-col gap-1">
-                  <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
+                  <p className="app-eyebrow">
                     Bancos e contas
                   </p>
-                  <p className="text-sm text-slate-300">
+                  <p className="text-sm text-[#5c738f]">
                     Limites, saldos e fatura atual
                   </p>
                 </div>
@@ -455,7 +454,7 @@ export function DashboardScreen({
                   {bankAccounts.length ? (
                     <AccountsList accounts={bankAccounts} />
                   ) : (
-                    <p className="text-xs text-slate-500 mt-2">
+                    <p className="mt-2 text-xs text-[#6a7890]">
                       Nenhuma conta bancária cadastrada.
                     </p>
                   )}
@@ -467,7 +466,7 @@ export function DashboardScreen({
                   {creditCards.length ? (
                     <AccountsList accounts={creditCards} />
                   ) : (
-                    <p className="text-xs text-slate-500 mt-2">
+                    <p className="mt-2 text-xs text-[#6a7890]">
                       Nenhum cartão cadastrado.
                     </p>
                   )}
@@ -480,12 +479,12 @@ export function DashboardScreen({
 
       {active === "Bancos" && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between gap-2 rounded-2xl border border-[#1d253d] bg-[#0f172a] px-4 py-3 shadow-lg shadow-black/30">
+          <div className="app-surface app-card flex items-center justify-between gap-2 px-4 py-4">
             <div className="flex flex-col gap-1">
-              <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
+              <p className="app-eyebrow">
                 Bancos e contas
               </p>
-              <p className="text-sm text-slate-300">
+              <p className="text-sm text-[#5c738f]">
                 Separe contas correntes e cartões.
               </p>
             </div>
@@ -494,25 +493,25 @@ export function DashboardScreen({
 
           <div className="space-y-3">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+              <p className="app-eyebrow">
                 Contas bancárias
               </p>
               {bankAccounts.length ? (
                 <AccountsList accounts={bankAccounts} />
               ) : (
-                <p className="text-xs text-slate-500 mt-2">
+                <p className="mt-2 text-xs text-[#6a7890]">
                   Nenhuma conta bancária cadastrada.
                 </p>
               )}
             </div>
             <div>
-              <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+              <p className="app-eyebrow">
                 Cartões de crédito
               </p>
               {creditCards.length ? (
                 <AccountsList accounts={creditCards} />
               ) : (
-                <p className="text-xs text-slate-500 mt-2">
+                <p className="mt-2 text-xs text-[#6a7890]">
                   Nenhum cartão cadastrado.
                 </p>
               )}
@@ -523,12 +522,12 @@ export function DashboardScreen({
 
       {active === "Metas" && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between gap-2 rounded-2xl border border-[#1a243c] bg-[#0d1427] px-4 py-3 shadow-lg shadow-black/30">
+          <div className="app-surface app-card flex items-center justify-between gap-2 px-4 py-4">
             <div className="flex flex-col gap-1">
-              <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
+              <p className="app-eyebrow">
                 Metas financeiras
               </p>
-              <p className="text-sm text-slate-300">
+              <p className="text-sm text-[#5c738f]">
                 Acompanhe o progresso dos objetivos.
               </p>
             </div>

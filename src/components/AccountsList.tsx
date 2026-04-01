@@ -6,58 +6,26 @@ import type { AccountStat } from "@/lib/accountTypes";
 import { useCurrency } from "@/lib/currency";
 import { formatCurrencyValue } from "../../shared/currency";
 
-function getBankVisual(name: string): {
-  label: string;
-  bgClass: string;
-  textClass: string;
-} {
-  const n = name.toLowerCase();
+function getBankVisual(name: string) {
+  const normalized = name.toLowerCase();
 
-  if (n.includes("nubank") || n.includes("nu")) {
-    return {
-      label: "Nubank",
-      bgClass: "bg-purple-500/10 border-purple-500/40",
-      textClass: "text-purple-300",
-    };
+  if (normalized.includes("nubank") || normalized.includes("nu")) {
+    return { label: "Nubank", tone: "bg-[#ece7ff] text-[#6753ce]" };
+  }
+  if (normalized.includes("inter")) {
+    return { label: "Banco Inter", tone: "bg-[#fff0e4] text-[#d47124]" };
+  }
+  if (normalized.includes("itau") || normalized.includes("itaú")) {
+    return { label: "Itau", tone: "bg-[#e7f1ff] text-[#2d6dd9]" };
+  }
+  if (normalized.includes("caixa")) {
+    return { label: "Caixa", tone: "bg-[#e5f6ff] text-[#2c88b5]" };
+  }
+  if (normalized.includes("santander")) {
+    return { label: "Santander", tone: "bg-[#ffe8ea] text-[#cf5b67]" };
   }
 
-  if (n.includes("inter")) {
-    return {
-      label: "Banco Inter",
-      bgClass: "bg-orange-500/10 border-orange-500/40",
-      textClass: "text-orange-300",
-    };
-  }
-
-  if (n.includes("itaú") || n.includes("itau")) {
-    return {
-      label: "Itaú",
-      bgClass: "bg-blue-500/10 border-blue-500/40",
-      textClass: "text-blue-300",
-    };
-  }
-
-  if (n.includes("caixa")) {
-    return {
-      label: "Caixa",
-      bgClass: "bg-sky-500/10 border-sky-500/40",
-      textClass: "text-sky-300",
-    };
-  }
-
-  if (n.includes("santander")) {
-    return {
-      label: "Santander",
-      bgClass: "bg-red-500/10 border-red-500/40",
-      textClass: "text-red-300",
-    };
-  }
-
-  return {
-    label: "Outro banco",
-    bgClass: "bg-zinc-800/60 border-zinc-700",
-    textClass: "text-zinc-300",
-  };
+  return { label: "Outro banco", tone: "bg-white/65 text-[#546377]" };
 }
 
 type Props = {
@@ -81,23 +49,11 @@ export function AccountsList({ accounts }: Props) {
     setEditing(acc);
     setName(acc.name ?? "");
     setInitialBalance(
-      acc.initialBalance !== null && acc.initialBalance !== undefined
-        ? String(acc.initialBalance)
-        : ""
+      acc.initialBalance !== null && acc.initialBalance !== undefined ? String(acc.initialBalance) : "",
     );
-    setCardLimit(
-      acc.cardLimit !== null && acc.cardLimit !== undefined
-        ? String(acc.cardLimit)
-        : ""
-    );
-    setClosingDay(
-      acc.closingDay !== null && acc.closingDay !== undefined
-        ? String(acc.closingDay)
-        : ""
-    );
-    setDueDay(
-      acc.dueDay !== null && acc.dueDay !== undefined ? String(acc.dueDay) : ""
-    );
+    setCardLimit(acc.cardLimit !== null && acc.cardLimit !== undefined ? String(acc.cardLimit) : "");
+    setClosingDay(acc.closingDay !== null && acc.closingDay !== undefined ? String(acc.closingDay) : "");
+    setDueDay(acc.dueDay !== null && acc.dueDay !== undefined ? String(acc.dueDay) : "");
     setErrorMsg(null);
   }
 
@@ -112,33 +68,29 @@ export function AccountsList({ accounts }: Props) {
     setSaving(false);
   }
 
-  async function handleEditSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleEditSubmit(event: React.FormEvent) {
+    event.preventDefault();
     if (!editing) return;
 
     setErrorMsg(null);
 
     if (!name.trim()) {
-      setErrorMsg("O nome da conta não pode estar vazio.");
+      setErrorMsg("O nome da conta nao pode estar vazio.");
       return;
     }
 
-    const limitNumber = cardLimit
-      ? Number(cardLimit.replace(",", "."))
-      : null;
+    const limitNumber = cardLimit ? Number(cardLimit.replace(",", ".")) : null;
     const closing = closingDay ? Number(closingDay) : null;
     const due = dueDay ? Number(dueDay) : null;
-    const initialNumber = initialBalance
-      ? Number(initialBalance.replace(",", "."))
-      : 0;
+    const initialNumber = initialBalance ? Number(initialBalance.replace(",", ".")) : 0;
 
     if (closing !== null && (closing < 1 || closing > 31)) {
-      setErrorMsg("Dia de fechamento inválido (1 a 31).");
+      setErrorMsg("Dia de fechamento invalido (1 a 31).");
       return;
     }
 
     if (due !== null && (due < 1 || due > 31)) {
-      setErrorMsg("Dia de vencimento inválido (1 a 31).");
+      setErrorMsg("Dia de vencimento invalido (1 a 31).");
       return;
     }
 
@@ -159,7 +111,6 @@ export function AccountsList({ accounts }: Props) {
 
     if (error) {
       console.error(error);
-      // 👇 mostra o erro real na UI pra saber o que o Supabase está a dizer
       setErrorMsg(error.message);
       return;
     }
@@ -170,28 +121,20 @@ export function AccountsList({ accounts }: Props) {
 
   async function handleDeleteAccount(accountId: string, accountName: string) {
     const ok = window.confirm(
-      `Tens a certeza que queres apagar a conta "${accountName}"?\n\nIsto também vai apagar TODAS as transações associadas a esta conta. Esta ação não pode ser desfeita.`
+      `Tem certeza que deseja apagar a conta "${accountName}"?\n\nIsso tambem vai apagar todas as transacoes associadas a esta conta.`,
     );
 
     if (!ok) return;
 
-    // 1) apaga transações associadas (evita erro de FK)
-    const { error: txError } = await supabase
-      .from("transactions")
-      .delete()
-      .eq("account_id", accountId);
+    const { error: txError } = await supabase.from("transactions").delete().eq("account_id", accountId);
 
     if (txError) {
       console.error(txError);
-      alert(`Erro ao apagar transações desta conta: ${txError.message}`);
+      alert(`Erro ao apagar transacoes desta conta: ${txError.message}`);
       return;
     }
 
-    // 2) apaga a conta
-    const { error: accError } = await supabase
-      .from("accounts")
-      .delete()
-      .eq("id", accountId);
+    const { error: accError } = await supabase.from("accounts").delete().eq("id", accountId);
 
     if (accError) {
       console.error(accError);
@@ -199,10 +142,7 @@ export function AccountsList({ accounts }: Props) {
       return;
     }
 
-    if (editing && editing.id === accountId) {
-      resetEditState();
-    }
-
+    if (editing && editing.id === accountId) resetEditState();
     window.dispatchEvent(new Event("data-refresh"));
   }
 
@@ -211,105 +151,79 @@ export function AccountsList({ accounts }: Props) {
       <div className="grid gap-3 md:grid-cols-2">
         {accounts.map((acc) => {
           const visual = getBankVisual(acc.name);
-
-      const usedPercent =
-        acc.cardLimit &&
-        acc.cardLimit > 0 &&
-        acc.invoiceCurrent !== null
-          ? Math.round((acc.invoiceCurrent / acc.cardLimit) * 100)
-          : null;
+          const usedPercent =
+            acc.cardLimit && acc.cardLimit > 0 && acc.invoiceCurrent !== null
+              ? Math.min(Math.round((acc.invoiceCurrent / acc.cardLimit) * 100), 100)
+              : null;
 
           return (
-            <div
-              key={acc.id}
-              className="flex flex-col justify-between rounded-2xl border border-[#1a243c] bg-[#0b1226] px-4 py-3 shadow-inner shadow-black/20"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex flex-col">
-                  <span
-                    className={`inline-flex items-center rounded-full border px-2 py-[2px] text-[10px] font-medium ${visual.bgClass} ${visual.textClass}`}
-                  >
+            <div key={acc.id} className="app-surface app-card-soft flex flex-col justify-between p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <span className={`inline-flex rounded-full px-3 py-1 text-[10px] font-semibold ${visual.tone}`}>
                     {visual.label}
                   </span>
-                  <div className="mt-1 flex items-center gap-2">
-                    <span className="text-sm font-semibold text-zinc-100">
-                      {acc.name}
-                    </span>
-                    <span className="rounded-full border border-[#233153] bg-[#0f172a] px-2 py-[2px] text-[10px] text-slate-300">
-                      {acc.accountType === "card" ? "Cartão" : "Conta"}
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="min-w-0 break-words text-sm font-semibold text-[#122033]">{acc.name}</span>
+                    <span className="app-pill px-2.5 py-1 text-[10px]">
+                      {acc.accountType === "card" ? "Cartao" : "Conta"}
                     </span>
                   </div>
                 </div>
 
-                <div className="flex flex-col items-end gap-1 text-right">
-                  <span className="text-[11px] text-zinc-500">
-                    Saldo atual
-                  </span>
-                  <span className="text-sm font-medium">
+                <div className="text-right">
+                  <p className="text-[11px] text-[#6d7c92]">Saldo atual</p>
+                  <p className="mt-1 text-lg font-semibold tracking-[-0.03em] text-[#122033]">
                     {formatCurrency(acc.balance)}
-                  </span>
-
-                  {acc.accountType !== "card" && (
-                    <span className="mt-1 text-[11px] text-zinc-500">
-                      Saldo inicial:{" "}
-                      <span className="text-zinc-300">
-                        {formatCurrency(acc.initialBalance)}
-                      </span>
-                    </span>
-                  )}
-
-                  {acc.cardLimit && (
-                    <span className="mt-1 text-[11px] text-zinc-500">
-                      Limite cartão:{" "}
-                      <span className="text-zinc-300">
-                        {formatCurrency(acc.cardLimit)}
-                      </span>
-                    </span>
-                  )}
-
-                  {acc.invoiceCurrent !== null && (
-                    <span className="mt-1 text-[11px] text-zinc-500">
-                      Fatura atual:{" "}
-                      <span className="text-amber-400">
-                        {formatCurrency(acc.invoiceCurrent)}
-                      </span>
-                    </span>
-                  )}
+                  </p>
                 </div>
               </div>
 
-              {usedPercent !== null && (
-                <div className="mt-3">
-                  <div className="mb-1 flex items-center justify-between text-[10px] text-zinc-500">
-                    <span>Utilização do limite</span>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {acc.accountType !== "card" ? (
+                  <div className="app-surface app-card-soft p-3">
+                    <p className="app-eyebrow">Saldo inicial</p>
+                    <p className="mt-2 text-sm font-semibold text-[#122033]">
+                      {formatCurrency(acc.initialBalance)}
+                    </p>
+                  </div>
+                ) : null}
+
+                {acc.cardLimit ? (
+                  <div className="app-surface app-card-soft p-3">
+                    <p className="app-eyebrow">Limite</p>
+                    <p className="mt-2 text-sm font-semibold text-[#122033]">{formatCurrency(acc.cardLimit)}</p>
+                    {acc.invoiceCurrent !== null ? (
+                      <p className="mt-1 text-xs text-[#6d7c92]">Fatura atual {formatCurrency(acc.invoiceCurrent)}</p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+
+              {usedPercent !== null ? (
+                <div className="mt-4">
+                  <div className="mb-2 flex items-center justify-between text-[11px] text-[#6d7c92]">
+                    <span>Utilizacao do limite</span>
                     <span>{usedPercent}%</span>
                   </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-900">
-                    <div
-                      className="h-full rounded-full bg-amber-400"
-                      style={{ width: `${usedPercent}%` }}
-                    />
+                  <div className="h-2 overflow-hidden rounded-full bg-white/45">
+                    <div className="h-full rounded-full bg-[linear-gradient(90deg,#6aa3ff,#86d2ff)]" style={{ width: `${usedPercent}%` }} />
                   </div>
                 </div>
-              )}
+              ) : null}
 
-              <div className="mt-3 flex items-center justify-between text-[11px] text-zinc-500">
-                <div className="flex flex-col">
-                  {acc.closingDay && (
-                    <span>Fecha: dia {acc.closingDay}</span>
-                  )}
-                  {acc.dueDay && <span>Vence: dia {acc.dueDay}</span>}
+              <div className="mt-4 flex flex-wrap items-end justify-between gap-3 text-[11px] text-[#6d7c92]">
+                <div className="flex flex-col gap-1">
+                  {acc.closingDay ? <span>Fecha dia {acc.closingDay}</span> : null}
+                  {acc.dueDay ? <span>Vence dia {acc.dueDay}</span> : null}
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => openEdit(acc)}
-                    className="rounded-full border border-zinc-700 px-3 py-1 text-[11px] text-zinc-400 hover:border-zinc-500 hover:text-zinc-100"
-                  >
+                  <button onClick={() => openEdit(acc)} className="app-button app-button-secondary px-3 py-1.5 text-[11px]">
                     Editar
                   </button>
                   <button
                     onClick={() => handleDeleteAccount(acc.id, acc.name)}
-                    className="rounded-full border border-zinc-800 px-3 py-1 text-[11px] text-zinc-500 hover:border-red-500/70 hover:text-red-400"
+                    className="app-button app-button-secondary px-3 py-1.5 text-[11px] text-[#b45f68]"
                   >
                     Apagar
                   </button>
@@ -320,127 +234,91 @@ export function AccountsList({ accounts }: Props) {
         })}
       </div>
 
-      {/* Modal de edição */}
-      {editing && (
-        <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4"
-        >
-          <div
-            className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 p-5 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
+      {editing ? (
+        <div className="app-modal-backdrop fixed inset-0 z-40 flex items-center justify-center px-4">
+          <div className="app-surface app-card w-full max-w-md p-5" onClick={(event) => event.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-medium text-zinc-100">
-                Editar conta / banco
-              </h2>
-              <button
-                type="button"
-                onClick={resetEditState}
-                className="text-xs text-zinc-500 hover:text-zinc-300"
-              >
+              <h2 className="text-base font-semibold text-[#122033]">Editar conta / banco</h2>
+              <button type="button" onClick={resetEditState} className="text-xs text-[#69798e]">
                 Fechar
               </button>
             </div>
 
             <form className="space-y-4" onSubmit={handleEditSubmit}>
-              {/* Nome */}
               <div className="space-y-1 text-sm">
-                <label className="text-xs text-zinc-400">
-                  Nome da conta / banco
-                </label>
+                <label className="text-xs text-[#69798e]">Nome da conta / banco</label>
                 <input
                   type="text"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
-                  placeholder="Nubank, Itaú..."
+                  onChange={(event) => setName(event.target.value)}
+                  className="app-input px-4 py-3 text-sm"
+                  placeholder="Nubank, Itau..."
                   required
                 />
               </div>
 
-              {/* Saldo inicial / ajuste (apenas contas bancárias) */}
-              {editing?.accountType !== "card" && (
+              {editing.accountType !== "card" ? (
                 <div className="space-y-1 text-sm">
-                  <label className="text-xs text-zinc-400">
-                    Saldo inicial / ajuste ({currency})
-                  </label>
+                  <label className="text-xs text-[#69798e]">Saldo inicial / ajuste ({currency})</label>
                   <input
                     type="number"
                     step="0.01"
                     value={initialBalance}
-                    onChange={(e) => setInitialBalance(e.target.value)}
-                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                    onChange={(event) => setInitialBalance(event.target.value)}
+                    className="app-input px-4 py-3 text-sm"
                     placeholder="Ex: 1500,00"
                   />
-                  <p className="text-[10px] text-zinc-500">
-                    Se alterares este valor, o saldo atual vai ser recalculado a
-                    partir daqui.
-                  </p>
                 </div>
-              )}
+              ) : null}
 
-              {/* Limite do cartão */}
               <div className="space-y-1 text-sm">
-                <label className="text-xs text-zinc-400">
-                  Limite total do cartão (opcional)
-                </label>
+                <label className="text-xs text-[#69798e]">Limite total do cartao (opcional)</label>
                 <input
                   type="number"
                   step="0.01"
                   value={cardLimit}
-                  onChange={(e) => setCardLimit(e.target.value)}
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                  onChange={(event) => setCardLimit(event.target.value)}
+                  className="app-input px-4 py-3 text-sm"
                   placeholder="Ex: 2000,00"
                 />
               </div>
 
-              {/* Fechamento / vencimento */}
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="space-y-1">
-                  <label className="text-xs text-zinc-400">
-                    Dia de fechamento (cartão)
-                  </label>
+                  <label className="text-xs text-[#69798e]">Dia de fechamento</label>
                   <input
                     type="number"
                     min={1}
                     max={31}
                     value={closingDay}
-                    onChange={(e) => setClosingDay(e.target.value)}
-                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                    onChange={(event) => setClosingDay(event.target.value)}
+                    className="app-input px-4 py-3 text-sm"
                     placeholder="Ex: 10"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-zinc-400">
-                    Dia de vencimento (fatura)
-                  </label>
+                  <label className="text-xs text-[#69798e]">Dia de vencimento</label>
                   <input
                     type="number"
                     min={1}
                     max={31}
                     value={dueDay}
-                    onChange={(e) => setDueDay(e.target.value)}
-                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                    onChange={(event) => setDueDay(event.target.value)}
+                    className="app-input px-4 py-3 text-sm"
                     placeholder="Ex: 22"
                   />
                 </div>
               </div>
 
-              {errorMsg && (
-                <p className="text-xs text-red-400">{errorMsg}</p>
-              )}
+              {errorMsg ? <p className="text-xs text-red-500">{errorMsg}</p> : null}
 
-              <button
-                type="submit"
-                disabled={saving}
-                className="mt-2 w-full rounded-xl bg-zinc-100 py-2 text-sm font-medium text-black hover:bg-zinc-300 disabled:opacity-60"
-              >
-                {saving ? "A guardar..." : "Guardar alterações"}
+              <button type="submit" disabled={saving} className="app-button app-button-primary w-full px-4 py-3 text-sm font-semibold">
+                {saving ? "A guardar..." : "Guardar alteracoes"}
               </button>
             </form>
           </div>
         </div>
-      )}
+      ) : null}
     </>
   );
 }
