@@ -653,12 +653,12 @@ export default function CardsPage() {
                         ? `Vence em ${insight?.daysUntilDue ?? 0} dia(s)`
                         : `Due in ${insight?.daysUntilDue ?? 0} day(s)`;
               return (
-                <div key={item.id} className={`rounded-2xl border p-4 sm:p-5 ${item.owner_type === "friend" ? "border-[#25404B] bg-[#10212A]" : "border-[#1E232E] bg-[#121621]"}`}>
+                <div key={item.id} className={`min-w-0 rounded-2xl border p-4 sm:p-5 ${item.owner_type === "friend" ? "border-[#25404B] bg-[#10212A]" : "border-[#1E232E] bg-[#121621]"}`}>
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 flex-1 space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <BankBrandBadge bankCode={item.bank_code} />
-                        <p className="text-lg font-semibold text-[#E4E7EC]">{item.name}</p>
+                        <p className="min-w-0 break-words text-lg font-semibold text-[#E4E7EC]">{item.name}</p>
                         <span className="rounded-full border border-[#2A3140] bg-[#0F141E] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[#9AA3B2]">
                           {item.owner_type === "friend" ? t("cards.ownerBadgeFriend") : t("cards.ownerBadgeSelf")}
                         </span>
@@ -691,24 +691,24 @@ export default function CardsPage() {
                   </div>
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <div className="rounded-xl border border-[#1B2230] bg-[#0F141E] p-3">
+                    <div className="min-w-0 rounded-xl border border-[#1B2230] bg-[#0F141E] p-3">
                       <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">{language === "pt" ? "Fatura atual" : "Current statement"}</p>
-                      <p className="mt-2 text-xl font-semibold text-[#E4E7EC]">{formatMoney(currentStatementTotal, language, currency)}</p>
+                      <p className="mt-2 break-words text-lg font-semibold leading-tight text-[#E4E7EC] sm:text-xl">{formatMoney(currentStatementTotal, language, currency)}</p>
                       <p className="mt-1 text-xs text-[#8B94A6]">{dueLabel}</p>
                     </div>
-                    <div className="rounded-xl border border-[#1B2230] bg-[#0F141E] p-3">
+                    <div className="min-w-0 rounded-xl border border-[#1B2230] bg-[#0F141E] p-3">
                       <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">{language === "pt" ? "Proxima fatura" : "Next statement"}</p>
-                      <p className="mt-2 text-xl font-semibold text-[#E4E7EC]">{formatMoney(insight?.nextStatement ?? 0, language, currency)}</p>
+                      <p className="mt-2 break-words text-lg font-semibold leading-tight text-[#E4E7EC] sm:text-xl">{formatMoney(insight?.nextStatement ?? 0, language, currency)}</p>
                       <p className="mt-1 text-xs text-[#8B94A6]">{language === "pt" ? `Fecha em ${insight?.daysUntilClosing ?? 0} dia(s)` : `Closes in ${insight?.daysUntilClosing ?? 0} day(s)`}</p>
                     </div>
-                    <div className="rounded-xl border border-[#1B2230] bg-[#0F141E] p-3">
+                    <div className="min-w-0 rounded-xl border border-[#1B2230] bg-[#0F141E] p-3">
                       <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">{language === "pt" ? "Limite usado" : "Used limit"}</p>
-                      <p className="mt-2 text-xl font-semibold text-[#E4E7EC]">{formatMoney(insight?.usedTotal ?? 0, language, currency)}</p>
+                      <p className="mt-2 break-words text-lg font-semibold leading-tight text-[#E4E7EC] sm:text-xl">{formatMoney(insight?.usedTotal ?? 0, language, currency)}</p>
                       <p className="mt-1 text-xs text-[#8B94A6]">{`${(insight?.utilizationPercent ?? 0).toFixed(1)}%`}</p>
                     </div>
-                    <div className="rounded-xl border border-[#1B2230] bg-[#0F141E] p-3">
+                    <div className="min-w-0 rounded-xl border border-[#1B2230] bg-[#0F141E] p-3">
                       <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">{language === "pt" ? "Limite disponivel" : "Available limit"}</p>
-                      <p className="mt-2 text-xl font-semibold text-[#5DD6C7]">{formatMoney(insight?.availableLimit ?? 0, language, currency)}</p>
+                      <p className="mt-2 break-words text-lg font-semibold leading-tight text-[#5DD6C7] sm:text-xl">{formatMoney(insight?.availableLimit ?? 0, language, currency)}</p>
                       <p className="mt-1 text-xs text-[#8B94A6]">{formatMoney(Number(item.limit_amount) || 0, language, currency)}</p>
                     </div>
                   </div>

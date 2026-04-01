@@ -3032,16 +3032,16 @@ export function HomeScreen() {
                 return (
                   <div
                     key={card.id}
-                    className={`rounded-xl px-4 py-3 ${
+                    className={`min-w-0 rounded-xl px-4 py-3 ${
                       isFriendCard
                         ? "border border-[#25404B] bg-[#10212A]"
                         : "border border-[#1C2332] bg-[#0F141E]"
                     }`}
                   >
-                    <div className="flex-1">
+                    <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <BankBrandBadge bankCode={card.bank_code} size="sm" />
-                      <p className="text-sm font-semibold text-[#E4E7EC]">{card.name}</p>
+                      <p className="min-w-0 break-words text-sm font-semibold text-[#E4E7EC]">{card.name}</p>
                        {isFriendCard ? (
                           <span className="rounded-full border border-[#2E6C79] bg-[#173038] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[#91E6DA]">
                             {t("cards.ownerBadgeFriend")}
@@ -3068,11 +3068,11 @@ export function HomeScreen() {
                         {t("cards.closes")} {card.closing_day} - {t("cards.due")} {card.due_day}
                       </p>
                       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <div className="rounded-xl border border-[#1B2230] bg-[#111723] p-3">
+                        <div className="min-w-0 rounded-xl border border-[#1B2230] bg-[#111723] p-3">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
                             {language === "pt" ? "Fatura atual" : "Current statement"}
                           </p>
-                          <p className="mt-2 text-2xl font-semibold text-[#E4E7EC]">
+                          <p className="mt-2 break-words text-xl font-semibold leading-tight text-[#E4E7EC] sm:text-2xl">
                             {formatCurrency(
                               (insight?.currentStatement ?? 0) + (insight?.overdueAmount ?? 0),
                               language,
@@ -3089,11 +3089,11 @@ export function HomeScreen() {
                                 : "No statement due"}
                           </p>
                         </div>
-                        <div className="rounded-xl border border-[#1B2230] bg-[#111723] p-3">
+                        <div className="min-w-0 rounded-xl border border-[#1B2230] bg-[#111723] p-3">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
                             {language === "pt" ? "Proxima fatura" : "Next statement"}
                           </p>
-                          <p className="mt-2 text-2xl font-semibold text-[#E4E7EC]">
+                          <p className="mt-2 break-words text-xl font-semibold leading-tight text-[#E4E7EC] sm:text-2xl">
                             {formatCurrency(insight?.nextStatement ?? 0, language, currency)}
                           </p>
                           <p className="mt-1 text-xs text-[#8B94A6]">
@@ -3111,23 +3111,23 @@ export function HomeScreen() {
                           }}
                         />
                       </div>
-                      <div className="mt-4 flex items-end justify-between gap-3">
-                        <div className="grid flex-1 gap-1 text-[11px] sm:grid-cols-3">
-                          <div>
+                      <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                        <div className="grid min-w-0 flex-1 gap-3 text-[11px] sm:grid-cols-3">
+                          <div className="min-w-0">
                             <p className={isFriendCard ? "text-[#A8D7D1]" : "text-[#8B94A6]"}>{t("home.cardLimitAvailable")}</p>
-                            <p className="font-semibold text-[#5DD6C7]">
+                            <p className="break-words font-semibold leading-tight text-[#5DD6C7]">
                               {loading ? "..." : formatCurrency(insight?.availableLimit ?? 0, language, currency)}
                             </p>
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <p className={isFriendCard ? "text-[#A8D7D1]" : "text-[#8B94A6]"}>{t("home.cardLimitUsed")}</p>
-                            <p className="font-semibold text-[#E4E7EC]">
+                            <p className="break-words font-semibold leading-tight text-[#E4E7EC]">
                               {loading ? "..." : formatCurrency(insight?.usedTotal ?? 0, language, currency)}
                             </p>
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <p className={isFriendCard ? "text-[#A8D7D1]" : "text-[#8B94A6]"}>{t("home.cardLimitTotal")}</p>
-                            <p className="font-semibold text-[#E4E7EC]">
+                            <p className="break-words font-semibold leading-tight text-[#E4E7EC]">
                               {loading
                                 ? "..."
                                 : formatCurrency(Number(card.limit_amount) || 0, language, currency)}
@@ -3138,7 +3138,7 @@ export function HomeScreen() {
                           type="button"
                           onClick={() => handleRemoveCard(card.id, card.name)}
                           disabled={deletingCardId === card.id}
-                          className={`rounded-full bg-[#0F141E] px-3 py-1 text-[11px] disabled:opacity-60 ${
+                          className={`self-start rounded-full bg-[#0F141E] px-3 py-1 text-[11px] disabled:opacity-60 lg:self-auto ${
                             isFriendCard
                               ? "border border-[#2E6C79] text-[#A8D7D1] hover:border-red-500/60 hover:text-red-300"
                               : "border border-[#2A3140] text-[#8B94A6] hover:border-red-500/60 hover:text-red-400"
