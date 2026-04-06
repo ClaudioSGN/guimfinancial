@@ -578,6 +578,15 @@ export function NewEntryScreen({ entryType }: Props) {
                     </button>
                   ))
                 )}
+                {!isTransfer ? (
+                  <button
+                    type="button"
+                    onClick={openCreateCardModal}
+                    className="rounded-full border border-dashed border-[#5DD6C7]/70 bg-[#0F141E] px-3 py-1 text-xs text-[#5DD6C7] hover:border-[#5DD6C7] hover:bg-[#1A2230]"
+                  >
+                    + {t("newEntry.createCard")}
+                  </button>
+                ) : null}
               </div>
             </div>
           ) : null}

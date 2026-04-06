@@ -174,6 +174,7 @@ export function TransactionsScreen() {
   const [editAmount, setEditAmount] = useState(emptyMoneyValue);
   const [editCategory, setEditCategory] = useState("");
   const [editDate, setEditDate] = useState("");
+  const [editCardId, setEditCardId] = useState<string | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -566,6 +567,7 @@ export function TransactionsScreen() {
     setEditAmount(formatCentsFromNumber(Number(tx.amount) || 0, currency));
     setEditCategory(tx.category ?? "");
     setEditDate(toDateInputValue(tx.date));
+    setEditCardId(tx.card_id ?? null);
     setEditError(null);
   }
 
@@ -588,6 +590,10 @@ export function TransactionsScreen() {
       setEditError("Escolha uma data.");
       return;
     }
+    if (editingTx.type === "card_expense" && !editCardId) {
+      setEditError("Selecione um cartao.");
+      return;
+    }
 
     setEditSaving(true);
     const previousAmount = Number(editingTx.amount) || 0;
@@ -600,6 +606,7 @@ export function TransactionsScreen() {
         amount: parsedAmount,
         category: editCategory.trim() || null,
         date: editDate,
+        card_id: editingTx.type === "card_expense" ? editCardId : null,
       })
       .eq("id", editingTx.id)
       .eq("user_id", user.id);
@@ -945,6 +952,31 @@ export function TransactionsScreen() {
                   placeholder="Ex: Mercado"
                 />
               </div>
+              {editingTx.type === "card_expense" ? (
+                <div className="space-y-2">
+                  <label className="text-xs text-[#8B94A6]">Cartao</label>
+                  <div className="flex flex-wrap gap-2">
+                    {cards.length === 0 ? (
+                      <span className="text-xs text-[#8B94A6]">Nenhum cartao cadastrado.</span>
+                    ) : (
+                      cards.map((card) => (
+                        <button
+                          key={card.id}
+                          type="button"
+                          onClick={() => setEditCardId(card.id)}
+                          className={`rounded-full border px-3 py-1 text-xs ${
+                            editCardId === card.id
+                              ? "border-[#5DD6C7] bg-[#1F2A3A] text-[#C7CEDA]"
+                              : "border-[#2A3140] bg-[#0F141E] text-[#C7CEDA]"
+                          }`}
+                        >
+                          {card.name}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ) : null}
               {editError ? <p className="text-xs text-red-400">{editError}</p> : null}
               <button
                 type="submit"
