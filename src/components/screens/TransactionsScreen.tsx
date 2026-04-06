@@ -928,7 +928,6 @@ export function TransactionsScreen() {
                     inputMode="numeric"
                     value={editAmount}
                     onChange={(event) => setEditAmount(formatCentsInput(event.target.value, currency))}
-                    pattern="[0-9]*"
                     className="w-full rounded-xl border border-[#1C2332] bg-[#0F141E] px-3 py-2 text-sm text-[#E4E7EC] outline-none focus:border-[#5DD6C7]"
                   />
                 </div>
