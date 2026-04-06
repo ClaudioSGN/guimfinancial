@@ -62,7 +62,7 @@ export function TopBar<T extends string>({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="app-eyebrow">Mes em gestao</p>
-            <p className="mt-1 text-base font-semibold text-[#122033]">{monthLabel}</p>
+            <p className="mt-1 text-base font-semibold text-[var(--text-main)]">{monthLabel}</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -72,7 +72,7 @@ export function TopBar<T extends string>({
             >
               ←
             </button>
-            <div className="app-pill px-4 py-2 text-xs font-semibold text-[#39516f]">
+            <div className="app-pill px-4 py-2 text-xs font-semibold text-[var(--text-soft)]">
               {monthLabel}
             </div>
             <button
@@ -97,8 +97,8 @@ export function TopBar<T extends string>({
                   onClick={() => onTabChange(tab)}
                   className={`rounded-full px-4 py-2 text-sm font-medium transition ${
                     isActive
-                      ? "bg-white/90 text-[#204a87] shadow-[0_10px_24px_rgba(129,151,178,0.18)]"
-                      : "text-[#617287] hover:bg-white/45 hover:text-[#122033]"
+                      ? "bg-white/14 text-[#E7EDF6] shadow-[0_10px_24px_rgba(5,10,18,0.22)]"
+                      : "text-[var(--text-soft)] hover:bg-white/8 hover:text-[var(--text-main)]"
                   }`}
                 >
                   {tab}
@@ -119,7 +119,7 @@ export function TopBar<T extends string>({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={avatarPreview} alt="Avatar do usuario" className="h-full w-full object-cover" />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-[#18304e]">
+              <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-[var(--text-main)]">
                 {initials}
               </div>
             )}
@@ -133,8 +133,8 @@ export function TopBar<T extends string>({
           </div>
 
           <div className="min-w-0 text-right">
-            <p className="truncate text-sm font-semibold text-[#122033]">{userName}</p>
-            <p className="text-xs text-[#6a7890]">{role}</p>
+            <p className="truncate text-sm font-semibold text-[var(--text-main)]">{userName}</p>
+            <p className="text-xs text-[var(--muted)]">{role}</p>
           </div>
         </div>
       </div>

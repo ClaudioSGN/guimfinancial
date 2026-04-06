@@ -74,7 +74,7 @@ export function AppShell({ activeTab, children }: Props) {
   return (
     <div className="min-h-screen text-slate-950">
       <div className="flex min-h-screen w-full max-w-none flex-col px-3 pb-28 pt-4 sm:px-4 lg:px-4 lg:pb-10 lg:pt-5 xl:px-5 2xl:px-6">
-        <div className="pointer-events-none fixed left-3 top-3 z-30 hidden lg:block">
+        <div className="pointer-events-none fixed left-3 top-2 z-30 hidden lg:block">
           <div className="group pointer-events-auto relative h-14 w-14">
             <div className="app-surface glass-highlight absolute left-0 top-0 flex h-14 w-14 items-center justify-center rounded-full shadow-[0_18px_45px_rgba(7,10,18,0.3)] transition-opacity duration-200 group-hover:opacity-0">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-[#dbe8ff]">
@@ -82,7 +82,7 @@ export function AppShell({ activeTab, children }: Props) {
               </div>
             </div>
 
-            <div className="absolute left-3 top-0 -translate-x-4 opacity-0 transition-all duration-300 ease-out group-hover:translate-x-0 group-hover:opacity-100">
+            <div className="absolute left-3 -top-1 -translate-x-4 opacity-0 transition-all duration-300 ease-out group-hover:translate-x-0 group-hover:opacity-100">
               <div className="glass-dark glass-dark-card flex w-[min(920px,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] flex-wrap items-center gap-1.5 overflow-hidden px-2 py-2">
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
                   {navItems.map((item) => {
