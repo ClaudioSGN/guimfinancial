@@ -19,7 +19,8 @@ type IconName =
   | "arrow-down"
   | "arrow-left"
   | "arrow-right"
-  | "transfer";
+  | "transfer"
+  | "download";
 
 type Props = {
   name: IconName;
@@ -178,6 +179,14 @@ export function AppIcon({ name, size = 20, color = "currentColor", stroke = 1.8 
         <svg {...common}>
           <path d="M7 7h13M14 4l3 3-3 3" />
           <path d="M17 17H4M10 20l-3-3 3-3" />
+        </svg>
+      );
+    case "download":
+      return (
+        <svg {...common}>
+          <path d="M12 4v10" />
+          <path d="M8 10l4 4 4-4" />
+          <path d="M5 19h14" />
         </svg>
       );
     default:
