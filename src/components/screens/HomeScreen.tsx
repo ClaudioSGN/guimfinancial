@@ -25,6 +25,11 @@ import {
 } from "@/lib/profile";
 import { BankBrandBadge } from "@/components/BankBrandBadge";
 import {
+  getCardChargeTiming,
+  getCardExpenseDueState,
+  getCardExpenseSettlementUpdate,
+} from "@/lib/cardStatements";
+import {
   ResponsiveContainer,
   ComposedChart,
   CartesianGrid,
@@ -413,19 +418,6 @@ function getSafeDayInMonth(year: number, month: number, day: number) {
   return Math.min(Math.max(day, 1), maxDay);
 }
 
-function getInstallmentMonthOffset(startDate: string, targetMonth: Date) {
-  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(startDate)
-    ? new Date(
-        Number(startDate.slice(0, 4)),
-        Number(startDate.slice(5, 7)) - 1,
-        Number(startDate.slice(8, 10)),
-      )
-    : new Date(startDate);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return (targetMonth.getFullYear() - parsed.getFullYear()) * 12 +
-    (targetMonth.getMonth() - parsed.getMonth());
-}
-
 function getDayWord(days: number, language: "pt" | "en") {
   if (language === "pt") return days === 1 ? "dia" : "dias";
   return days === 1 ? "day" : "days";
@@ -469,88 +461,6 @@ function saveCardReminderDismissals(next: Record<string, true>) {
   );
 }
 
-function getCardExpenseDueState(tx: Transaction, targetDate: Date) {
-  if (!isCardLinkedExpense(tx)) return null;
-
-  const amount = Number(tx.amount) || 0;
-  if (amount <= 0) return null;
-
-  const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
-  const isInstallment = totalInstallments > 0;
-
-  if (isInstallment) {
-    const paidInstallments = Math.min(
-      Math.max(Number(tx.installments_paid) || 0, 0),
-      totalInstallments,
-    );
-    const monthOffset = getInstallmentMonthOffset(tx.date, targetDate);
-    const dueInstallments =
-      monthOffset == null
-        ? 0
-        : Math.min(Math.max(monthOffset + 1, 0), totalInstallments);
-    const installmentsToPay = Math.max(dueInstallments - paidInstallments, 0);
-    const perInstallment = amount / totalInstallments;
-    const pendingAmount = perInstallment * installmentsToPay;
-
-    if (pendingAmount <= 0) return null;
-
-    return { pendingAmount };
-  }
-
-  const txDate = parseLocalDate(tx.date);
-  const normalizedTxDate = txDate
-    ? new Date(txDate.getFullYear(), txDate.getMonth(), txDate.getDate())
-    : null;
-  const isDueNow = normalizedTxDate ? normalizedTxDate.getTime() <= targetDate.getTime() : true;
-  if (!isDueNow || tx.is_paid) return null;
-
-  return { pendingAmount: amount };
-}
-
-function getCardExpenseSettlementUpdate(tx: Transaction, targetDate: Date) {
-  if (!isCardLinkedExpense(tx)) return null;
-
-  const amount = Number(tx.amount) || 0;
-  if (amount <= 0) return null;
-
-  const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
-  if (totalInstallments > 0) {
-    const paidInstallments = Math.min(
-      Math.max(Number(tx.installments_paid) || 0, 0),
-      totalInstallments,
-    );
-    const monthOffset = getInstallmentMonthOffset(tx.date, targetDate);
-    const dueInstallments =
-      monthOffset == null
-        ? 0
-        : Math.min(Math.max(monthOffset + 1, 0), totalInstallments);
-    if (dueInstallments <= paidInstallments) return null;
-
-    const perInstallment = amount / totalInstallments;
-    return {
-      update: {
-        installments_paid: dueInstallments,
-        is_paid: dueInstallments >= totalInstallments,
-      },
-      balanceDelta: perInstallment * (dueInstallments - paidInstallments),
-    };
-  }
-
-  const txDate = parseLocalDate(tx.date);
-  const normalizedTxDate = txDate
-    ? new Date(txDate.getFullYear(), txDate.getMonth(), txDate.getDate())
-    : null;
-  const isDueNow = normalizedTxDate ? normalizedTxDate.getTime() <= targetDate.getTime() : true;
-  if (!isDueNow || tx.is_paid) return null;
-
-  return {
-    update: {
-      is_paid: true,
-    },
-    balanceDelta: amount,
-  };
-}
-
 function getSettledCardExpenseAmount(tx: Transaction) {
   if (!isCardLinkedExpense(tx)) return 0;
 
@@ -567,32 +477,6 @@ function getSettledCardExpenseAmount(tx: Transaction) {
   }
 
   return tx.is_paid ? amount : 0;
-}
-
-function getCardChargeTiming(tx: Transaction, card: CreditCard, today: Date) {
-  const txDate = parseLocalDate(tx.date);
-  if (!txDate) return null;
-
-  const closingDay = getSafeDayInMonth(txDate.getFullYear(), txDate.getMonth(), Number(card.closing_day));
-  const closesThisMonth = new Date(txDate.getFullYear(), txDate.getMonth(), closingDay);
-  const statementMonth =
-    txDate.getTime() <= closesThisMonth.getTime()
-      ? new Date(txDate.getFullYear(), txDate.getMonth(), 1)
-      : new Date(txDate.getFullYear(), txDate.getMonth() + 1, 1);
-
-  const currentStatementMonth =
-    today.getDate() <= Number(card.closing_day)
-      ? new Date(today.getFullYear(), today.getMonth(), 1)
-      : new Date(today.getFullYear(), today.getMonth() + 1, 1);
-
-  const monthDelta =
-    (statementMonth.getFullYear() - currentStatementMonth.getFullYear()) * 12 +
-    (statementMonth.getMonth() - currentStatementMonth.getMonth());
-
-  if (monthDelta < 0) return "overdue" as const;
-  if (monthDelta === 0) return "current" as const;
-  if (monthDelta === 1) return "next" as const;
-  return "future" as const;
 }
 
 function computeEffectiveAccountBalance(
@@ -843,6 +727,14 @@ export function HomeScreen() {
     buildEmptyQuickAddForm(currency),
   );
   const quickAddRecognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const cardById = useMemo(
+    () =>
+      cards.reduce<Record<string, CreditCard>>((acc, card) => {
+        acc[card.id] = card;
+        return acc;
+      }, {}),
+    [cards],
+  );
 
   useEffect(() => {
     setProfile(loadProfileSettings());
@@ -1426,13 +1318,18 @@ export function HomeScreen() {
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     cardTransactions.forEach((tx) => {
-      const dueState = getCardExpenseDueState(tx, today);
-      if (!dueState || !tx.card_id) return;
+      if (!tx.card_id) return;
+      const card = cardById[tx.card_id];
+      if (!card) return;
+      const dueState = getCardExpenseDueState(tx, card, today, {
+        includeCurrentStatement: false,
+      });
+      if (!dueState) return;
       pendingByCard[tx.card_id] = (pendingByCard[tx.card_id] ?? 0) + dueState.pendingAmount;
     });
 
     return pendingByCard;
-  }, [cardTransactions]);
+  }, [cardById, cardTransactions]);
 
   const cardReminders = useMemo<CardReminder[]>(() => {
     if (!user) return [];
@@ -2026,9 +1923,18 @@ export function HomeScreen() {
     try {
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const reminderCard = cardById[card.id];
+      if (!reminderCard) {
+        throw new Error(`Card ${card.id} not found while settling reminder.`);
+      }
       const dueTransactions = cardTransactions
         .filter((tx) => tx.card_id === card.id)
-        .map((tx) => ({ tx, settlement: getCardExpenseSettlementUpdate(tx, today) }))
+        .map((tx) => ({
+          tx,
+          settlement: getCardExpenseSettlementUpdate(tx, reminderCard, today, {
+            includeCurrentStatement: false,
+          }),
+        }))
         .filter(
           (
             item,

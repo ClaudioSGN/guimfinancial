@@ -9,6 +9,10 @@ import { formatCentsFromNumber, formatCentsInput, parseCentsInput } from "@/lib/
 import { hasMissingColumnError } from "@/lib/errorUtils";
 import { BankBrandBadge, BankBrandPicker } from "@/components/BankBrandBadge";
 import { DEFAULT_BANK_BRAND_CODE, type BankBrandCode } from "@/lib/bankBrands";
+import {
+  getCardChargeTiming,
+  getCardExpenseSettlementUpdate,
+} from "@/lib/cardStatements";
 
 type CardOwnerType = "self" | "friend";
 type Card = {
@@ -86,59 +90,8 @@ function getSafeDayInMonth(year: number, month: number, day: number) {
   return Math.min(Math.max(day, 1), maxDay);
 }
 
-function getInstallmentMonthOffset(startDate: string, targetMonth: Date) {
-  const parsed = parseLocalDate(startDate);
-  if (!parsed) return null;
-  return (targetMonth.getFullYear() - parsed.getFullYear()) * 12 +
-    (targetMonth.getMonth() - parsed.getMonth());
-}
-
 function isCardLinkedExpense(tx: Transaction) {
   return Boolean(tx.card_id) && tx.type !== "income";
-}
-
-function getCardChargeTiming(tx: Transaction, card: Card, today: Date) {
-  const txDate = parseLocalDate(tx.date);
-  if (!txDate) return null;
-  const closingDay = getSafeDayInMonth(txDate.getFullYear(), txDate.getMonth(), Number(card.closing_day));
-  const closesThisMonth = new Date(txDate.getFullYear(), txDate.getMonth(), closingDay);
-  const statementMonth =
-    txDate.getTime() <= closesThisMonth.getTime()
-      ? new Date(txDate.getFullYear(), txDate.getMonth(), 1)
-      : new Date(txDate.getFullYear(), txDate.getMonth() + 1, 1);
-  const currentStatementMonth =
-    today.getDate() <= Number(card.closing_day)
-      ? new Date(today.getFullYear(), today.getMonth(), 1)
-      : new Date(today.getFullYear(), today.getMonth() + 1, 1);
-  const monthDelta =
-    (statementMonth.getFullYear() - currentStatementMonth.getFullYear()) * 12 +
-    (statementMonth.getMonth() - currentStatementMonth.getMonth());
-  if (monthDelta < 0) return "overdue" as const;
-  if (monthDelta === 0) return "current" as const;
-  if (monthDelta === 1) return "next" as const;
-  return "future" as const;
-}
-
-function getCardExpenseSettlementUpdate(tx: Transaction, targetDate: Date) {
-  if (!isCardLinkedExpense(tx)) return null;
-  const amount = Number(tx.amount) || 0;
-  if (amount <= 0) return null;
-  const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
-  if (totalInstallments > 0) {
-    const paidInstallments = Math.min(Math.max(Number(tx.installments_paid) || 0, 0), totalInstallments);
-    const dueInstallments = Math.min(Math.max((getInstallmentMonthOffset(tx.date, targetDate) ?? -1) + 1, 0), totalInstallments);
-    if (dueInstallments <= paidInstallments) return null;
-    const perInstallment = amount / totalInstallments;
-    return {
-      update: { installments_paid: dueInstallments, is_paid: dueInstallments >= totalInstallments },
-      balanceDelta: perInstallment * (dueInstallments - paidInstallments),
-    };
-  }
-  const txDate = parseLocalDate(tx.date);
-  const normalizedTxDate = txDate ? new Date(txDate.getFullYear(), txDate.getMonth(), txDate.getDate()) : null;
-  const isDueNow = normalizedTxDate ? normalizedTxDate.getTime() <= targetDate.getTime() : true;
-  if (!isDueNow || tx.is_paid) return null;
-  return { update: { is_paid: true }, balanceDelta: amount };
 }
 
 function formatMoney(value: number, language: "pt" | "en", currency: "BRL" | "EUR") {
@@ -317,7 +270,7 @@ export default function CardsPage() {
           if (!txDate) return;
           for (let index = paidInstallments; index < totalInstallments; index += 1) {
             const installmentDate = new Date(txDate.getFullYear(), txDate.getMonth() + index, txDate.getDate());
-            const timing = getCardChargeTiming({ ...tx, date: toDateString(installmentDate), amount: perInstallment, installment_total: null, installments_paid: null, is_paid: false }, card, currentDate);
+            const timing = getCardChargeTiming({ date: toDateString(installmentDate) }, card, currentDate);
             if (timing === "overdue") overdueAmount += perInstallment;
             if (timing === "current") currentStatement += perInstallment;
             if (timing === "next") nextStatement += perInstallment;
@@ -548,7 +501,12 @@ export default function CardsPage() {
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const dueTransactions = cardTransactions
         .filter((tx) => tx.card_id === card.id)
-        .map((tx) => ({ tx, settlement: getCardExpenseSettlementUpdate(tx, today) }))
+        .map((tx) => ({
+          tx,
+          settlement: getCardExpenseSettlementUpdate(tx, card, today, {
+            includeCurrentStatement: true,
+          }),
+        }))
         .filter((item): item is { tx: Transaction; settlement: NonNullable<ReturnType<typeof getCardExpenseSettlementUpdate>> } => Boolean(item.settlement));
       for (const item of dueTransactions) {
         const { error } = await supabase.from("transactions").update(item.settlement.update).eq("id", item.tx.id);
