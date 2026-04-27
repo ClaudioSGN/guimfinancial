@@ -672,96 +672,74 @@ export function TransactionsScreen() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between">
+      {/* Header: filter + month nav */}
+      <div className="flex items-center justify-between gap-3">
         <button
           type="button"
           onClick={() => setFilterOpen(true)}
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-[#1E232E] bg-[#111723] text-[#8B94A6]"
-          aria-label="Filter"
+          className="ui-btn ui-btn-secondary ui-btn-sm gap-1.5"
         >
-          <AppIcon name="list" size={18} />
+          <AppIcon name="list" size={14} />
+          {filter === "income" ? "Receitas" : filter === "expense" ? "Despesas" : "Todos"}
         </button>
 
-        <button
-          type="button"
-          onClick={() => setFilterOpen(true)}
-          className="flex items-center gap-2 rounded-full border border-[#2A3140] bg-[#141A25] px-5 py-2 text-sm font-semibold text-[#C7CEDA]"
-        >
-          {filter === "income"
-            ? "Receitas"
-            : filter === "expense"
-              ? "Despesas"
-              : "Transações"}
-          <AppIcon name="chevron-down" size={16} />
-        </button>
-
-        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#1E232E] bg-[#111723] text-[#8B94A6]">
-          <span className="text-lg leading-none">...</span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => { const prev = new Date(selectedMonth); prev.setMonth(prev.getMonth() - 1); setSelectedMonth(prev); }}
+            className="ui-btn ui-btn-secondary ui-btn-sm h-8 w-8 p-0"
+          >
+            <AppIcon name="arrow-left" size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setMonthOpen((v) => !v)}
+            className="ui-btn ui-btn-secondary ui-btn-sm px-4"
+          >
+            {monthLabel}
+          </button>
+          <button
+            type="button"
+            onClick={() => { const next = new Date(selectedMonth); next.setMonth(next.getMonth() + 1); setSelectedMonth(next); }}
+            className="ui-btn ui-btn-secondary ui-btn-sm h-8 w-8 p-0"
+          >
+            <AppIcon name="arrow-right" size={14} />
+          </button>
         </div>
       </div>
 
-      <div className="flex items-center justify-center gap-6 text-sm text-[#C7CEDA]">
-        <button
-          type="button"
-          onClick={() => {
-            const prev = new Date(selectedMonth);
-            prev.setMonth(prev.getMonth() - 1);
-            setSelectedMonth(prev);
-          }}
-          className="rounded-full border border-[#1E232E] bg-[#111723] px-2 py-1 text-[#8B94A6]"
-        >
-          <AppIcon name="arrow-left" size={14} />
-        </button>
-        <button
-          type="button"
-          onClick={() => setMonthOpen((value) => !value)}
-          className="rounded-full border border-[#2A3140] bg-[#141A25] px-4 py-1.5 text-sm font-semibold text-[#C7CEDA]"
-        >
-          {monthLabel}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            const next = new Date(selectedMonth);
-            next.setMonth(next.getMonth() + 1);
-            setSelectedMonth(next);
-          }}
-          className="rounded-full border border-[#1E232E] bg-[#111723] px-2 py-1 text-[#8B94A6]"
-        >
-          <AppIcon name="arrow-right" size={14} />
-        </button>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-2">
-        <div className="flex items-center gap-3 rounded-2xl border border-[#1E232E] bg-[#121621] p-4">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[#1E232E] bg-[#101620] text-[#8B94A6]">
-            <AppIcon name="wallet" size={16} />
+      {/* Summary stats */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="ui-card flex items-center gap-3 p-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent-dim)]">
+            <AppIcon name="wallet" size={16} color="var(--accent)" />
           </div>
           <div>
-            <p className="text-xs text-[#8B94A6]">Saldo atual</p>
-            <p className="text-sm font-semibold text-[#5DD6C7]">
-              {loading ? "..." : formatCurrency(totalBalance, language, currency)}
+            <p className="ui-eyebrow">{language === "pt" ? "Saldo atual" : "Current balance"}</p>
+            <p className="ui-amount text-sm text-[var(--text-1)]">
+              {loading ? "—" : formatCurrency(totalBalance, language, currency)}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3 rounded-2xl border border-[#1E232E] bg-[#121621] p-4">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[#1E232E] bg-[#101620] text-[#8B94A6]">
-            <AppIcon name="calendar" size={16} />
+        <div className="ui-card flex items-center gap-3 p-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent-dim)]">
+            <AppIcon name="calendar" size={16} color="var(--accent)" />
           </div>
           <div>
-            <p className="text-xs text-[#8B94A6]">Balanço mensal</p>
-            <p className="text-sm font-semibold text-[#5DD6C7]">
-              {loading ? "..." : formatCurrency(monthNet, language, currency)}
+            <p className="ui-eyebrow">{language === "pt" ? "Balanço mensal" : "Month balance"}</p>
+            <p className={`ui-amount text-sm ${monthNet >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+              {loading ? "—" : formatCurrency(monthNet, language, currency)}
             </p>
           </div>
         </div>
       </div>
 
-      {errorMsg ? <p className="text-xs text-red-400">{errorMsg}</p> : null}
+      {errorMsg ? <p className="text-xs text-[var(--red)]">{errorMsg}</p> : null}
 
-      <div className="flex flex-col gap-3">
+      {/* Transactions list */}
+      <div className="flex flex-col gap-2">
         {filteredTransactions.length === 0 ? (
-          <p className="text-center text-xs text-[#8B94A6]">
+          <p className="py-8 text-center text-xs text-[var(--text-3)]">
             {loading ? t("common.loading") : t("transactions.empty")}
           </p>
         ) : (
@@ -773,116 +751,55 @@ export function TransactionsScreen() {
             const totalInstallments = Math.max(0, Number(item.installment_total) || 0);
             const isInstallment = totalInstallments > 0;
             const paidInstallments = Math.max(0, Number(item.installments_paid) || 0);
-            const installmentOffset = isInstallment
-              ? getInstallmentMonthOffset(item.date, selectedMonth)
-              : null;
-            const canPayInstallment =
-              isInstallment &&
-              installmentOffset !== null &&
-              installmentOffset === paidInstallments &&
-              paidInstallments < totalInstallments;
+            const installmentOffset = isInstallment ? getInstallmentMonthOffset(item.date, selectedMonth) : null;
+            const canPayInstallment = isInstallment && installmentOffset !== null && installmentOffset === paidInstallments && paidInstallments < totalInstallments;
             const canUndoInstallment = isInstallment && paidInstallments > 0;
-            const title =
-              item.description ||
-              (isIncome
-                ? t("newEntry.income")
-                : isCard
-                  ? t("newEntry.cardExpense")
-                  : t("newEntry.expense"));
+            const title = item.description || (isIncome ? t("newEntry.income") : isCard ? t("newEntry.cardExpense") : t("newEntry.expense"));
             const baseTx = baseTxById.get(item.baseId) ?? null;
             const cardName = isCard && item.card_id ? cardNameById.get(item.card_id) : null;
             return (
               <div
                 key={item.displayId}
-                className="flex min-w-0 flex-col gap-4 rounded-2xl border border-[#1E232E] bg-[#121621] p-4 sm:flex-row sm:items-center sm:justify-between"
+                className="group ui-card flex min-w-0 flex-col gap-3 p-4 transition-colors hover:border-[var(--border-bright)] hover:bg-[var(--surface-2)] sm:flex-row sm:items-center sm:justify-between"
               >
-                <div className="min-w-0 flex-1 space-y-1">
-                  <p className="text-sm font-semibold text-[#E4E7EC]">{title}</p>
-                  <p className="text-xs text-[#8A93A3]">
-                    {formatDate(item.displayDate, language)} ·{" "}
-                    {item.category ?? (language === "pt" ? "Sem categoria" : "No category")}
-                  </p>
-                  {cardName ? (
-                    <p className="text-[11px] text-[#7EA0D8]">
-                      {language === "pt" ? "Cartao" : "Card"}: {cardName}
-                    </p>
-                  ) : null}
-                  {isInstallment ? (
-                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#8A93A3]">
-                      <span>
-                        Parcelas: {paidInstallments}/{totalInstallments}
-                      </span>
-                      <span
-                        className={`rounded-full border px-2 py-[2px] text-[10px] ${
-                          paidInstallments >= totalInstallments
-                            ? "border-emerald-500/40 text-emerald-300"
-                            : "border-amber-500/40 text-amber-300"
-                        }`}
-                      >
-                        {paidInstallments >= totalInstallments ? "Pago" : "Em aberto"}
-                      </span>
+                <div className="flex min-w-0 flex-1 items-start gap-3">
+                  <div className={`mt-1 h-2 w-2 shrink-0 rounded-full ${isIncome ? "bg-[var(--green)]" : "bg-[var(--red)]"}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-[var(--text-1)]">{title}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs text-[var(--text-3)]">{formatDate(item.displayDate, language)}</span>
+                      {item.category ? <span className="ui-badge ui-badge-neutral">{item.category}</span> : null}
+                      {cardName ? <span className="ui-badge ui-badge-accent">{cardName}</span> : null}
+                      {isInstallment ? (
+                        <span className={`ui-badge ${paidInstallments >= totalInstallments ? "ui-badge-income" : "ui-badge-warning"}`}>
+                          {paidInstallments}/{totalInstallments}x
+                        </span>
+                      ) : null}
+                      {isFixedExpense ? <span className="ui-badge ui-badge-neutral">{t("newEntry.fixedExpense")}</span> : null}
+                      {item.isBudgetCarryover ? <span className="ui-badge ui-badge-accent">{t("transactions.nextMonthSalary")}</span> : null}
                     </div>
-                  ) : null}
-                  {isFixedExpense ? (
-                    <span className="inline-flex rounded-full border border-[#3A8F8A] bg-[#163137] px-2 py-[2px] text-[10px] text-[#64D1C4]">
-                      {t("newEntry.fixedExpense")}
-                    </span>
-                  ) : null}
-                  {item.isBudgetCarryover ? (
-                    <span className="inline-flex rounded-full border border-[#5DA7FF]/40 bg-[#122033] px-2 py-[2px] text-[10px] text-[#9DC4FF]">
-                      {t("transactions.nextMonthSalary")}
-                    </span>
-                  ) : null}
+                  </div>
                 </div>
-                <div className="min-w-0 flex flex-col gap-2 text-left sm:items-end sm:text-right">
-                  <p
-                    className={`text-sm font-semibold ${
-                      isIncome ? "text-[#5DD6C7]" : "text-[#F59E8B]"
-                    }`}
-                  >
-                    {isIncome ? "+" : "-"} {formatCurrency(amount, language, currency)}
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <p className={`ui-amount text-sm ${isIncome ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                    {isIncome ? "+" : "-"}{formatCurrency(amount, language, currency)}
                   </p>
-                  <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
+                  <div className="flex flex-wrap items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                     {canPayInstallment ? (
-                      <button
-                        type="button"
-                        onClick={() => baseTx && handleMarkInstallmentPaid(baseTx)}
-                        disabled={installmentSavingId === item.baseId}
-                        className="max-w-full rounded-full border border-[#2A3140] bg-[#0F141E] px-3 py-1 text-xs text-[#8B94A6] hover:border-emerald-500/60 hover:text-emerald-300 disabled:opacity-60"
-                      >
-                        {installmentSavingId === item.baseId
-                          ? t("common.saving")
-                          : "Registrar parcela"}
+                      <button type="button" onClick={() => baseTx && handleMarkInstallmentPaid(baseTx)} disabled={installmentSavingId === item.baseId} className="ui-btn ui-btn-secondary ui-btn-sm">
+                        {installmentSavingId === item.baseId ? "..." : "Parcela"}
                       </button>
                     ) : null}
                     {isInstallment ? (
-                      <button
-                        type="button"
-                        onClick={() => baseTx && handleUndoInstallmentPaid(baseTx)}
-                        disabled={!canUndoInstallment || undoSavingId === item.baseId}
-                        className="max-w-full rounded-full border border-[#2A3140] bg-[#0F141E] px-3 py-1 text-xs text-[#8B94A6] hover:border-amber-500/60 hover:text-amber-300 disabled:opacity-60"
-                      >
-                        {undoSavingId === item.baseId
-                          ? t("common.saving")
-                          : "Desfazer parcela"}
+                      <button type="button" onClick={() => baseTx && handleUndoInstallmentPaid(baseTx)} disabled={!canUndoInstallment || undoSavingId === item.baseId} className="ui-btn ui-btn-secondary ui-btn-sm">
+                        {undoSavingId === item.baseId ? "..." : "Desfazer"}
                       </button>
                     ) : null}
-                    <button
-                      type="button"
-                      onClick={() => baseTx && openEdit(baseTx)}
-                      className="max-w-full rounded-full border border-[#2A3140] bg-[#0F141E] px-3 py-1 text-xs text-[#8B94A6] hover:border-[#5DD6C7] hover:text-[#5DD6C7]"
-                    >
+                    <button type="button" onClick={() => baseTx && openEdit(baseTx)} className="ui-btn ui-btn-ghost ui-btn-sm text-[var(--text-2)]">
                       Editar
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => baseTx && handleRemove(baseTx)}
-                      disabled={deletingId === item.baseId}
-                      className="max-w-full rounded-full border border-[#2A3140] bg-[#0F141E] px-3 py-1 text-xs text-[#8B94A6] hover:border-red-500/60 hover:text-red-400 disabled:opacity-60"
-                    >
-                      {deletingId === item.baseId
-                        ? t("common.saving")
-                        : t("transactions.remove")}
+                    <button type="button" onClick={() => baseTx && handleRemove(baseTx)} disabled={deletingId === item.baseId} className="ui-btn ui-btn-ghost ui-btn-sm text-[var(--red)]">
+                      {deletingId === item.baseId ? "..." : "×"}
                     </button>
                   </div>
                 </div>
@@ -892,179 +809,90 @@ export function TransactionsScreen() {
         )}
       </div>
 
+      {/* Edit modal */}
       {editingTx ? (
-        <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4"
-        >
-          <div
-            className="w-full max-w-md rounded-2xl border border-[#1B2230] bg-[#111723] p-5 text-[#E4E7EC] shadow-xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Editar transacao</h2>
-              <button
-                type="button"
-                onClick={closeEdit}
-                className="text-xs text-[#8B94A6] hover:text-[#C7CEDA]"
-              >
-                Fechar
-              </button>
+        <div className="ui-modal-backdrop fixed inset-0 z-40 flex items-end justify-center sm:items-center" onClick={closeEdit}>
+          <div className="ui-card-2 ui-slide-up w-full max-w-md rounded-t-2xl p-5 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-[var(--text-1)]">Editar transação</h2>
+              <button type="button" onClick={closeEdit} className="ui-btn ui-btn-ghost ui-btn-sm">Fechar</button>
             </div>
-            <form className="space-y-4" onSubmit={handleEditSubmit}>
-              <div className="space-y-1">
-                <label className="text-xs text-[#8B94A6]">Descricao</label>
-                <input
-                  type="text"
-                  value={editDescription}
-                  onChange={(event) => setEditDescription(event.target.value)}
-                  className="w-full rounded-xl border border-[#1C2332] bg-[#0F141E] px-3 py-2 text-sm text-[#E4E7EC] outline-none focus:border-[#5DD6C7]"
-                />
+            <form className="flex flex-col gap-3" onSubmit={handleEditSubmit}>
+              <div className="flex flex-col gap-1.5">
+                <label className="ui-label">Descrição</label>
+                <input type="text" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} className="ui-input" />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs text-[#8B94A6]">Valor ({currency})</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={editAmount}
-                    onChange={(event) => setEditAmount(formatCentsInput(event.target.value, currency))}
-                    className="w-full rounded-xl border border-[#1C2332] bg-[#0F141E] px-3 py-2 text-sm text-[#E4E7EC] outline-none focus:border-[#5DD6C7]"
-                  />
+                <div className="flex flex-col gap-1.5">
+                  <label className="ui-label">Valor ({currency})</label>
+                  <input type="text" inputMode="numeric" value={editAmount} onChange={(e) => setEditAmount(formatCentsInput(e.target.value, currency))} className="ui-input" />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-[#8B94A6]">Data</label>
-                  <input
-                    type="date"
-                    value={editDate}
-                    onChange={(event) => setEditDate(event.target.value)}
-                    className="w-full rounded-xl border border-[#1C2332] bg-[#0F141E] px-3 py-2 text-sm text-[#E4E7EC] outline-none focus:border-[#5DD6C7]"
-                  />
+                <div className="flex flex-col gap-1.5">
+                  <label className="ui-label">Data</label>
+                  <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} className="ui-input" />
                 </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-xs text-[#8B94A6]">Categoria</label>
-                <input
-                  type="text"
-                  value={editCategory}
-                  onChange={(event) => setEditCategory(event.target.value)}
-                  className="w-full rounded-xl border border-[#1C2332] bg-[#0F141E] px-3 py-2 text-sm text-[#E4E7EC] outline-none focus:border-[#5DD6C7]"
-                  placeholder="Ex: Mercado"
-                />
+              <div className="flex flex-col gap-1.5">
+                <label className="ui-label">Categoria</label>
+                <input type="text" value={editCategory} onChange={(e) => setEditCategory(e.target.value)} placeholder="Ex: Mercado" className="ui-input" />
               </div>
               {editingTx.type === "card_expense" ? (
-                <div className="space-y-2">
-                  <label className="text-xs text-[#8B94A6]">Cartao</label>
+                <div className="flex flex-col gap-1.5">
+                  <label className="ui-label">Cartão</label>
                   <div className="flex flex-wrap gap-2">
                     {cards.length === 0 ? (
-                      <span className="text-xs text-[#8B94A6]">Nenhum cartao cadastrado.</span>
-                    ) : (
-                      cards.map((card) => (
-                        <button
-                          key={card.id}
-                          type="button"
-                          onClick={() => setEditCardId(card.id)}
-                          className={`rounded-full border px-3 py-1 text-xs ${
-                            editCardId === card.id
-                              ? "border-[#5DD6C7] bg-[#1F2A3A] text-[#C7CEDA]"
-                              : "border-[#2A3140] bg-[#0F141E] text-[#C7CEDA]"
-                          }`}
-                        >
-                          {card.name}
-                        </button>
-                      ))
-                    )}
+                      <span className="text-xs text-[var(--text-3)]">Nenhum cartão cadastrado.</span>
+                    ) : cards.map((card) => (
+                      <button key={card.id} type="button" onClick={() => setEditCardId(card.id)}
+                        className={`ui-btn ui-btn-sm ${editCardId === card.id ? "ui-btn-primary" : "ui-btn-secondary"}`}>
+                        {card.name}
+                      </button>
+                    ))}
                   </div>
                 </div>
               ) : null}
-              {editError ? <p className="text-xs text-red-400">{editError}</p> : null}
-              <button
-                type="submit"
-                disabled={editSaving}
-                className="w-full rounded-full bg-[#E4E7EC] px-3 py-2 text-xs font-semibold text-[#0B0E13] hover:bg-white disabled:opacity-60"
-              >
-                {editSaving ? "Salvando..." : "Salvar"}
+              {editError ? <p className="text-xs text-[var(--red)]">{editError}</p> : null}
+              <button type="submit" disabled={editSaving} className="ui-btn ui-btn-primary ui-btn-lg w-full">
+                {editSaving ? "A guardar..." : "Guardar alterações"}
               </button>
             </form>
           </div>
         </div>
       ) : null}
 
+      {/* Month picker dropdown */}
       {monthOpen ? (
-        <div className="fixed inset-0 z-40">
-          <div className="absolute inset-0 bg-[#0B0E13]/60" />
-          <div
-            className="absolute left-1/2 top-24 w-56 -translate-x-1/2 rounded-2xl border border-[#1B2230] bg-[#111723] p-2 text-xs text-[#C7CEDA]"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="ui-modal-backdrop fixed inset-0 z-40" onClick={() => setMonthOpen(false)}>
+          <div className="absolute left-1/2 top-20 w-52 -translate-x-1/2 ui-card-2 ui-slide-up overflow-hidden p-1.5" onClick={(e) => e.stopPropagation()}>
             {monthOptions.map((option) => (
-              <button
-                key={option.label}
-                type="button"
-                className="w-full rounded-lg px-3 py-2 text-left hover:bg-[#151A27]"
-                onClick={() => {
-                  setSelectedMonth(option.value);
-                  setMonthOpen(false);
-                }}
-              >
+              <button key={option.label} type="button"
+                className="w-full rounded-lg px-3 py-2 text-left text-sm text-[var(--text-1)] hover:bg-[var(--surface-3)]"
+                onClick={() => { setSelectedMonth(option.value); setMonthOpen(false); }}>
                 {option.label}
               </button>
             ))}
-            <button
-              type="button"
-              className="w-full rounded-lg px-3 py-2 text-left text-[#8B94A6] hover:bg-[#151A27]"
-              onClick={() => setMonthOpen(false)}
-            >
+            <button type="button" className="w-full rounded-lg px-3 py-2 text-left text-sm text-[var(--text-3)] hover:bg-[var(--surface-3)]" onClick={() => setMonthOpen(false)}>
               {t("common.cancel")}
             </button>
           </div>
         </div>
       ) : null}
 
+      {/* Filter sheet */}
       {filterOpen ? (
-        <div className="fixed inset-0 z-40">
-          <div className="absolute inset-0 bg-[#0B0E13]/60" />
-          <div
-            className="absolute bottom-0 left-0 right-0 rounded-t-3xl border-t border-[#1E232E] bg-[#121621] p-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-[#2A3140]" />
-            <div className="flex flex-col gap-2 text-center text-sm text-[#8B94A6]">
-              <button
-                type="button"
-                className="rounded-2xl bg-[#101620] py-3 text-[#5DD6C7]"
-                onClick={() => {
-                  setFilter("expense");
-                  setFilterOpen(false);
-                }}
-              >
-                Despesas
-              </button>
-              <button
-                type="button"
-                className="rounded-2xl bg-[#101620] py-3 text-[#5DD6C7]"
-                onClick={() => {
-                  setFilter("income");
-                  setFilterOpen(false);
-                }}
-              >
-                Receitas
-              </button>
-              <button
-                type="button"
-                className="rounded-2xl bg-[#101620] py-3 text-[#5DD6C7]"
-                onClick={() => {
-                  setFilter("all");
-                  setFilterOpen(false);
-                }}
-              >
-                Transações
-              </button>
-              <button
-                type="button"
-                className="rounded-2xl bg-[#0F141E] py-3 text-[#8B94A6]"
-                onClick={() => setFilterOpen(false)}
-              >
-                Cancelar
+        <div className="ui-modal-backdrop fixed inset-0 z-40" onClick={() => setFilterOpen(false)}>
+          <div className="absolute bottom-0 left-0 right-0 ui-card-2 ui-slide-up rounded-t-2xl p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-[var(--border-bright)]" />
+            <div className="flex flex-col gap-2">
+              {(["expense", "income", "all"] as const).map((f) => (
+                <button key={f} type="button"
+                  className={`ui-btn ui-btn-lg w-full ${filter === f ? "ui-btn-primary" : "ui-btn-secondary"}`}
+                  onClick={() => { setFilter(f); setFilterOpen(false); }}>
+                  {f === "expense" ? "Despesas" : f === "income" ? "Receitas" : "Todos"}
+                </button>
+              ))}
+              <button type="button" className="ui-btn ui-btn-ghost ui-btn-lg w-full" onClick={() => setFilterOpen(false)}>
+                {t("common.cancel")}
               </button>
             </div>
           </div>

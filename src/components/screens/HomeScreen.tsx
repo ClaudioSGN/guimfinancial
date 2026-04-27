@@ -1262,12 +1262,12 @@ export function HomeScreen() {
   const expensePressureWidth = expensePressure == null ? 0 : Math.min(100, expensePressure);
   const expensePressureTone =
     expensePressure == null
-      ? "bg-[#5DA7FF]"
+      ? "bg-[var(--accent)]"
       : expensePressure <= 70
-        ? "bg-emerald-400"
+        ? "bg-[var(--green)]"
         : expensePressure <= 100
-          ? "bg-amber-400"
-          : "bg-rose-400";
+          ? "bg-[var(--amber)]"
+          : "bg-[var(--red)]";
 
   const categoryChartData = useMemo(() => {
     const totals: Record<string, number> = {};
@@ -1981,25 +1981,23 @@ export function HomeScreen() {
     const row = payload[0]?.payload as FlowRow | undefined;
     if (!row) return null;
     return (
-      <div className="rounded-xl border border-[#1C2332] bg-[#0F141E] p-3 text-xs text-[#E4E7EC] shadow-lg">
-        <p className="text-[11px] uppercase tracking-[0.18em] text-[#8B94A6]">
-          Dia {label}
-        </p>
-        <div className="mt-2 grid gap-1">
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-[#67D6B2]">{t("home.income")}</span>
+      <div className="chart-tooltip">
+        <p className="ui-eyebrow mb-2">Dia {label}</p>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between gap-6">
+            <span className="tone-income">{t("home.income")}</span>
             <span className="font-semibold">{formatCurrency(row.income, language, currency)}</span>
           </div>
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-[#F0A3A3]">{t("home.expenses")}</span>
+          <div className="flex items-center justify-between gap-6">
+            <span className="tone-expense">{t("home.expenses")}</span>
             <span className="font-semibold">{formatCurrency(row.expense, language, currency)}</span>
           </div>
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-[#EAC37A]">Saldo diario</span>
+          <div className="flex items-center justify-between gap-6">
+            <span className="tone-warning">{language === "pt" ? "Saldo diário" : "Daily net"}</span>
             <span className="font-semibold">{formatCurrency(row.netDay, language, currency)}</span>
           </div>
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-[#9AB0C9]">Saldo acumulado</span>
+          <div className="flex items-center justify-between gap-6">
+            <span style={{ color: "var(--text-2)" }}>{language === "pt" ? "Acumulado" : "Running"}</span>
             <span className="font-semibold">{formatCurrency(row.net, language, currency)}</span>
           </div>
         </div>
@@ -2014,453 +2012,240 @@ export function HomeScreen() {
       | undefined;
     if (!item) return null;
     return (
-      <div className="rounded-xl border border-[#1C2332] bg-[#0F141E] p-3 text-xs text-[#E4E7EC] shadow-lg">
-        <p className="font-semibold text-[#E7ECF2]">{item.name}</p>
-        <p className="mt-1 text-[#9AA3B2]">{formatCurrency(item.value, language, currency)}</p>
-        <p className="text-[#9AA3B2]">{formatPercent(item.percent, language)}</p>
+      <div className="chart-tooltip">
+        <p className="font-semibold text-[var(--text-1)]">{item.name}</p>
+        <p className="mt-0.5 text-[var(--text-2)]">{formatCurrency(item.value, language, currency)}</p>
+        <p className="text-[var(--text-3)]">{formatPercent(item.percent, language)}</p>
       </div>
     );
   };
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-end">
-        <div className="flex items-center justify-between gap-3 sm:justify-end">
+    <div className="flex flex-col gap-4">
+      {/* ── Header ─────────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          {/* Month picker */}
           <div className="relative">
             <button
               type="button"
-              onClick={() => setMonthOpen((value) => !value)}
-              className="glass-dark-pill flex h-10 items-center gap-2 px-3 text-xs text-[#D7E3F7]"
+              onClick={() => setMonthOpen((v) => !v)}
+              className="flex items-center gap-1.5 rounded-full border border-[var(--border-bright)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-2)] transition hover:bg-[var(--surface-3)]"
             >
-              <span>{monthTitle}</span>
-              <AppIcon name="chevron-down" size={16} color="#A3ABB9" />
+              {monthTitle}
+              <AppIcon name="chevron-down" size={14} color="currentColor" />
             </button>
             {monthOpen ? (
-              <div className="absolute left-0 top-12 z-20 w-44 rounded-2xl border border-[#1B2230] bg-[#111723] p-2 text-xs text-[#C7CEDA] shadow-xl">
+              <div className="absolute left-0 top-10 z-30 w-44 overflow-hidden rounded-xl border border-[var(--border-bright)] bg-[var(--surface-2)] py-1 shadow-[var(--shadow-lg)]">
                 {monthOptions.map((option) => (
                   <button
                     key={option.label}
                     type="button"
-                    className="w-full rounded-lg px-3 py-2 text-left hover:bg-[#151A27]"
-                    onClick={() => {
-                      setSelectedMonth(option.value);
-                      setMonthOpen(false);
-                    }}
+                    className="w-full px-4 py-2 text-left text-xs text-[var(--text-2)] transition hover:bg-[var(--surface-3)] hover:text-[var(--text-1)]"
+                    onClick={() => { setSelectedMonth(option.value); setMonthOpen(false); }}
                   >
                     {option.label}
                   </button>
                 ))}
-                <button
-                  type="button"
-                  className="w-full rounded-lg px-3 py-2 text-left text-[#8B94A6] hover:bg-[#151A27]"
-                  onClick={() => setMonthOpen(false)}
-                >
-                  {t("common.cancel")}
-                </button>
               </div>
             ) : null}
           </div>
-        </div>
-        <div className="flex items-center justify-between gap-3 sm:justify-end">
+
+          {/* Quick add */}
           <button
             type="button"
             onClick={openQuickAddModal}
-            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-[#245A55] bg-[#123430] px-3 py-2 text-xs font-semibold text-[#7AF0D0] transition hover:border-[#2D7A72] hover:bg-[#15413B]"
+            className="flex items-center gap-1.5 rounded-full border border-[var(--border-bright)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-2)] transition hover:bg-[var(--surface-3)]"
           >
-            <span className="flex h-6 w-6 items-center justify-center rounded-full border border-[#2A8A7D] bg-[#0F141E]">
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M12 4a3 3 0 013 3v5a3 3 0 01-6 0V7a3 3 0 013-3z" />
-                <path d="M19 11a7 7 0 01-14 0" />
-                <path d="M12 18v3" />
-                <path d="M8 21h8" />
-              </svg>
-            </span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 4a3 3 0 013 3v5a3 3 0 01-6 0V7a3 3 0 013-3z" />
+              <path d="M19 11a7 7 0 01-14 0" />
+              <path d="M12 18v3" /><path d="M8 21h8" />
+            </svg>
+            <span className="hidden sm:inline">{language === "pt" ? "Entrada rápida" : "Quick add"}</span>
             <span className="sm:hidden">{language === "pt" ? "Voz" : "Voice"}</span>
-            <span className="hidden sm:inline">
-              {language === "pt" ? "Entrada rapida" : "Quick add"}
-            </span>
           </button>
-          <Link href="/profile" className="group flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[#1A2230] bg-[#101620] text-xs font-semibold text-[#E2E6ED] transition group-hover:border-[#2B364B]">
-              {avatarSrc ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={avatarSrc}
-                  alt="Profile avatar"
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                initials
-              )}
-            </div>
-            <div className="hidden sm:flex flex-col text-right">
-              <span className="text-xs font-semibold text-[#E2E6ED]">{displayName}</span>
-              <span className="text-[10px] text-[#8B94A6]">{profileSecondaryLabel}</span>
-            </div>
-          </Link>
         </div>
+
+        {/* Profile */}
+        <Link href="/profile" className="group flex items-center gap-2.5">
+          <div className="hidden flex-col text-right sm:flex">
+            <span className="text-xs font-semibold text-[var(--text-1)]">{displayName}</span>
+            <span className="text-[10px] text-[var(--text-3)]">{profileSecondaryLabel}</span>
+          </div>
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--border-bright)] bg-[var(--surface-3)] text-xs font-semibold text-[var(--text-1)] transition group-hover:border-[var(--accent)]">
+            {avatarSrc ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={avatarSrc} alt="Profile" className="h-full w-full object-cover" />
+            ) : initials}
+          </div>
+        </Link>
       </div>
 
-      {errorMsg ? <p className="text-xs text-red-400">{errorMsg}</p> : null}
+      {errorMsg ? (
+        <div className="rounded-xl border border-[var(--red-dim)] bg-[var(--red-dim)] px-4 py-3 text-xs text-[var(--red)]">
+          {errorMsg}
+        </div>
+      ) : null}
 
       {quickAddOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#060A11]/80 px-3 pb-3 pt-16 backdrop-blur-sm sm:items-center sm:p-6">
-          <div className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-[#1E2A3C] bg-[#0E1420] shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
-            <div className="sticky top-0 z-10 border-b border-[#1B2330] bg-[#0E1420]/95 px-5 py-4 backdrop-blur">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-base font-semibold text-[#E7ECF2]">
-                    {language === "pt" ? "Entrada rapida com voz" : "Voice quick add"}
-                  </p>
-                  <p className="mt-1 text-xs text-[#8B94A6]">
-                    {language === "pt"
-                      ? "Fale ou digite um lancamento, revise e salve."
-                      : "Speak or type an entry, review it, and save."}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={closeQuickAddModal}
-                  className="rounded-full border border-[#263043] bg-[#111826] px-3 py-1 text-xs text-[#A8B2C3] transition hover:border-[#344159] hover:text-[#E7ECF2]"
-                >
-                  {t("common.cancel")}
-                </button>
+        <div
+          className="ui-modal-backdrop fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+          onClick={closeQuickAddModal}
+        >
+          <div
+            className="ui-card-2 ui-slide-up max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-t-2xl sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-[var(--border)] bg-[var(--surface-2)] px-5 py-4">
+              <div>
+                <p className="text-sm font-semibold text-[var(--text-1)]">
+                  {language === "pt" ? "Entrada rápida com voz" : "Voice quick add"}
+                </p>
+                <p className="mt-0.5 text-xs text-[var(--text-3)]">
+                  {language === "pt" ? "Fale ou digite, revise e salve." : "Speak or type, review, and save."}
+                </p>
               </div>
+              <button type="button" onClick={closeQuickAddModal} className="ui-btn ui-btn-ghost ui-btn-sm">
+                {t("common.cancel")}
+              </button>
             </div>
 
-            <div className="space-y-4 px-5 py-5">
-              <div className="rounded-2xl border border-[#1B2433] bg-[#111826] p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7EEAD5]">
-                  {language === "pt" ? "Comando" : "Command"}
-                </p>
-                <p className="mt-1 text-xs text-[#8B94A6]">
-                  {language === "pt"
-                    ? 'Ex.: "adicione uma despesa no cartao nubank de 56 reais do uber ontem"'
-                    : 'Ex.: "add a 56 card expense on Nubank for Uber yesterday"'}
-                </p>
+            <div className="flex flex-col gap-4 p-5">
+              <div className="ui-card-inner p-4">
+                <p className="ui-eyebrow mb-3">{language === "pt" ? "Comando" : "Command"}</p>
                 <textarea
                   value={quickAddInput}
-                  onChange={(event) => setQuickAddInput(event.target.value)}
+                  onChange={(e) => setQuickAddInput(e.target.value)}
                   rows={3}
-                  className="mt-3 w-full rounded-2xl border border-[#202A39] bg-[#0B111B] px-4 py-3 text-sm text-[#E7ECF2] outline-none transition placeholder:text-[#627086] focus:border-[#2B8C80]"
-                  placeholder={
-                    language === "pt"
-                      ? "Descreva o lancamento em linguagem natural"
-                      : "Describe the entry in natural language"
-                  }
+                  className="ui-textarea"
+                  placeholder={language === "pt" ? 'Ex.: "despesa de 56 reais no Uber pelo Nubank ontem"' : 'Ex.: "56 expense for Uber on Nubank yesterday"'}
                 />
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void handleParseQuickAdd()}
-                    disabled={quickAddParsing || quickAddSaving}
-                    className="rounded-full border border-[#2A8A7D] bg-[#143A34] px-4 py-2 text-xs font-semibold text-[#7AF0D0] transition hover:border-[#35B7A6] disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {quickAddParsing
-                      ? language === "pt"
-                        ? "Interpretando..."
-                        : "Interpreting..."
-                      : language === "pt"
-                        ? "Interpretar"
-                        : "Interpret"}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => void handleParseQuickAdd()} disabled={quickAddParsing || quickAddSaving} className="ui-btn ui-btn-primary ui-btn-sm">
+                    {quickAddParsing ? (language === "pt" ? "Interpretando..." : "Interpreting...") : (language === "pt" ? "Interpretar" : "Interpret")}
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleStartQuickAddListening}
-                    disabled={!quickAddSpeechSupported || quickAddListening || quickAddSaving}
-                    className="rounded-full border border-[#2B364B] bg-[#111826] px-4 py-2 text-xs font-semibold text-[#C7D0DD] transition hover:border-[#4A5D79] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {quickAddListening
-                      ? language === "pt"
-                        ? "Ouvindo..."
-                        : "Listening..."
-                      : language === "pt"
-                        ? "Usar voz"
-                        : "Use voice"}
+                  <button type="button" onClick={handleStartQuickAddListening} disabled={!quickAddSpeechSupported || quickAddListening || quickAddSaving} className="ui-btn ui-btn-secondary ui-btn-sm">
+                    {quickAddListening ? (language === "pt" ? "Ouvindo..." : "Listening...") : (language === "pt" ? "Usar voz" : "Use voice")}
                   </button>
-                  {!quickAddSpeechSupported ? (
-                    <span className="text-[11px] text-[#8B94A6]">
-                      {language === "pt"
-                        ? "Seu navegador nao liberou voz aqui, mas o texto continua funcionando."
-                        : "Your browser does not support voice here, but text still works."}
-                    </span>
-                  ) : null}
                 </div>
               </div>
 
               {quickAddError ? (
-                <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-                  {quickAddError}
-                </div>
+                <div className="rounded-xl border border-[var(--red-dim)] bg-[var(--red-dim)] px-4 py-3 text-sm text-[var(--red)]">{quickAddError}</div>
               ) : null}
-
               {quickAddInfo ? (
-                <div className="rounded-2xl border border-[#2A8A7D]/35 bg-[#123430]/55 px-4 py-3 text-sm text-[#A9F5E5]">
-                  {quickAddInfo}
-                </div>
+                <div className="rounded-xl border border-[var(--green-dim)] bg-[var(--green-dim)] px-4 py-3 text-sm text-[var(--green)]">{quickAddInfo}</div>
               ) : null}
 
               <div className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-2xl border border-[#1B2433] bg-[#111826] p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-[#E7ECF2]">
-                      {language === "pt" ? "Confirmacao" : "Confirmation"}
+                <div className="ui-card-inner flex flex-col gap-3 p-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-[var(--text-1)]">
+                      {language === "pt" ? "Confirmação" : "Confirmation"}
                     </p>
                     {quickAddResult ? (
-                      <span className="rounded-full border border-[#2B364B] bg-[#0E1420] px-3 py-1 text-[11px] text-[#98A7BC]">
-                        {language === "pt" ? "Confianca" : "Confidence"}{" "}
+                      <span className="ui-badge ui-badge-neutral">
                         {Math.round(quickAddResult.confidence * 100)}%
                       </span>
                     ) : null}
                   </div>
 
-                  <div className="mt-4 space-y-3">
-                    <label className="block">
-                      <span className="mb-1 block text-[11px] uppercase tracking-[0.14em] text-[#8B94A6]">
-                        {language === "pt" ? "Tipo" : "Type"}
-                      </span>
-                      <select
-                        value={quickAddForm.entryType}
-                        onChange={(event) =>
-                          setQuickAddForm((current) => ({
-                            ...current,
-                            entryType: event.target.value as QuickAddEntryType,
-                            accountId:
-                              event.target.value === "card_expense" ? null : current.accountId,
-                            cardId:
-                              event.target.value === "card_expense" ? current.cardId : null,
-                          }))
-                        }
-                        className="w-full rounded-xl border border-[#202A39] bg-[#0B111B] px-4 py-3 text-sm text-[#E7ECF2] outline-none focus:border-[#2B8C80]"
-                      >
+                  <div className="flex flex-col gap-2.5">
+                    <div className="flex flex-col gap-1">
+                      <label className="ui-label">{language === "pt" ? "Tipo" : "Type"}</label>
+                      <select value={quickAddForm.entryType} onChange={(e) => setQuickAddForm((c) => ({ ...c, entryType: e.target.value as QuickAddEntryType, accountId: e.target.value === "card_expense" ? null : c.accountId, cardId: e.target.value === "card_expense" ? c.cardId : null }))} className="ui-select">
                         <option value="expense">{language === "pt" ? "Despesa" : "Expense"}</option>
-                        <option value="card_expense">
-                          {language === "pt" ? "Despesa no cartao" : "Card expense"}
-                        </option>
+                        <option value="card_expense">{language === "pt" ? "Despesa no cartão" : "Card expense"}</option>
                         <option value="income">{language === "pt" ? "Receita" : "Income"}</option>
                       </select>
-                    </label>
-
-                    <label className="block">
-                      <span className="mb-1 block text-[11px] uppercase tracking-[0.14em] text-[#8B94A6]">
-                        {language === "pt" ? "Valor" : "Amount"}
-                      </span>
-                      <input
-                        value={quickAddForm.amount}
-                        onChange={(event) =>
-                          setQuickAddForm((current) => ({
-                            ...current,
-                            amount: formatCentsInput(event.target.value, currency),
-                          }))
-                        }
-                        inputMode="decimal"
-                        className="w-full rounded-xl border border-[#202A39] bg-[#0B111B] px-4 py-3 text-sm text-[#E7ECF2] outline-none placeholder:text-[#627086] focus:border-[#2B8C80]"
-                        placeholder={language === "pt" ? "R$ 0,00" : "0.00"}
-                      />
-                    </label>
-
-                    <label className="block">
-                      <span className="mb-1 block text-[11px] uppercase tracking-[0.14em] text-[#8B94A6]">
-                        {language === "pt" ? "Descricao" : "Description"}
-                      </span>
-                      <input
-                        value={quickAddForm.description}
-                        onChange={(event) =>
-                          setQuickAddForm((current) => ({
-                            ...current,
-                            description: event.target.value,
-                          }))
-                        }
-                        className="w-full rounded-xl border border-[#202A39] bg-[#0B111B] px-4 py-3 text-sm text-[#E7ECF2] outline-none placeholder:text-[#627086] focus:border-[#2B8C80]"
-                        placeholder={language === "pt" ? "Ex.: Uber" : "Ex.: Uber"}
-                      />
-                    </label>
-
-                    <label className="block">
-                      <span className="mb-1 block text-[11px] uppercase tracking-[0.14em] text-[#8B94A6]">
-                        {language === "pt" ? "Categoria" : "Category"}
-                      </span>
-                      <input
-                        value={quickAddForm.category}
-                        onChange={(event) =>
-                          setQuickAddForm((current) => ({
-                            ...current,
-                            category: event.target.value,
-                          }))
-                        }
-                        className="w-full rounded-xl border border-[#202A39] bg-[#0B111B] px-4 py-3 text-sm text-[#E7ECF2] outline-none placeholder:text-[#627086] focus:border-[#2B8C80]"
-                        placeholder={language === "pt" ? "Opcional" : "Optional"}
-                      />
-                    </label>
-
-                    <label className="block">
-                      <span className="mb-1 block text-[11px] uppercase tracking-[0.14em] text-[#8B94A6]">
-                        {language === "pt" ? "Data" : "Date"}
-                      </span>
-                      <input
-                        type="date"
-                        value={quickAddForm.date}
-                        onChange={(event) =>
-                          setQuickAddForm((current) => ({
-                            ...current,
-                            date: event.target.value,
-                          }))
-                        }
-                        className="w-full rounded-xl border border-[#202A39] bg-[#0B111B] px-4 py-3 text-sm text-[#E7ECF2] outline-none focus:border-[#2B8C80]"
-                      />
-                    </label>
-
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="ui-label">{language === "pt" ? "Valor" : "Amount"}</label>
+                      <input value={quickAddForm.amount} onChange={(e) => setQuickAddForm((c) => ({ ...c, amount: formatCentsInput(e.target.value, currency) }))} inputMode="decimal" className="ui-input" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="ui-label">{language === "pt" ? "Descrição" : "Description"}</label>
+                      <input value={quickAddForm.description} onChange={(e) => setQuickAddForm((c) => ({ ...c, description: e.target.value }))} className="ui-input" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex flex-col gap-1">
+                        <label className="ui-label">{language === "pt" ? "Categoria" : "Category"}</label>
+                        <input value={quickAddForm.category} onChange={(e) => setQuickAddForm((c) => ({ ...c, category: e.target.value }))} className="ui-input" placeholder={language === "pt" ? "Opcional" : "Optional"} />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="ui-label">{language === "pt" ? "Data" : "Date"}</label>
+                        <input type="date" value={quickAddForm.date} onChange={(e) => setQuickAddForm((c) => ({ ...c, date: e.target.value }))} className="ui-input" />
+                      </div>
+                    </div>
                     {quickAddForm.entryType === "card_expense" ? (
-                      <label className="block">
-                        <span className="mb-1 block text-[11px] uppercase tracking-[0.14em] text-[#8B94A6]">
-                          {language === "pt" ? "Cartao" : "Card"}
-                        </span>
-                        <select
-                          value={quickAddForm.cardId ?? ""}
-                          onChange={(event) =>
-                            setQuickAddForm((current) => ({
-                              ...current,
-                              cardId: event.target.value || null,
-                            }))
-                          }
-                          className="w-full rounded-xl border border-[#202A39] bg-[#0B111B] px-4 py-3 text-sm text-[#E7ECF2] outline-none focus:border-[#2B8C80]"
-                        >
-                          <option value="">{language === "pt" ? "Selecione um cartao" : "Select a card"}</option>
-                          {cards.map((card) => (
-                            <option key={card.id} value={card.id}>
-                              {card.name}
-                              {card.owner_type === "friend" && card.friend_name
-                                ? ` (${card.friend_name})`
-                                : ""}
-                            </option>
-                          ))}
+                      <div className="flex flex-col gap-1">
+                        <label className="ui-label">{language === "pt" ? "Cartão" : "Card"}</label>
+                        <select value={quickAddForm.cardId ?? ""} onChange={(e) => setQuickAddForm((c) => ({ ...c, cardId: e.target.value || null }))} className="ui-select">
+                          <option value="">{language === "pt" ? "Selecione um cartão" : "Select a card"}</option>
+                          {cards.map((card) => (<option key={card.id} value={card.id}>{card.name}{card.owner_type === "friend" && card.friend_name ? ` (${card.friend_name})` : ""}</option>))}
                         </select>
-                      </label>
+                      </div>
                     ) : (
-                      <label className="block">
-                        <span className="mb-1 block text-[11px] uppercase tracking-[0.14em] text-[#8B94A6]">
-                          {language === "pt" ? "Conta" : "Account"}
-                        </span>
-                        <select
-                          value={quickAddForm.accountId ?? ""}
-                          onChange={(event) =>
-                            setQuickAddForm((current) => ({
-                              ...current,
-                              accountId: event.target.value || null,
-                            }))
-                          }
-                          className="w-full rounded-xl border border-[#202A39] bg-[#0B111B] px-4 py-3 text-sm text-[#E7ECF2] outline-none focus:border-[#2B8C80]"
-                        >
+                      <div className="flex flex-col gap-1">
+                        <label className="ui-label">{language === "pt" ? "Conta" : "Account"}</label>
+                        <select value={quickAddForm.accountId ?? ""} onChange={(e) => setQuickAddForm((c) => ({ ...c, accountId: e.target.value || null }))} className="ui-select">
                           <option value="">{language === "pt" ? "Selecione uma conta" : "Select an account"}</option>
-                          {accounts.map((account) => (
-                            <option key={account.id} value={account.id}>
-                              {account.name}
-                            </option>
-                          ))}
+                          {accounts.map((account) => (<option key={account.id} value={account.id}>{account.name}</option>))}
                         </select>
-                      </label>
+                      </div>
                     )}
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-[#1B2433] bg-[#111826] p-4">
-                  <p className="text-sm font-semibold text-[#E7ECF2]">
+                <div className="ui-card-inner p-4">
+                  <p className="mb-3 text-sm font-semibold text-[var(--text-1)]">
                     {language === "pt" ? "Leitura do comando" : "Command reading"}
                   </p>
                   {quickAddResult ? (
-                    <div className="mt-4 space-y-3">
-                      <div className="rounded-xl border border-[#223047] bg-[#0B111B] p-3">
-                        <p className="text-[11px] uppercase tracking-[0.16em] text-[#8B94A6]">
-                          {language === "pt" ? "Entrada detectada" : "Detected entry"}
-                        </p>
-                        <p className="mt-2 text-sm font-semibold text-[#E7ECF2]">
-                          {quickAddResult.entryType === "income"
-                            ? language === "pt"
-                              ? "Receita"
-                              : "Income"
-                            : quickAddResult.entryType === "card_expense"
-                              ? language === "pt"
-                                ? "Despesa no cartao"
-                                : "Card expense"
-                              : language === "pt"
-                                ? "Despesa"
-                                : "Expense"}
+                    <div className="flex flex-col gap-2.5">
+                      <div className="ui-card-inner p-3">
+                        <p className="ui-eyebrow">{language === "pt" ? "Entrada detectada" : "Detected entry"}</p>
+                        <p className="mt-1.5 text-sm font-semibold text-[var(--text-1)]">
+                          {quickAddResult.entryType === "income" ? (language === "pt" ? "Receita" : "Income") : quickAddResult.entryType === "card_expense" ? (language === "pt" ? "Despesa no cartão" : "Card expense") : (language === "pt" ? "Despesa" : "Expense")}
                         </p>
                       </div>
-
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="rounded-xl border border-[#223047] bg-[#0B111B] p-3">
-                          <p className="text-[11px] text-[#8B94A6]">{language === "pt" ? "Conta" : "Account"}</p>
-                          <p className="mt-1 text-sm text-[#E7ECF2]">
-                            {quickAddResult.accountName || "--"}
-                          </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="ui-card-inner p-3">
+                          <p className="ui-label">{language === "pt" ? "Conta" : "Account"}</p>
+                          <p className="mt-1 text-sm text-[var(--text-1)]">{quickAddResult.accountName || "--"}</p>
                         </div>
-                        <div className="rounded-xl border border-[#223047] bg-[#0B111B] p-3">
-                          <p className="text-[11px] text-[#8B94A6]">{language === "pt" ? "Cartao" : "Card"}</p>
-                          <p className="mt-1 text-sm text-[#E7ECF2]">
-                            {quickAddResult.cardName || "--"}
-                          </p>
+                        <div className="ui-card-inner p-3">
+                          <p className="ui-label">{language === "pt" ? "Cartão" : "Card"}</p>
+                          <p className="mt-1 text-sm text-[var(--text-1)]">{quickAddResult.cardName || "--"}</p>
                         </div>
                       </div>
-
-                      <div className="rounded-xl border border-[#223047] bg-[#0B111B] p-3">
-                        <p className="text-[11px] uppercase tracking-[0.16em] text-[#8B94A6]">
-                          {language === "pt" ? "Campos para revisar" : "Fields to review"}
-                        </p>
+                      <div className="ui-card-inner p-3">
+                        <p className="ui-eyebrow">{language === "pt" ? "Campos para revisar" : "Fields to review"}</p>
                         {quickAddResult.missingFields.length === 0 ? (
-                          <p className="mt-2 text-sm text-[#A9F5E5]">
-                            {language === "pt"
-                              ? "Tudo essencial foi entendido. Revise e salve."
-                              : "Everything essential was understood. Review and save."}
+                          <p className="mt-1.5 text-xs text-[var(--green)]">
+                            {language === "pt" ? "Tudo essencial foi entendido." : "Everything essential was understood."}
                           </p>
                         ) : (
-                          <div className="mt-2 flex flex-wrap gap-2">
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
                             {quickAddResult.missingFields.map((field) => (
-                              <span
-                                key={field}
-                                className="rounded-full border border-amber-500/35 bg-amber-500/10 px-3 py-1 text-[11px] text-amber-200"
-                              >
-                                {field}
-                              </span>
+                              <span key={field} className="ui-badge ui-badge-warning">{field}</span>
                             ))}
                           </div>
                         )}
                       </div>
                     </div>
                   ) : (
-                    <div className="mt-4 rounded-2xl border border-dashed border-[#283446] bg-[#0B111B] px-4 py-6 text-sm text-[#8B94A6]">
-                      {language === "pt"
-                        ? "Depois de interpretar o comando, os campos aparecem prontos para voce confirmar."
-                        : "After interpreting the command, the fields will be prepared here for confirmation."}
+                    <div className="rounded-xl border border-dashed border-[var(--border-bright)] px-4 py-8 text-center text-xs text-[var(--text-3)]">
+                      {language === "pt" ? "Os campos aparecem aqui após interpretar o comando." : "Fields appear here after interpreting the command."}
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[#1B2330] pt-1">
-                <button
-                  type="button"
-                  onClick={closeQuickAddModal}
-                  className="rounded-full border border-[#263043] bg-[#111826] px-4 py-2 text-sm text-[#A8B2C3] transition hover:border-[#344159] hover:text-[#E7ECF2]"
-                >
-                  {t("common.cancel")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleSaveQuickAdd()}
-                  disabled={quickAddSaving || quickAddParsing}
-                  className="rounded-full border border-[#2A8A7D] bg-[#143A34] px-5 py-2 text-sm font-semibold text-[#7AF0D0] transition hover:border-[#35B7A6] disabled:cursor-not-allowed disabled:opacity-60"
-                >
+              <div className="flex items-center justify-end gap-2 border-t border-[var(--border)] pt-4">
+                <button type="button" onClick={closeQuickAddModal} className="ui-btn ui-btn-secondary">{t("common.cancel")}</button>
+                <button type="button" onClick={() => void handleSaveQuickAdd()} disabled={quickAddSaving || quickAddParsing} className="ui-btn ui-btn-primary">
                   {quickAddSaving ? t("common.saving") : t("common.save")}
                 </button>
               </div>
@@ -2469,266 +2254,202 @@ export function HomeScreen() {
         </div>
       ) : null}
 
+      {/* ── Main grid ──────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-12">
-        <div className="glass-dark glass-dark-card p-5 lg:col-span-3">
+
+        {/* Balance hero */}
+        <div className="ui-card p-5 lg:col-span-4">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-[#8D96A6]">{t("home.balanceLabel")}</p>
+            <p className="ui-eyebrow">{t("home.balanceLabel")}</p>
             <button
               type="button"
-              onClick={() => setShowBalance((value) => !value)}
-              className="glass-dark-pill flex h-8 w-8 items-center justify-center"
+              onClick={() => setShowBalance((v) => !v)}
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--border)] text-[var(--text-3)] hover:bg-[var(--surface-3)]"
             >
-              <AppIcon
-                name={showBalance ? "eye-off" : "eye"}
-                size={16}
-                color="#A3ABB9"
-              />
+              <AppIcon name={showBalance ? "eye-off" : "eye"} size={14} color="currentColor" />
             </button>
           </div>
-          <p className="mt-4 text-3xl font-semibold text-[#E7ECF2]">
-            {loading ? "..." : showBalance ? formatCurrency(totalBalance, language, currency) : "****"}
+          <p className="ui-balance mt-3">
+            {loading ? "—" : showBalance ? formatCurrency(totalBalance, language, currency) : "••••••"}
           </p>
-          <p className="mt-3 text-xs text-[#8D96A6]">
-            {t("home.total")} {loading ? "..." : formatCurrency(totalBalance, language, currency)}
+          <p className="mt-1 text-xs text-[var(--text-3)]">
+            {t("home.total")} {loading ? "—" : formatCurrency(accountBalanceTotal, language, currency)}
           </p>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <div className="glass-dark-inner rounded-[18px] p-2.5">
-              <p className="text-[10px] uppercase tracking-[0.12em] text-[#8D96A6]">
-                {language === "pt" ? "Contas ativas" : "Active accounts"}
-              </p>
-              <p className="mt-1 text-sm font-semibold text-[#E7ECF2]">{accounts.length}</p>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className="ui-card-inner p-3">
+              <p className="ui-eyebrow">{language === "pt" ? "Contas ativas" : "Active accounts"}</p>
+              <p className="mt-1 text-base font-semibold text-[var(--text-1)]">{accounts.length}</p>
             </div>
-            <div className="glass-dark-inner rounded-[18px] p-2.5">
-              <p className="text-[10px] uppercase tracking-[0.12em] text-[#8D96A6]">
-                {language === "pt" ? "Em cartoes" : "Card usage"}
-              </p>
-              <p className="mt-1 text-sm font-semibold text-[#E7ECF2]">
-                {loading ? "..." : formatCurrency(cardUsedTotal, language, currency)}
+            <div className="ui-card-inner p-3">
+              <p className="ui-eyebrow">{language === "pt" ? "Em cartões" : "Card usage"}</p>
+              <p className="mt-1 text-base font-semibold text-[var(--text-1)]">
+                {loading ? "—" : formatCurrency(cardUsedTotal, language, currency)}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="glass-dark glass-dark-card p-5 lg:col-span-6">
+        {/* Income vs Expenses stats */}
+        <div className="ui-card p-5 lg:col-span-8">
           <div className="mb-4 flex items-center justify-between">
-            <p className="text-sm font-semibold text-[#E3E9F1]">{t("home.inflowVsOutflow")}</p>
-            <span className="text-[11px] text-[#8D96A6]">{t("home.vsLastMonth")}</span>
+            <p className="text-sm font-semibold text-[var(--text-1)]">{t("home.inflowVsOutflow")}</p>
+            <span className="text-xs text-[var(--text-3)]">{t("home.vsLastMonth")}</span>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="glass-dark-inner rounded-[22px] p-3">
+            <div className="ui-card-inner p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#48C59F]">
-                    <AppIcon name="plus" size={14} color="#0C1018" />
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--green-dim)]">
+                    <AppIcon name="plus" size={14} color="var(--green)" />
                   </div>
                   <div>
-                    <p className="text-xs text-[#8D96A6]">{t("home.income")}</p>
-                    <p className="text-lg font-semibold text-[#E3E9F1]">
-                      {loading ? "..." : formatCurrency(income, language, currency)}
+                    <p className="text-xs text-[var(--text-3)]">{t("home.income")}</p>
+                    <p className="ui-amount text-base text-[var(--green)]">
+                      {loading ? "—" : formatCurrency(income, language, currency)}
                     </p>
                   </div>
                 </div>
-                <div
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold ${
+                <span
+                  className={`ui-badge ${
                     monthOverMonth.incomePct == null || incomeDirection === "neutral"
-                      ? "bg-[#172031] text-[#9AA3B2]"
+                      ? "ui-badge-neutral"
                       : incomeDirection === "up"
-                        ? "bg-emerald-500/15 text-emerald-300"
-                        : "bg-rose-500/15 text-rose-300"
+                        ? "ui-badge-income"
+                        : "ui-badge-expense"
                   }`}
                 >
-                  <AppIcon
-                    name={
-                      monthOverMonth.incomePct == null || incomeDirection === "neutral"
-                        ? "arrow-right"
-                        : incomeDirection === "up"
-                          ? "arrow-up"
-                          : "arrow-down"
-                    }
-                    size={12}
-                    color="currentColor"
-                  />
                   {loading
-                    ? "..."
+                    ? "—"
                     : monthOverMonth.incomePct == null
                       ? "--"
                       : formatChangePercent(monthOverMonth.incomePct, language)}
-                </div>
+                </span>
               </div>
             </div>
 
-            <div className="glass-dark-inner rounded-[22px] p-3">
+            <div className="ui-card-inner p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#E46E6E]">
-                    <AppIcon name="arrow-down" size={14} color="#0C1018" />
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--red-dim)]">
+                    <AppIcon name="arrow-down" size={14} color="var(--red)" />
                   </div>
                   <div>
-                    <p className="text-xs text-[#8D96A6]">{t("home.expenses")}</p>
-                    <p className="text-lg font-semibold text-[#E3E9F1]">
-                      {loading ? "..." : formatCurrency(expenses, language, currency)}
+                    <p className="text-xs text-[var(--text-3)]">{t("home.expenses")}</p>
+                    <p className="ui-amount text-base text-[var(--red)]">
+                      {loading ? "—" : formatCurrency(expenses, language, currency)}
                     </p>
                   </div>
                 </div>
-                <div
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold ${
+                <span
+                  className={`ui-badge ${
                     monthOverMonth.expensesPct == null || expensesDirection === "neutral"
-                      ? "bg-[#172031] text-[#9AA3B2]"
+                      ? "ui-badge-neutral"
                       : expensesDirection === "down"
-                        ? "bg-emerald-500/15 text-emerald-300"
-                        : "bg-rose-500/15 text-rose-300"
+                        ? "ui-badge-income"
+                        : "ui-badge-expense"
                   }`}
                 >
-                  <AppIcon
-                    name={
-                      monthOverMonth.expensesPct == null || expensesDirection === "neutral"
-                        ? "arrow-right"
-                        : expensesDirection === "up"
-                          ? "arrow-up"
-                          : "arrow-down"
-                    }
-                    size={12}
-                    color="currentColor"
-                  />
                   {loading
-                    ? "..."
+                    ? "—"
                     : monthOverMonth.expensesPct == null
                       ? "--"
                       : formatChangePercent(monthOverMonth.expensesPct, language)}
-                </div>
+                </span>
               </div>
             </div>
           </div>
-          <p className="mt-3 text-xs text-[#8D96A6]">
+
+          <p className="mt-3 text-xs text-[var(--text-3)]">
             {t("home.balanceAfterExpenses")}:{" "}
-            {loading ? "..." : formatCurrency(monthNet, language, currency)}
+            <span className={`font-semibold ${monthNet >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+              {loading ? "—" : formatCurrency(monthNet, language, currency)}
+            </span>
           </p>
+
           <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
-            <div className="glass-dark-inner rounded-[18px] p-2.5">
-              <p className="text-[10px] uppercase tracking-[0.12em] text-[#8D96A6]">
-                {language === "pt" ? "Resultado do mes" : "Month result"}
-              </p>
-              <p
-                className={`mt-1 text-sm font-semibold ${
-                  monthNet >= 0 ? "text-emerald-300" : "text-rose-300"
-                }`}
-              >
-                {loading ? "..." : formatSignedCurrency(monthNet, language, currency)}
+            <div className="ui-card-inner p-2.5">
+              <p className="ui-eyebrow">{language === "pt" ? "Resultado" : "Result"}</p>
+              <p className={`mt-1 text-sm font-semibold ${monthNet >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                {loading ? "—" : formatSignedCurrency(monthNet, language, currency)}
               </p>
             </div>
-            <div className="glass-dark-inner rounded-[18px] p-2.5">
-              <p className="text-[10px] uppercase tracking-[0.12em] text-[#8D96A6]">
-                {language === "pt" ? "Taxa de poupanca" : "Savings rate"}
-              </p>
-              <p className="mt-1 text-sm font-semibold text-[#E7ECF2]">
-                {loading
-                  ? "..."
-                  : savingsRate == null
-                    ? "--"
-                    : formatPercent(savingsRate, language)}
+            <div className="ui-card-inner p-2.5">
+              <p className="ui-eyebrow">{language === "pt" ? "Poupança" : "Savings"}</p>
+              <p className="mt-1 text-sm font-semibold text-[var(--text-1)]">
+                {loading ? "—" : savingsRate == null ? "--" : formatPercent(savingsRate, language)}
               </p>
             </div>
-            <div className="glass-dark-inner rounded-[18px] p-2.5">
-              <p className="text-[10px] uppercase tracking-[0.12em] text-[#8D96A6]">
-                {language === "pt" ? "Media desp./dia" : "Avg exp./day"}
-              </p>
-              <p className="mt-1 text-sm font-semibold text-[#E7ECF2]">
-                {loading
-                  ? "..."
-                  : monthProgress.elapsedDays > 0
-                    ? formatCurrency(expenses / monthProgress.elapsedDays, language, currency)
-                    : "--"}
+            <div className="ui-card-inner p-2.5">
+              <p className="ui-eyebrow">{language === "pt" ? "Média/dia" : "Avg/day"}</p>
+              <p className="mt-1 text-sm font-semibold text-[var(--text-1)]">
+                {loading ? "—" : monthProgress.elapsedDays > 0 ? formatCurrency(expenses / monthProgress.elapsedDays, language, currency) : "--"}
               </p>
             </div>
-            <div className="glass-dark-inner rounded-[18px] p-2.5">
-              <p className="text-[10px] uppercase tracking-[0.12em] text-[#8D96A6]">
-                {language === "pt" ? "Projecao do mes" : "Month projection"}
-              </p>
-              <p
-                className={`mt-1 text-sm font-semibold ${
-                  (monthProjection?.net ?? 0) >= 0 ? "text-emerald-300" : "text-rose-300"
-                }`}
-              >
-                {loading
-                  ? "..."
-                  : monthProjection
-                    ? formatSignedCurrency(monthProjection.net, language, currency)
-                    : "--"}
+            <div className="ui-card-inner p-2.5">
+              <p className="ui-eyebrow">{language === "pt" ? "Projeção" : "Projection"}</p>
+              <p className={`mt-1 text-sm font-semibold ${(monthProjection?.net ?? 0) >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                {loading ? "—" : monthProjection ? formatSignedCurrency(monthProjection.net, language, currency) : "--"}
               </p>
             </div>
           </div>
-          <div className="glass-dark-inner mt-3 rounded-[22px] p-3">
-            <div className="flex items-center justify-between gap-3 text-[11px] text-[#8D96A6]">
-              <span>{language === "pt" ? "Pressao de despesas" : "Expense pressure"}</span>
-              <span>
-                {loading
-                  ? "..."
-                  : expensePressure == null
-                    ? "--"
-                    : formatPercent(expensePressure, language)}
+
+          <div className="mt-3 ui-card-inner p-3">
+            <div className="flex items-center justify-between gap-3 text-xs text-[var(--text-3)]">
+              <span>{language === "pt" ? "Pressão de despesas" : "Expense pressure"}</span>
+              <span className="font-semibold text-[var(--text-2)]">
+                {loading ? "—" : expensePressure == null ? "--" : formatPercent(expensePressure, language)}
               </span>
             </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#111827]">
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--surface)]">
               <div
-                className={`h-2 rounded-full ${expensePressureTone}`}
+                className={`h-1.5 rounded-full ${expensePressureTone}`}
                 style={{ width: `${expensePressureWidth}%` }}
               />
             </div>
           </div>
         </div>
 
-        <div className="glass-dark glass-dark-card p-5 lg:col-span-3">
+        {/* Category breakdown */}
+        <div className="ui-card p-5 sm:col-span-2 lg:col-span-4">
           <div className="mb-3 flex items-center justify-between">
-            <p className="text-sm font-semibold text-[#C7CEDA]">{t("home.categories")}</p>
-            <span className="text-[11px] text-[#8B94A6]">
-              {t("transactions.monthSummary")}
-            </span>
+            <p className="text-sm font-semibold text-[var(--text-1)]">{t("home.categories")}</p>
+            <span className="text-xs text-[var(--text-3)]">{t("transactions.monthSummary")}</span>
           </div>
           {categoryChartData.length === 0 ? (
-            <p className="text-xs text-[#8B94A6]">{t("transactions.empty")}</p>
+            <p className="text-xs text-[var(--text-3)]">{t("transactions.empty")}</p>
           ) : (
-            <div className="glass-dark-inner rounded-[22px] p-3">
-              <p className="text-xs font-semibold text-[#D7DDEA]">
-                {language === "pt"
-                  ? "Principais categorias de despesas"
-                  : "Top expense categories"}
+            <div className="ui-card-inner p-3">
+              <p className="text-xs font-semibold text-[var(--text-1)]">
+                {language === "pt" ? "Principais categorias" : "Top categories"}
               </p>
-              <p className="mt-1 text-[11px] text-[#8B94A6]">
-                {language === "pt" ? "Resumo do mes" : "Month summary"}:{" "}
+              <p className="mt-0.5 text-[11px] text-[var(--text-3)]">
                 {formatCurrency(totalCategoryAmount, language, currency)}
               </p>
-
               <div className="relative mt-3 grid grid-cols-[1fr_126px] items-center gap-1 overflow-hidden">
-                <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
+                <div className="max-h-40 space-y-1 overflow-y-auto pr-1">
                   {categoryChartData.map((category, index) => (
                     <div
                       key={category.name}
-                      className={`flex items-center gap-2 rounded-lg px-1 py-1 transition-colors ${
-                        activeCategoryIndex === index
-                          ? "bg-[#171E2B]"
-                          : "hover:bg-[#141B27]"
+                      className={`flex items-center gap-2 rounded-lg px-1 py-1 transition-colors cursor-default ${
+                        activeCategoryIndex === index ? "bg-[var(--surface-3)]" : "hover:bg-[var(--surface-3)]"
                       }`}
                       onMouseEnter={() => setActiveCategoryIndex(index)}
                       onMouseLeave={() => setActiveCategoryIndex(null)}
                     >
-                      <span
-                        className="h-9 w-1.5 rounded-full"
-                        style={{ backgroundColor: category.color }}
-                      />
+                      <span className="h-8 w-1 shrink-0 rounded-full" style={{ backgroundColor: category.color }} />
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-[#E7ECF2]">
+                        <p className="truncate text-xs font-semibold text-[var(--text-1)]">
                           {index + 1}. {category.name}
                         </p>
-                        <div className="flex items-center gap-2 text-[11px] text-[#9AA3B2]">
+                        <div className="flex items-center gap-1.5 text-[10px] text-[var(--text-3)]">
                           <span>{formatPercent(category.percent, language)}</span>
-                          <span className="text-[#7F8A9B]">·</span>
+                          <span>·</span>
                           <span>{formatCurrency(category.value, language, currency)}</span>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
-
                 <div className="h-40 w-[176px] -mr-12 overflow-hidden">
                   <ResponsiveContainer width="100%" height="100%" minHeight={120}>
                     <PieChart>
@@ -2754,19 +2475,11 @@ export function HomeScreen() {
                           <Cell
                             key={`${category.name}-${index}`}
                             fill={category.color}
-                            fillOpacity={
-                              activeCategoryIndex == null || activeCategoryIndex === index
-                                ? 1
-                                : 0.28
-                            }
+                            fillOpacity={activeCategoryIndex == null || activeCategoryIndex === index ? 1 : 0.28}
                           />
                         ))}
                       </Pie>
-                      <Tooltip
-                        content={CategoryTooltip}
-                        cursor={false}
-                        wrapperStyle={{ outline: "none" }}
-                      />
+                      <Tooltip content={CategoryTooltip} cursor={false} wrapperStyle={{ outline: "none" }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -2774,211 +2487,114 @@ export function HomeScreen() {
             </div>
           )}
         </div>
-        <div className="glass-dark glass-dark-card p-5 sm:col-span-2 lg:col-span-6">
+
+        {/* Daily flow chart */}
+        <div className="ui-card p-5 sm:col-span-2 lg:col-span-8">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-[#E4E7EC]">
-                {t("home.monthlyFlow")}
-              </p>
-              <p className="text-xs text-[#8B94A6]">{t("home.inflowVsOutflow")}</p>
+              <p className="text-sm font-semibold text-[var(--text-1)]">{t("home.monthlyFlow")}</p>
+              <p className="text-xs text-[var(--text-3)]">{t("home.inflowVsOutflow")}</p>
             </div>
-            <div className="glass-dark-pill px-3 py-1 text-[11px] text-[#9AA3B2]">
-              {t("home.last30Days")}
-            </div>
+            <span className="ui-badge ui-badge-neutral">{t("home.last30Days")}</span>
           </div>
-
           <div className="mt-5 h-64 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={180}>
               <ComposedChart data={flowSeries}>
                 <defs>
                   <linearGradient id="homeNetFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#5DA7FF" stopOpacity={0.25} />
-                    <stop offset="100%" stopColor="#5DA7FF" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#4f8eff" stopOpacity={0.2} />
+                    <stop offset="100%" stopColor="#4f8eff" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid stroke="#1C2332" strokeDasharray="4 6" vertical={false} />
+                <CartesianGrid stroke="rgba(255,255,255,0.055)" strokeDasharray="4 6" vertical={false} />
                 <XAxis
                   dataKey="day"
-                  stroke="#6E7A8C"
-                  tick={{ fill: "#9AA3B2", fontSize: 10 }}
-                  axisLine={{ stroke: "#1C2332" }}
+                  tick={{ fill: "#4a6278", fontSize: 10 }}
+                  axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
-                  stroke="#6E7A8C"
-                  tick={{ fill: "#9AA3B2", fontSize: 10 }}
-                  axisLine={{ stroke: "#1C2332" }}
+                  tick={{ fill: "#4a6278", fontSize: 10 }}
+                  axisLine={false}
                   tickFormatter={(value) => formatCurrency(value, language, currency)}
                   tickLine={false}
                   width={80}
                 />
                 <Tooltip content={FlowTooltip} />
-                <Legend wrapperStyle={{ color: "#E2E6ED", fontSize: 11 }} />
-                <ReferenceLine y={0} stroke="#1C2332" strokeDasharray="4 6" />
-                <ReferenceLine
-                  y={flowMetrics.avgIncome}
-                  stroke="#48C59F"
-                  strokeDasharray="4 6"
-                  strokeOpacity={0.35}
-                />
-                <ReferenceLine
-                  y={flowMetrics.avgExpense}
-                  stroke="#E46E6E"
-                  strokeDasharray="4 6"
-                  strokeOpacity={0.35}
-                />
-                <Bar
-                  dataKey="income"
-                  name={t("home.income")}
-                  fill="#4FC3A1"
-                  radius={[6, 6, 0, 0]}
-                  maxBarSize={18}
-                />
-                <Bar
-                  dataKey="expense"
-                  name={t("home.expenses")}
-                  fill="#E36B6B"
-                  radius={[6, 6, 0, 0]}
-                  maxBarSize={18}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="netDay"
-                  name="Saldo diario"
-                  stroke="#EAC37A"
-                  strokeDasharray="4 6"
-                  strokeWidth={2}
-                  dot={false}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="net"
-                  name="Saldo acumulado"
-                  stroke="#5DA7FF"
-                  fill="url(#homeNetFill)"
-                  strokeWidth={2}
-                  dot={false}
-                />
+                <Legend wrapperStyle={{ color: "#8ba3be", fontSize: 11 }} />
+                <ReferenceLine y={0} stroke="rgba(255,255,255,0.055)" strokeDasharray="4 6" />
+                <ReferenceLine y={flowMetrics.avgIncome} stroke="#34d399" strokeDasharray="4 6" strokeOpacity={0.35} />
+                <ReferenceLine y={flowMetrics.avgExpense} stroke="#f87171" strokeDasharray="4 6" strokeOpacity={0.35} />
+                <Bar dataKey="income" name={t("home.income")} fill="#34d399" radius={[4, 4, 0, 0]} maxBarSize={18} />
+                <Bar dataKey="expense" name={t("home.expenses")} fill="#f87171" radius={[4, 4, 0, 0]} maxBarSize={18} />
+                <Line type="monotone" dataKey="netDay" name="Saldo diário" stroke="#fbbf24" strokeDasharray="4 6" strokeWidth={2} dot={false} />
+                <Area type="monotone" dataKey="net" name="Saldo acumulado" stroke="#4f8eff" fill="url(#homeNetFill)" strokeWidth={2} dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
-
         </div>
 
-        <div className="glass-dark glass-dark-card p-5 sm:col-span-2 lg:col-span-6">
-          <div className="mb-4 flex items-center justify-between">
-            <p className="text-sm font-semibold text-[#C7CEDA]">{t("home.accounts")}</p>
-            <span className="glass-dark-pill flex h-8 w-8 items-center justify-center">
-              <AppIcon name="wallet" size={16} color="#92A0B7" />
+        {/* Accounts */}
+        <div className="ui-card p-5 sm:col-span-2 lg:col-span-4">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm font-semibold text-[var(--text-1)]">{t("home.accounts")}</p>
+            <span className="text-xs text-[var(--text-3)]">
+              {positiveAccountsCount}/{accounts.length} {language === "pt" ? "positivas" : "positive"}
             </span>
           </div>
-          <div className="mb-4 grid gap-3 sm:grid-cols-3">
-            <div className="glass-dark-inner rounded-[22px] p-3">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
-                {language === "pt" ? "Saldo total" : "Total balance"}
-              </p>
-              <p className="mt-2 text-lg font-semibold text-[#E5E8EF]">
-                {loading ? "..." : formatCurrency(accountBalanceTotal, language, currency)}
-              </p>
-            </div>
-            <div className="glass-dark-inner rounded-[22px] p-3">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
-                {language === "pt" ? "Contas positivas" : "Positive accounts"}
-              </p>
-              <p className="mt-2 text-lg font-semibold text-[#5DD6C7]">
-                {positiveAccountsCount}/{accounts.length}
-              </p>
-            </div>
-            <div className="glass-dark-inner rounded-[22px] p-3">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
-                {language === "pt" ? "Media por conta" : "Average per account"}
-              </p>
-              <p className="mt-2 text-lg font-semibold text-[#E5E8EF]">
-                {loading ? "..." : formatCurrency(averageAccountBalance, language, currency)}
-              </p>
-            </div>
-          </div>
           {accounts.length === 0 ? (
-            <p className="text-xs text-[#8B94A6]">{t("home.noAccounts")}</p>
+            <p className="text-xs text-[var(--text-3)]">{t("home.noAccounts")}</p>
           ) : (
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className="space-y-2">
               {accounts.map((account) => (
-                <div
-                  key={account.id}
-                  className="glass-dark-inner flex items-center gap-3 rounded-[22px] p-3"
-                >
+                <div key={account.id} className="ui-card-inner flex items-center gap-3 p-3">
                   <div className="relative shrink-0">
                     <BankBrandBadge bankCode={account.bank_code} size="sm" />
                     <span
-                      className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border border-[#0F141E] ${
-                        (Number(account.balance) || 0) > 0 ? "bg-[#4FC3A1]" : "bg-[#64748B]"
+                      className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[var(--surface-3)] ${
+                        (Number(account.balance) || 0) > 0 ? "bg-[var(--green)]" : "bg-[var(--text-3)]"
                       }`}
                     />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="truncate text-sm font-semibold text-[#E4E7EC]">{account.name}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="truncate text-sm font-semibold text-[var(--text-1)]">{account.name}</p>
                       {largestAccount?.id === account.id ? (
-                        <span className="rounded-full border border-[#2E6C79] bg-[#173038] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[#91E6DA]">
-                          {language === "pt" ? "Maior saldo" : "Top balance"}
-                        </span>
+                        <span className="ui-badge ui-badge-income">{language === "pt" ? "Maior" : "Top"}</span>
                       ) : null}
                     </div>
-                    <p className="text-lg font-semibold text-[#E5E8EF]">
-                      {loading ? "..." : formatCurrency(Number(account.balance) || 0, language, currency)}
-                    </p>
-                    <p className="text-xs text-[#8B94A6]">
-                      {usesHistoricalAccountBalances
-                        ? language === "pt"
-                          ? "Saldo atual da conta"
-                          : "Current account balance"
-                        : language === "pt"
-                          ? "Movimento do mes selecionado"
-                          : "Selected month movement"}
+                    <p className="ui-amount text-sm text-[var(--text-1)]">
+                      {loading ? "—" : formatCurrency(Number(account.balance) || 0, language, currency)}
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleRemoveAccount(account.id, account.name)}
                     disabled={deletingAccountId === account.id}
-                    className="glass-dark-pill px-3 py-1 text-[11px] text-[#8B94A6] hover:border-red-500/60 hover:text-red-400 disabled:opacity-60"
+                    className="ui-btn ui-btn-ghost ui-btn-sm text-[var(--text-3)] hover:text-[var(--red)]"
                   >
-                    {deletingAccountId === account.id ? "Removendo..." : "Remover"}
+                    {deletingAccountId === account.id ? "..." : "×"}
                   </button>
                 </div>
               ))}
             </div>
           )}
-          <div className="mt-4 flex items-center justify-between border-t border-[#1C2332] pt-3 text-sm">
-            <span className="text-[#8B94A6]">
-              {language === "pt" ? "Resumo das contas" : "Accounts summary"}
-            </span>
-            <span className="font-semibold text-[#C7CEDA]">
-              {t("home.total")} {loading ? "..." : formatCurrency(accountBalanceTotal, language, currency)}
-            </span>
-          </div>
         </div>
 
-
-        <div className="glass-dark glass-dark-card p-5 sm:col-span-2 lg:col-span-6">
+        {/* Credit cards */}
+        <div className="ui-card p-5 sm:col-span-2 lg:col-span-8">
           <div className="mb-4 flex items-center justify-between">
-            <p className="text-sm font-semibold text-[#C7CEDA]">{t("home.creditCards")}</p>
-            <span className="glass-dark-pill flex h-8 w-8 items-center justify-center">
-              <AppIcon name="credit-card" size={16} color="#92A0B7" />
-            </span>
+            <p className="text-sm font-semibold text-[var(--text-1)]">{t("home.creditCards")}</p>
+            <AppIcon name="credit-card" size={16} color="var(--text-3)" />
           </div>
-          <div className="mb-3 flex flex-wrap gap-2 text-[11px]">
-            <span className="rounded-full border border-[#3A8F8A] bg-[#163137] px-3 py-1 text-[#64D1C4]">
-              {t("home.openStatements")} {openStatementsCount}
-            </span>
-            <span className="glass-dark-pill px-3 py-1 text-[#8B94A6]">
-              {t("home.closedStatements")} {closedStatementsCount}
-            </span>
+          <div className="mb-3 flex flex-wrap gap-2">
+            <span className="ui-badge ui-badge-income">{t("home.openStatements")} {openStatementsCount}</span>
+            <span className="ui-badge ui-badge-neutral">{t("home.closedStatements")} {closedStatementsCount}</span>
           </div>
           {cards.length === 0 ? (
-            <p className="text-xs text-[#8B94A6]">{t("home.noCards")}</p>
+            <p className="text-xs text-[var(--text-3)]">{t("home.noCards")}</p>
           ) : (
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {cards.map((card) => {
                 const isFriendCard = (card.owner_type ?? "self") === "friend";
                 const insight = cardInsightsById[card.id];
@@ -2986,121 +2602,87 @@ export function HomeScreen() {
                 return (
                   <div
                     key={card.id}
-                    className={`min-w-0 rounded-xl px-4 py-3 ${
-                      isFriendCard
-                        ? "border border-[#25404B] bg-[#10212A]"
-                        : "glass-dark-inner border border-white/10 bg-white/[0.03]"
-                    }`}
+                    className={`ui-card-inner min-w-0 p-4 ${isFriendCard ? "border-[var(--accent)] border-opacity-30" : ""}`}
                   >
-                    <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <BankBrandBadge bankCode={card.bank_code} size="sm" />
-                      <p className="min-w-0 break-words text-sm font-semibold text-[#E4E7EC]">{card.name}</p>
-                       {isFriendCard ? (
-                          <span className="rounded-full border border-[#2E6C79] bg-[#173038] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[#91E6DA]">
-                            {t("cards.ownerBadgeFriend")}
-                          </span>
-                        ) : null}
-                        <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] ${
-                            statementStatus === "closed"
-                              ? "border-amber-500/45 bg-amber-500/10 text-amber-200"
-                              : "border-[#2A8C73] bg-[#163137] text-[#91E6DA]"
-                          }`}
-                        >
-                          {statementStatus === "closed"
-                            ? t("home.closedStatements")
-                            : t("home.openStatements")}
-                        </span>
-                      </div>
-                      {isFriendCard && card.friend_name ? (
-                        <p className="mt-1 text-xs text-[#A8D7D1]">
-                          {t("home.friendCardOwner")}: {card.friend_name}
-                        </p>
+                      <p className="min-w-0 break-words text-sm font-semibold text-[var(--text-1)]">{card.name}</p>
+                      {isFriendCard ? (
+                        <span className="ui-badge ui-badge-accent">{t("cards.ownerBadgeFriend")}</span>
                       ) : null}
-                      <p className="text-xs text-[#8B94A6]">
-                        {t("cards.closes")} {card.closing_day} - {t("cards.due")} {card.due_day}
+                      <span className={`ui-badge ${statementStatus === "closed" ? "ui-badge-warning" : "ui-badge-income"}`}>
+                        {statementStatus === "closed" ? t("home.closedStatements") : t("home.openStatements")}
+                      </span>
+                    </div>
+                    {isFriendCard && card.friend_name ? (
+                      <p className="mt-1.5 text-xs text-[var(--text-3)]">
+                        {t("home.friendCardOwner")}: {card.friend_name}
                       </p>
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <div className="glass-dark-inner min-w-0 rounded-[22px] p-3">
-                          <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
-                            {language === "pt" ? "Fatura atual" : "Current statement"}
-                          </p>
-                          <p className="mt-2 break-words text-xl font-semibold leading-tight text-[#E4E7EC] sm:text-2xl">
-                            {formatCurrency(
-                              (insight?.currentStatement ?? 0) + (insight?.overdueAmount ?? 0),
-                              language,
-                              currency,
-                            )}
-                          </p>
-                          <p className="mt-1 text-xs text-[#8B94A6]">
-                            {insight && insight.currentStatement + insight.overdueAmount > 0
-                              ? language === "pt"
-                                ? `Vence em ${insight.daysUntilDue} ${getDayWord(insight.daysUntilDue, language)}`
-                                : `Due in ${insight.daysUntilDue} ${getDayWord(insight.daysUntilDue, language)}`
-                              : language === "pt"
-                                ? "Sem fatura pendente"
-                                : "No statement due"}
+                    ) : null}
+                    <p className="mt-0.5 text-xs text-[var(--text-3)]">
+                      {t("cards.closes")} {card.closing_day} · {t("cards.due")} {card.due_day}
+                    </p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <div className="ui-card-inner p-2.5">
+                        <p className="ui-eyebrow">{language === "pt" ? "Fatura atual" : "Current"}</p>
+                        <p className="mt-1 ui-amount text-sm text-[var(--text-1)]">
+                          {formatCurrency((insight?.currentStatement ?? 0) + (insight?.overdueAmount ?? 0), language, currency)}
+                        </p>
+                        <p className="mt-0.5 text-[10px] text-[var(--text-3)]">
+                          {insight && insight.currentStatement + insight.overdueAmount > 0
+                            ? language === "pt"
+                              ? `Vence em ${insight.daysUntilDue} ${getDayWord(insight.daysUntilDue, language)}`
+                              : `Due in ${insight.daysUntilDue} ${getDayWord(insight.daysUntilDue, language)}`
+                            : language === "pt" ? "Sem pendência" : "No statement due"}
+                        </p>
+                      </div>
+                      <div className="ui-card-inner p-2.5">
+                        <p className="ui-eyebrow">{language === "pt" ? "Próxima" : "Next"}</p>
+                        <p className="mt-1 ui-amount text-sm text-[var(--text-1)]">
+                          {formatCurrency(insight?.nextStatement ?? 0, language, currency)}
+                        </p>
+                        <p className="mt-0.5 text-[10px] text-[var(--text-3)]">
+                          {language === "pt"
+                            ? `Fecha em ${insight?.daysUntilClosing ?? 0} ${getDayWord(insight?.daysUntilClosing ?? 0, language)}`
+                            : `Closes in ${insight?.daysUntilClosing ?? 0} ${getDayWord(insight?.daysUntilClosing ?? 0, language)}`}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-3 h-1 rounded-full bg-[var(--surface)]">
+                      <div
+                        className="h-1 rounded-full bg-[var(--accent)]"
+                        style={{ width: `${Math.min(100, Math.max(0, insight?.utilizationPercent ?? 0))}%` }}
+                      />
+                    </div>
+                    <div className="mt-3 flex items-end justify-between gap-3">
+                      <div className="grid flex-1 grid-cols-3 gap-2 text-[10px]">
+                        <div>
+                          <p className="text-[var(--text-3)]">{t("home.cardLimitAvailable")}</p>
+                          <p className="font-semibold text-[var(--green)]">
+                            {loading ? "—" : formatCurrency(insight?.availableLimit ?? 0, language, currency)}
                           </p>
                         </div>
-                        <div className="glass-dark-inner min-w-0 rounded-[22px] p-3">
-                          <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
-                            {language === "pt" ? "Proxima fatura" : "Next statement"}
+                        <div>
+                          <p className="text-[var(--text-3)]">{t("home.cardLimitUsed")}</p>
+                          <p className="font-semibold text-[var(--text-1)]">
+                            {loading ? "—" : formatCurrency(insight?.usedTotal ?? 0, language, currency)}
                           </p>
-                          <p className="mt-2 break-words text-xl font-semibold leading-tight text-[#E4E7EC] sm:text-2xl">
-                            {formatCurrency(insight?.nextStatement ?? 0, language, currency)}
-                          </p>
-                          <p className="mt-1 text-xs text-[#8B94A6]">
-                            {language === "pt"
-                              ? `Fecha em ${insight?.daysUntilClosing ?? 0} ${getDayWord(insight?.daysUntilClosing ?? 0, language)}`
-                              : `Closes in ${insight?.daysUntilClosing ?? 0} ${getDayWord(insight?.daysUntilClosing ?? 0, language)}`}
+                        </div>
+                        <div>
+                          <p className="text-[var(--text-3)]">{t("home.cardLimitTotal")}</p>
+                          <p className="font-semibold text-[var(--text-1)]">
+                            {loading ? "—" : formatCurrency(Number(card.limit_amount) || 0, language, currency)}
                           </p>
                         </div>
                       </div>
-                      <div className={`mt-4 h-1.5 rounded-full ${isFriendCard ? "bg-[#173038]" : "bg-[#1A2230]"}`}>
-                        <div
-                          className="h-1.5 rounded-full bg-[#5DD6C7]"
-                          style={{
-                            width: `${Math.min(100, Math.max(0, insight?.utilizationPercent ?? 0))}%`,
-                          }}
-                        />
-                      </div>
-                      <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                        <div className="grid min-w-0 flex-1 gap-3 text-[11px] sm:grid-cols-3">
-                          <div className="min-w-0">
-                            <p className={isFriendCard ? "text-[#A8D7D1]" : "text-[#8B94A6]"}>{t("home.cardLimitAvailable")}</p>
-                            <p className="break-words font-semibold leading-tight text-[#5DD6C7]">
-                              {loading ? "..." : formatCurrency(insight?.availableLimit ?? 0, language, currency)}
-                            </p>
-                          </div>
-                          <div className="min-w-0">
-                            <p className={isFriendCard ? "text-[#A8D7D1]" : "text-[#8B94A6]"}>{t("home.cardLimitUsed")}</p>
-                            <p className="break-words font-semibold leading-tight text-[#E4E7EC]">
-                              {loading ? "..." : formatCurrency(insight?.usedTotal ?? 0, language, currency)}
-                            </p>
-                          </div>
-                          <div className="min-w-0">
-                            <p className={isFriendCard ? "text-[#A8D7D1]" : "text-[#8B94A6]"}>{t("home.cardLimitTotal")}</p>
-                            <p className="break-words font-semibold leading-tight text-[#E4E7EC]">
-                              {loading
-                                ? "..."
-                                : formatCurrency(Number(card.limit_amount) || 0, language, currency)}
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveCard(card.id, card.name)}
-                          disabled={deletingCardId === card.id}
-                          className={`glass-dark-pill self-start px-3 py-1 text-[11px] disabled:opacity-60 lg:self-auto ${
-                            isFriendCard
-                              ? "border border-[#2E6C79] text-[#A8D7D1] hover:border-red-500/60 hover:text-red-300"
-                              : "border border-[#2A3140] text-[#8B94A6] hover:border-red-500/60 hover:text-red-400"
-                          }`}
-                        >
-                          {deletingCardId === card.id ? "Removendo..." : "Remover"}
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCard(card.id, card.name)}
+                        disabled={deletingCardId === card.id}
+                        className="ui-btn ui-btn-ghost ui-btn-sm text-[var(--text-3)] hover:text-[var(--red)]"
+                      >
+                        {deletingCardId === card.id ? "..." : "×"}
+                      </button>
                     </div>
                   </div>
                 );
@@ -3109,24 +2691,23 @@ export function HomeScreen() {
           )}
         </div>
 
-        <div className="glass-dark glass-dark-card flex h-full min-h-0 flex-col p-4 sm:col-span-2 lg:col-span-6 sm:p-5">
+        {/* Transactions list */}
+        <div className="ui-card flex h-full min-h-0 flex-col p-5 sm:col-span-2 lg:col-span-12">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-[#C7CEDA]">{t("transactions.title")}</p>
-            <span className="glass-dark-pill px-3 py-1 text-[11px] text-[#9AA3B2]">
-              {t("transactions.monthSummary")}
-            </span>
+            <p className="text-sm font-semibold text-[var(--text-1)]">{t("transactions.title")}</p>
+            <span className="ui-badge ui-badge-neutral">{t("transactions.monthSummary")}</span>
           </div>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#8B94A6]">
-            <span>Transacoes do mes</span>
-            <span>{monthTransactions.length}</span>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-3)]">
+            <span>{language === "pt" ? "Transações do mês" : "Month transactions"}</span>
+            <span className="font-semibold text-[var(--text-2)]">{monthTransactions.length}</span>
           </div>
           {monthTransactions.length === 0 ? (
-            <div className="glass-dark-inner flex flex-1 items-center justify-center rounded-[22px] border border-dashed border-white/12 px-4 py-8">
-              <p className="text-xs text-[#8B94A6]">{t("transactions.empty")}</p>
+            <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-[var(--border-bright)] px-4 py-8">
+              <p className="text-xs text-[var(--text-3)]">{t("transactions.empty")}</p>
             </div>
           ) : (
-            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-              <div className="divide-y divide-[#1C2332]">
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="grid gap-1 lg:grid-cols-2 xl:grid-cols-3">
                 {monthTransactions.map((tx) => {
                   const isIncome = tx.type === "income";
                   const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
@@ -3135,50 +2716,37 @@ export function HomeScreen() {
                   return (
                     <div
                       key={tx.displayId}
-                      className="flex flex-col gap-2 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+                      className="flex items-center justify-between gap-3 rounded-xl px-3 py-2 hover:bg-[var(--surface-3)] transition-colors"
                     >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-[#E4E7EC]">
-                          {tx.description || tx.category || "--"}
-                        </p>
-                        <p className="text-xs text-[#8B94A6]">
-                          {(() => {
-                            if (/^\d{4}-\d{2}-\d{2}$/.test(tx.displayDate)) {
-                              const [y, m, d] = tx.displayDate.split("-").map(Number);
-                              if (y && m && d) {
-                                return new Date(y, m - 1, d).toLocaleDateString(
-                                  language === "pt" ? "pt-BR" : "en-US",
-                                );
-                              }
-                            }
-                            return new Date(tx.displayDate).toLocaleDateString(
-                              language === "pt" ? "pt-BR" : "en-US",
-                            );
-                          })()}
-                        </p>
-                        {isInstallment ? (
-                          <span
-                            className={`mt-1 inline-flex rounded-full border px-2 py-[2px] text-[10px] ${
-                              paidInstallments >= totalInstallments
-                                ? "border-emerald-500/40 text-emerald-300"
-                                : "border-amber-500/40 text-amber-300"
-                            }`}
-                          >
-                            {paidInstallments >= totalInstallments ? "Pago" : "Em aberto"}
-                          </span>
-                        ) : null}
-                        {tx.isBudgetCarryover ? (
-                          <span className="mt-1 inline-flex rounded-full border border-[#5DA7FF]/40 bg-[#122033] px-2 py-[2px] text-[10px] text-[#9DC4FF]">
-                            {t("transactions.nextMonthSalary")}
-                          </span>
-                        ) : null}
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
+                        <div className={`h-2 w-2 shrink-0 rounded-full ${isIncome ? "bg-[var(--green)]" : "bg-[var(--red)]"}`} />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-[var(--text-1)]">
+                            {tx.description || tx.category || "--"}
+                          </p>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                            <span className="text-[10px] text-[var(--text-3)]">
+                              {(() => {
+                                if (/^\d{4}-\d{2}-\d{2}$/.test(tx.displayDate)) {
+                                  const [y, m, d] = tx.displayDate.split("-").map(Number);
+                                  if (y && m && d) return new Date(y, m - 1, d).toLocaleDateString(language === "pt" ? "pt-BR" : "en-US");
+                                }
+                                return new Date(tx.displayDate).toLocaleDateString(language === "pt" ? "pt-BR" : "en-US");
+                              })()}
+                            </span>
+                            {isInstallment ? (
+                              <span className={`ui-badge ${paidInstallments >= totalInstallments ? "ui-badge-income" : "ui-badge-warning"}`}>
+                                {paidInstallments >= totalInstallments ? "Pago" : "Em aberto"}
+                              </span>
+                            ) : null}
+                            {tx.isBudgetCarryover ? (
+                              <span className="ui-badge ui-badge-accent">{t("transactions.nextMonthSalary")}</span>
+                            ) : null}
+                          </div>
+                        </div>
                       </div>
-                      <span
-                        className={`shrink-0 text-sm font-semibold sm:text-right ${
-                          isIncome ? "text-[#4FC3A1]" : "text-[#E36B6B]"
-                        }`}
-                      >
-                        {isIncome ? "+" : "-"} {formatCurrency(tx.displayAmount, language, currency)}
+                      <span className={`ui-amount shrink-0 text-sm ${isIncome ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                        {isIncome ? "+" : "-"}{formatCurrency(tx.displayAmount, language, currency)}
                       </span>
                     </div>
                   );
@@ -3188,24 +2756,19 @@ export function HomeScreen() {
           )}
         </div>
 
-        <div className="glass-dark glass-dark-card p-5 sm:col-span-2 lg:col-span-12">
+        {/* Card payment reminders */}
+        <div className="ui-card p-5 sm:col-span-2 lg:col-span-12">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-[#C7CEDA]">
-                {t("home.cardReminderTitle")}
-              </p>
-              <p className="text-xs text-[#8B94A6]">
-                {t("home.cardReminderSubtitle")}
-              </p>
+              <p className="text-sm font-semibold text-[var(--text-1)]">{t("home.cardReminderTitle")}</p>
+              <p className="text-xs text-[var(--text-3)]">{t("home.cardReminderSubtitle")}</p>
             </div>
-            <span className="glass-dark-pill px-3 py-1 text-[11px] text-[#9AA3B2]">
-              {cardReminders.length}
-            </span>
+            <span className="ui-badge ui-badge-neutral">{cardReminders.length}</span>
           </div>
           {cards.length === 0 ? (
-            <p className="text-xs text-[#8B94A6]">{t("home.noCards")}</p>
+            <p className="text-xs text-[var(--text-3)]">{t("home.noCards")}</p>
           ) : cardReminders.length === 0 ? (
-            <p className="text-xs text-[#8B94A6]">{t("home.cardReminderEmpty")}</p>
+            <p className="text-xs text-[var(--text-3)]">{t("home.cardReminderEmpty")}</p>
           ) : (
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
               {cardReminders.map((card) => {
@@ -3215,54 +2778,36 @@ export function HomeScreen() {
                     key={card.id}
                     className={`rounded-xl border px-4 py-3 ${
                       isExpired
-                        ? "border-red-500/35 bg-[#261419]"
-                        : "border-amber-500/35 bg-[#241E12]"
+                        ? "border-[var(--red)] border-opacity-30 bg-[var(--red-dim)]"
+                        : "border-[var(--amber)] border-opacity-30 bg-[var(--amber-dim)]"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-[#E4E7EC]">{card.name}</p>
+                        <p className="text-sm font-semibold text-[var(--text-1)]">{card.name}</p>
                         {card.owner_type === "friend" && card.friend_name ? (
-                          <p className="mt-1 text-[11px] text-[#A8B2C3]">
+                          <p className="mt-0.5 text-[11px] text-[var(--text-3)]">
                             {t("home.friendCardOwner")}: {card.friend_name}
                           </p>
                         ) : null}
-                        <p className="mt-1 text-[11px] text-[#A8B2C3]">
-                          {t("cards.closes")} {card.closingDay} - {t("cards.due")} {card.dueDay}
+                        <p className="mt-0.5 text-[11px] text-[var(--text-3)]">
+                          {t("cards.closes")} {card.closingDay} · {t("cards.due")} {card.dueDay}
                         </p>
                       </div>
-                      <span
-                        className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                          isExpired
-                            ? "border-red-500/50 text-red-300"
-                            : "border-amber-500/50 text-amber-300"
-                        }`}
-                      >
-                        {isExpired
-                          ? t("home.cardReminderExpiredBadge")
-                          : t("home.cardReminderClosedBadge")}
+                      <span className={`ui-badge ${isExpired ? "ui-badge-expense" : "ui-badge-warning"}`}>
+                        {isExpired ? t("home.cardReminderExpiredBadge") : t("home.cardReminderClosedBadge")}
                       </span>
                     </div>
                     <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
-                      <p
-                        className={`text-xs ${
-                          isExpired ? "text-red-200" : "text-amber-200"
-                        }`}
-                      >
-                        {isExpired
-                          ? t("home.cardReminderExpiredSince")
-                          : t("home.cardReminderClosedSince")}{" "}
+                      <p className={`text-xs ${isExpired ? "text-[var(--red)]" : "text-[var(--amber)]"}`}>
+                        {isExpired ? t("home.cardReminderExpiredSince") : t("home.cardReminderClosedSince")}{" "}
                         {card.days} {getDayWord(card.days, language)}
                       </p>
                       <button
                         type="button"
                         onClick={() => handleMarkCardReminderPaid(card)}
                         disabled={payingReminderCardId === card.id}
-                        className={`rounded-full border px-3 py-1 text-[11px] font-medium transition ${
-                          isExpired
-                            ? "border-red-500/55 bg-red-500/10 text-red-100 hover:border-red-400"
-                            : "border-amber-500/55 bg-amber-500/10 text-amber-100 hover:border-amber-400"
-                        } disabled:cursor-not-allowed disabled:opacity-60`}
+                        className={`ui-btn ui-btn-sm ${isExpired ? "ui-btn-danger" : "ui-btn-secondary"}`}
                       >
                         {payingReminderCardId === card.id
                           ? t("home.cardReminderPaying")

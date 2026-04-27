@@ -29,6 +29,7 @@ type LegacyCard = Omit<Card, "owner_type" | "friend_name">;
 
 type Props = {
   entryType: string;
+  onClose?: () => void;
 };
 
 function toDateString(date: Date) {
@@ -57,7 +58,7 @@ function hydrateLegacyCards(cards: LegacyCard[]): Card[] {
   }));
 }
 
-export function NewEntryScreen({ entryType }: Props) {
+export function NewEntryScreen({ entryType, onClose }: Props) {
   const { language, t } = useLanguage();
   const { currency } = useCurrency();
   const { user } = useAuth();
@@ -274,8 +275,10 @@ export function NewEntryScreen({ entryType }: Props) {
     setSaving(false);
     setSaved(true);
     window.dispatchEvent(new Event("data-refresh"));
-    setTimeout(() => setSaved(false), 2000);
-    router.back();
+    setTimeout(() => {
+      setSaved(false);
+      if (onClose) onClose(); else router.back();
+    }, 800);
   }
 
   function resetCreateCardForm() {
@@ -401,340 +404,163 @@ export function NewEntryScreen({ entryType }: Props) {
   }, [date, language]);
 
   return (
-    <div className="min-h-screen bg-[#0D0F14] px-6 py-6 text-slate-50">
-      <div className="mx-auto flex w-full max-w-[680px] flex-col gap-5">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="flex items-center gap-2 text-xs text-[#9CA3AF]"
-        >
-          <AppIcon name="arrow-left" size={14} />
-          Voltar
-        </button>
-
-        <div className="space-y-1">
-          <p className="text-[11px] uppercase tracking-[0.2em] text-[#7F8694]">
-            {t("newEntry.title")}
-          </p>
-          <p className="text-2xl font-semibold text-[#E5E8EF]">
-            {labelForType(entryType, t)}
-          </p>
+    <div className="flex flex-col gap-5">
+      {!onClose ? (
+        <div className="flex items-center gap-3">
+          <button type="button" onClick={() => router.back()} className="ui-btn ui-btn-ghost ui-btn-sm gap-1.5 text-[var(--text-3)]">
+            <AppIcon name="arrow-left" size={14} />
+            {language === "pt" ? "Voltar" : "Back"}
+          </button>
         </div>
+      ) : null}
 
-        <div className="flex flex-col gap-4">
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-[#C7CEDA]">
-              {t("newEntry.amount")}
-            </label>
-            <input
-              value={amount}
-              onChange={(event) => setAmount(formatCentsInput(event.target.value, currency))}
-              placeholder={emptyMoneyValue}
-              inputMode="numeric"
-              pattern="[0-9]*"
-              className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-[#C7CEDA]">
-              {t("newEntry.description")}
-            </label>
-            <input
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder={language === "pt" ? "Ex: Supermercado" : "e.g., Grocery"}
-              className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
-            />
-          </div>
-
-          {!isTransfer ? (
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-[#C7CEDA]">
-                {t("newEntry.category")}
-              </label>
-              <input
-                value={category}
-                onChange={(event) => setCategory(event.target.value)}
-                placeholder={language === "pt" ? "Ex: Alimentacao" : "e.g., Food"}
-                className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
-              />
-            </div>
-          ) : null}
-
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-[#C7CEDA]">
-              {t("newEntry.date")}
-            </label>
-            <input
-              type="date"
-              value={date}
-              onChange={(event) => setDate(event.target.value)}
-              className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
-            />
-            <p className="text-xs text-[#8B94A6]">{displayDate}</p>
-          </div>
-
-          {isCardExpense ? (
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-[#C7CEDA]">
-                {t("newEntry.card")}
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {cards.length === 0 ? (
-                  <span className="text-xs text-[#8B94A6]">
-                    {language === "pt" ? "Nenhum cartao cadastrado." : "No cards registered."}
-                  </span>
-                ) : (
-                  cards.map((card) => (
-                    <button
-                      key={card.id}
-                      type="button"
-                      onClick={() => setCardId(card.id)}
-                      className={`rounded-full border px-3 py-1 text-xs ${
-                        cardId === card.id
-                          ? "border-[#5DD6C7] bg-[#1F2A3A] text-[#C7CEDA]"
-                          : "border-[#2A3140] bg-[#0F141E] text-[#C7CEDA]"
-                      }`}
-                    >
-                      {card.owner_type === "friend" && card.friend_name
-                        ? `${card.name} - ${card.friend_name}`
-                        : card.name}
-                    </button>
-                  ))
-                )}
-                <button
-                  type="button"
-                  onClick={openCreateCardModal}
-                  className="rounded-full border border-dashed border-[#5DD6C7]/70 bg-[#0F141E] px-3 py-1 text-xs text-[#5DD6C7] hover:border-[#5DD6C7] hover:bg-[#1A2230]"
-                >
-                  + {t("newEntry.createCard")}
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          {canBeFixedEntry ? (
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm text-[#C7CEDA]">
-                <input
-                  type="checkbox"
-                  checked={isFixed}
-                  onChange={(event) => setIsFixed(event.target.checked)}
-                  className="h-4 w-4 rounded border-[#2A3140] bg-[#0F141E] text-[#5DD6C7]"
-                />
-                <span>{entryType === "income" ? t("newEntry.fixedIncome") : t("newEntry.fixedExpense")}</span>
-              </label>
-            </div>
-          ) : null}
-
-          {isCardExpense ? (
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm text-[#C7CEDA]">
-                <input
-                  type="checkbox"
-                  checked={isInstallment}
-                  onChange={(event) => setIsInstallment(event.target.checked)}
-                  className="h-4 w-4 rounded border-[#2A3140] bg-[#0F141E] text-[#5DD6C7]"
-                />
-                <span>{language === "pt" ? "Compra parcelada" : "Installments"}</span>
-              </label>
-              {isInstallment ? (
-                <input
-                  value={installmentTotal}
-                  onChange={(event) => setInstallmentTotal(event.target.value)}
-                  placeholder={language === "pt" ? "Numero de parcelas" : "Installment count"}
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
-                />
-              ) : null}
-            </div>
-          ) : null}
-
-          {needsAccount || isTransfer ? (
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-[#C7CEDA]">
-                {isTransfer ? t("newEntry.fromAccount") : t("newEntry.account")}
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {accounts.length === 0 ? (
-                  <span className="text-xs text-[#8B94A6]">
-                    {language === "pt" ? "Nenhuma conta cadastrada." : "No accounts registered."}
-                  </span>
-                ) : (
-                  accounts.map((account) => (
-                    <button
-                      key={account.id}
-                      type="button"
-                      onClick={() => setAccountId(account.id)}
-                      className={`rounded-full border px-3 py-1 text-xs ${
-                        accountId === account.id
-                          ? "border-[#5DD6C7] bg-[#1F2A3A] text-[#C7CEDA]"
-                          : "border-[#2A3140] bg-[#0F141E] text-[#C7CEDA]"
-                      }`}
-                    >
-                      {account.name}
-                    </button>
-                  ))
-                )}
-                {!isTransfer ? (
-                  <button
-                    type="button"
-                    onClick={openCreateCardModal}
-                    className="rounded-full border border-dashed border-[#5DD6C7]/70 bg-[#0F141E] px-3 py-1 text-xs text-[#5DD6C7] hover:border-[#5DD6C7] hover:bg-[#1A2230]"
-                  >
-                    + {t("newEntry.createCard")}
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-
-          {isTransfer ? (
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-[#C7CEDA]">
-                {t("newEntry.toAccount")}
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {accounts.length === 0 ? (
-                  <span className="text-xs text-[#8B94A6]">
-                    {language === "pt" ? "Nenhuma conta cadastrada." : "No accounts registered."}
-                  </span>
-                ) : (
-                  accounts.map((account) => (
-                    <button
-                      key={account.id}
-                      type="button"
-                      onClick={() => setToAccountId(account.id)}
-                      className={`rounded-full border px-3 py-1 text-xs ${
-                        toAccountId === account.id
-                          ? "border-[#5DD6C7] bg-[#1F2A3A] text-[#C7CEDA]"
-                          : "border-[#2A3140] bg-[#0F141E] text-[#C7CEDA]"
-                      }`}
-                    >
-                      {account.name}
-                    </button>
-                  ))
-                )}
-              </div>
-            </div>
-          ) : null}
-        </div>
-
-        {errorMsg ? <p className="text-xs text-red-400">{errorMsg}</p> : null}
-        {saved ? <p className="text-xs text-[#5DD6C7]">{t("newEntry.saved")}</p> : null}
-
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving}
-          className="w-full rounded-xl bg-[#E6EDF3] py-3 text-sm font-semibold text-[#0C1018] disabled:opacity-60"
-        >
-          {saving ? t("common.saving") : t("common.save")}
-        </button>
+      <div>
+        <p className="ui-eyebrow">{t("newEntry.title")}</p>
+        <p className="mt-1 text-xl font-semibold text-[var(--text-1)]">{labelForType(entryType, t)}</p>
       </div>
 
-      {createCardOpen ? (
-        <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4"
-        >
-          <div
-            className="w-full max-w-md rounded-2xl border border-[#1E232E] bg-[#121621] p-5"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm font-semibold text-[#E5E8EF]">
-                {t("newEntry.createCardTitle")}
-              </p>
-              <button
-                type="button"
-                onClick={closeCreateCardModal}
-                className="text-xs text-[#8B94A6]"
-              >
-                {t("common.cancel")}
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1.5">
+          <label className="ui-label">{t("newEntry.amount")}</label>
+          <input value={amount} onChange={(e) => setAmount(formatCentsInput(e.target.value, currency))} placeholder={emptyMoneyValue} inputMode="numeric" pattern="[0-9]*" className="ui-input text-lg font-semibold" />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="ui-label">{t("newEntry.description")}</label>
+          <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={language === "pt" ? "Ex: Supermercado" : "e.g., Grocery"} className="ui-input" />
+        </div>
+
+        {!isTransfer ? (
+          <div className="flex flex-col gap-1.5">
+            <label className="ui-label">{t("newEntry.category")}</label>
+            <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder={language === "pt" ? "Ex: Alimentação" : "e.g., Food"} className="ui-input" />
+          </div>
+        ) : null}
+
+        <div className="flex flex-col gap-1.5">
+          <label className="ui-label">{t("newEntry.date")}</label>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="ui-input" />
+          <p className="text-xs text-[var(--text-3)]">{displayDate}</p>
+        </div>
+
+        {isCardExpense ? (
+          <div className="flex flex-col gap-1.5">
+            <label className="ui-label">{t("newEntry.card")}</label>
+            <div className="flex flex-wrap gap-2">
+              {cards.length === 0 ? (
+                <span className="text-xs text-[var(--text-3)]">{language === "pt" ? "Nenhum cartão cadastrado." : "No cards registered."}</span>
+              ) : cards.map((card) => (
+                <button key={card.id} type="button" onClick={() => setCardId(card.id)}
+                  className={`ui-btn ui-btn-sm ${cardId === card.id ? "ui-btn-primary" : "ui-btn-secondary"}`}>
+                  {card.owner_type === "friend" && card.friend_name ? `${card.name} · ${card.friend_name}` : card.name}
+                </button>
+              ))}
+              <button type="button" onClick={openCreateCardModal} className="ui-btn ui-btn-secondary ui-btn-sm border-dashed">
+                + {t("newEntry.createCard")}
               </button>
             </div>
+          </div>
+        ) : null}
 
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8B94A6]">
-                  {t("cards.ownerLabel")}
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setNewCardOwnerType("self")}
-                    className={`rounded-full border px-3 py-1 text-xs ${
-                      newCardOwnerType === "self"
-                        ? "border-[#5DD6C7] bg-[#173038] text-[#D7FBF6]"
-                        : "border-[#2A3140] bg-[#0F141E] text-[#A8B2C3]"
-                    }`}
-                  >
-                    {t("cards.ownerSelf")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNewCardOwnerType("friend")}
-                    className={`rounded-full border px-3 py-1 text-xs ${
-                      newCardOwnerType === "friend"
-                        ? "border-[#5DD6C7] bg-[#173038] text-[#D7FBF6]"
-                        : "border-[#2A3140] bg-[#0F141E] text-[#A8B2C3]"
-                    }`}
-                  >
-                    {t("cards.ownerFriend")}
-                  </button>
+        {canBeFixedEntry ? (
+          <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface-3)] px-4 py-3">
+            <span className="text-sm text-[var(--text-2)]">
+              {entryType === "income" ? t("newEntry.fixedIncome") : t("newEntry.fixedExpense")}
+            </span>
+            <button type="button" onClick={() => setIsFixed((v) => !v)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isFixed ? "bg-[var(--accent)]" : "bg-[var(--surface-3)] border border-[var(--border-bright)]"}`}>
+              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${isFixed ? "translate-x-4" : "translate-x-0.5"}`} />
+            </button>
+          </div>
+        ) : null}
+
+        {isCardExpense ? (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface-3)] px-4 py-3">
+              <span className="text-sm text-[var(--text-2)]">{language === "pt" ? "Compra parcelada" : "Installments"}</span>
+              <button type="button" onClick={() => setIsInstallment((v) => !v)}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isInstallment ? "bg-[var(--accent)]" : "bg-[var(--surface-3)] border border-[var(--border-bright)]"}`}>
+                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${isInstallment ? "translate-x-4" : "translate-x-0.5"}`} />
+              </button>
+            </div>
+            {isInstallment ? (
+              <input value={installmentTotal} onChange={(e) => setInstallmentTotal(e.target.value)} placeholder={language === "pt" ? "Número de parcelas" : "Installment count"} inputMode="numeric" pattern="[0-9]*" className="ui-input" />
+            ) : null}
+          </div>
+        ) : null}
+
+        {needsAccount || isTransfer ? (
+          <div className="flex flex-col gap-1.5">
+            <label className="ui-label">{isTransfer ? t("newEntry.fromAccount") : t("newEntry.account")}</label>
+            <div className="flex flex-wrap gap-2">
+              {accounts.length === 0 ? (
+                <span className="text-xs text-[var(--text-3)]">{language === "pt" ? "Nenhuma conta cadastrada." : "No accounts registered."}</span>
+              ) : accounts.map((account) => (
+                <button key={account.id} type="button" onClick={() => setAccountId(account.id)}
+                  className={`ui-btn ui-btn-sm ${accountId === account.id ? "ui-btn-primary" : "ui-btn-secondary"}`}>
+                  {account.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {isTransfer ? (
+          <div className="flex flex-col gap-1.5">
+            <label className="ui-label">{t("newEntry.toAccount")}</label>
+            <div className="flex flex-wrap gap-2">
+              {accounts.length === 0 ? (
+                <span className="text-xs text-[var(--text-3)]">{language === "pt" ? "Nenhuma conta cadastrada." : "No accounts registered."}</span>
+              ) : accounts.map((account) => (
+                <button key={account.id} type="button" onClick={() => setToAccountId(account.id)}
+                  className={`ui-btn ui-btn-sm ${toAccountId === account.id ? "ui-btn-primary" : "ui-btn-secondary"}`}>
+                  {account.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      {errorMsg ? <p className="text-xs text-[var(--red)]">{errorMsg}</p> : null}
+      {saved ? <p className="text-xs text-[var(--green)]">{t("newEntry.saved")}</p> : null}
+
+      <button type="button" onClick={handleSave} disabled={saving} className="ui-btn ui-btn-primary ui-btn-lg w-full">
+        {saving ? t("common.saving") : t("common.save")}
+      </button>
+
+      {/* Create card modal */}
+      {createCardOpen ? (
+        <div className="ui-modal-backdrop fixed inset-0 z-40 flex items-end justify-center sm:items-center" onClick={closeCreateCardModal}>
+          <div className="ui-card-2 ui-slide-up w-full max-w-md rounded-t-2xl p-5 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-5 flex items-center justify-between">
+              <p className="text-sm font-semibold text-[var(--text-1)]">{t("newEntry.createCardTitle")}</p>
+              <button type="button" onClick={closeCreateCardModal} className="ui-btn ui-btn-ghost ui-btn-sm">{t("common.cancel")}</button>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="ui-label">{t("cards.ownerLabel")}</label>
+                <div className="flex gap-2">
+                  {(["self", "friend"] as const).map((ownerType) => (
+                    <button key={ownerType} type="button" onClick={() => setNewCardOwnerType(ownerType)}
+                      className={`ui-btn ui-btn-sm flex-1 ${newCardOwnerType === ownerType ? "ui-btn-primary" : "ui-btn-secondary"}`}>
+                      {ownerType === "self" ? t("cards.ownerSelf") : t("cards.ownerFriend")}
+                    </button>
+                  ))}
                 </div>
               </div>
-              <input
-                value={newCardName}
-                onChange={(event) => setNewCardName(event.target.value)}
-                placeholder={t("cards.namePlaceholder")}
-                className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
-              />
+              <input value={newCardName} onChange={(e) => setNewCardName(e.target.value)} placeholder={t("cards.namePlaceholder")} className="ui-input" />
               {newCardOwnerType === "friend" ? (
-                <input
-                  value={newCardFriendName}
-                  onChange={(event) => setNewCardFriendName(event.target.value)}
-                  placeholder={t("cards.friendNamePlaceholder")}
-                  className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
-                />
+                <input value={newCardFriendName} onChange={(e) => setNewCardFriendName(e.target.value)} placeholder={t("cards.friendNamePlaceholder")} className="ui-input" />
               ) : null}
-              <input
-                value={newCardLimitAmount}
-                onChange={(event) =>
-                  setNewCardLimitAmount(formatCentsInput(event.target.value, currency))
-                }
-                placeholder={t("cards.limitPlaceholder")}
-                inputMode="numeric"
-                pattern="[0-9]*"
-                className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
-              />
-              <input
-                value={newCardClosingDay}
-                onChange={(event) => setNewCardClosingDay(event.target.value)}
-                placeholder={t("cards.closingDayPlaceholder")}
-                inputMode="numeric"
-                pattern="[0-9]*"
-                className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
-              />
-              <input
-                value={newCardDueDay}
-                onChange={(event) => setNewCardDueDay(event.target.value)}
-                placeholder={t("cards.dueDayPlaceholder")}
-                inputMode="numeric"
-                pattern="[0-9]*"
-                className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
-              />
-              {createCardError ? (
-                <p className="text-xs text-red-400">{createCardError}</p>
-              ) : null}
-              <button
-                type="button"
-                onClick={handleCreateCard}
-                disabled={createCardSaving}
-                className="w-full rounded-xl bg-[#E6EDF3] py-3 text-sm font-semibold text-[#0C1018] disabled:opacity-60"
-              >
+              <input value={newCardLimitAmount} onChange={(e) => setNewCardLimitAmount(formatCentsInput(e.target.value, currency))} placeholder={t("cards.limitPlaceholder")} inputMode="numeric" pattern="[0-9]*" className="ui-input" />
+              <div className="grid grid-cols-2 gap-3">
+                <input value={newCardClosingDay} onChange={(e) => setNewCardClosingDay(e.target.value)} placeholder={t("cards.closingDayPlaceholder")} inputMode="numeric" pattern="[0-9]*" className="ui-input" />
+                <input value={newCardDueDay} onChange={(e) => setNewCardDueDay(e.target.value)} placeholder={t("cards.dueDayPlaceholder")} inputMode="numeric" pattern="[0-9]*" className="ui-input" />
+              </div>
+              {createCardError ? <p className="text-xs text-[var(--red)]">{createCardError}</p> : null}
+              <button type="button" onClick={handleCreateCard} disabled={createCardSaving} className="ui-btn ui-btn-primary ui-btn-lg w-full">
                 {createCardSaving ? t("common.saving") : t("newEntry.createCardSubmit")}
               </button>
             </div>

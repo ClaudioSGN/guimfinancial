@@ -62,10 +62,7 @@ export function TransactionRow({ tx }: Props) {
 
     const { error } = await supabase
       .from("transactions")
-      .update({
-        installments_paid: newPaid,
-        is_paid: newIsPaid,
-      })
+      .update({ installments_paid: newPaid, is_paid: newIsPaid })
       .eq("id", tx.id);
 
     setSaving(false);
@@ -83,9 +80,7 @@ export function TransactionRow({ tx }: Props) {
     if (!isExpense || isInstallmentExpense || saving) return;
 
     setSaving(true);
-
     const { error } = await supabase.from("transactions").update({ is_paid: !tx.isPaid }).eq("id", tx.id);
-
     setSaving(false);
 
     if (error) {
@@ -128,7 +123,7 @@ export function TransactionRow({ tx }: Props) {
 
     const parsedValue = parseCentsInput(editValue);
     if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
-      setEditError("Valor invalido.");
+      setEditError("Valor inválido.");
       return;
     }
 
@@ -154,7 +149,7 @@ export function TransactionRow({ tx }: Props) {
 
     if (error) {
       console.error("Erro ao editar transacao:", error);
-      setEditError("Erro ao editar transacao.");
+      setEditError("Erro ao editar transação.");
       return;
     }
 
@@ -165,7 +160,7 @@ export function TransactionRow({ tx }: Props) {
   async function handleDelete() {
     if (deleting) return;
 
-    const ok = window.confirm("Tem certeza que deseja apagar esta transacao?");
+    const ok = window.confirm("Tem certeza que deseja apagar esta transação?");
     if (!ok) return;
 
     setDeleting(true);
@@ -174,7 +169,7 @@ export function TransactionRow({ tx }: Props) {
 
     if (error) {
       console.error("Erro ao apagar transacao:", error);
-      alert("Erro ao apagar transacao.");
+      alert("Erro ao apagar transação.");
       return;
     }
 
@@ -183,142 +178,195 @@ export function TransactionRow({ tx }: Props) {
 
   return (
     <>
-      <div className="app-surface app-card-soft flex flex-col gap-4 p-4 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full px-3 py-1 text-[10px] font-semibold ${isIncome ? "bg-[#e5f7f1] text-[#23916f]" : "bg-[#ffe8ea] text-[#d46770]"}`}>
-              {isIncome ? "Receita" : "Despesa"}
-            </span>
-            {bankName ? <span className="app-pill px-2.5 py-1 text-[10px]">{bankName}</span> : null}
-            {tx.category ? <span className="app-pill px-2.5 py-1 text-[10px]">{tx.category}</span> : null}
-          </div>
+      <div className="group flex items-start justify-between gap-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 transition-colors hover:border-[var(--border-bright)] hover:bg-[var(--surface-2)]">
+        {/* Left: type indicator + info */}
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          {/* Color dot */}
+          <div
+            className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${isIncome ? "bg-[var(--green)]" : "bg-[var(--red)]"}`}
+          />
 
-          <p className="mt-3 text-sm font-semibold text-[#122033]">{tx.description || "(sem descricao)"}</p>
-          <p className="mt-1 text-[11px] text-[#6d7c92]">
-            {new Date(tx.date).toLocaleDateString("pt-BR")}
-          </p>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-[var(--text-1)]">
+              {tx.description || "(sem descrição)"}
+            </p>
 
-          {isInstallmentExpense ? (
-            <div className="mt-3 space-y-1 text-[11px] text-[#6d7c92]">
-              <p>
-                Parcelado em <span className="font-semibold text-[#122033]">{totalInstallments}x de {formatCurrency(perInstallment)}</span>
-              </p>
-              <p>
-                Ja pagas <span className="font-semibold text-[#122033]">{tx.installmentsPaid}/{totalInstallments}</span>
-              </p>
-              {remainingInstallments > 0 ? (
-                <p>
-                  Restam <span className="font-semibold text-[#c5873b]">{remainingInstallments}x ({formatCurrency(remainingAmount)})</span>
-                </p>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-[var(--text-3)]">
+                {new Date(tx.date).toLocaleDateString("pt-BR")}
+              </span>
+              {bankName ? (
+                <span className="ui-badge ui-badge-neutral">{bankName}</span>
+              ) : null}
+              {tx.category ? (
+                <span className="ui-badge ui-badge-neutral">{tx.category}</span>
+              ) : null}
+              {isInstallmentExpense ? (
+                <span className="ui-badge ui-badge-warning">
+                  {tx.installmentsPaid}/{totalInstallments}x
+                </span>
+              ) : null}
+              {!isInstallmentExpense && isExpense && (
+                <span className={`ui-badge ${tx.isPaid ? "ui-badge-income" : "ui-badge-warning"}`}>
+                  {tx.isPaid ? "Pago" : "Em aberto"}
+                </span>
+              )}
+              {allPaid ? (
+                <span className="ui-badge ui-badge-income">Concluído</span>
               ) : null}
             </div>
-          ) : null}
 
-          {!isInstallmentExpense && isExpense ? (
-            <p className="mt-3 text-[11px] text-[#6d7c92]">
-              Estado <span className={tx.isPaid ? "font-semibold text-[#23916f]" : "font-semibold text-[#c5873b]"}>{tx.isPaid ? "Pago" : "Em aberto"}</span>
-            </p>
-          ) : null}
+            {isInstallmentExpense && remainingInstallments > 0 ? (
+              <p className="mt-1.5 text-xs text-[var(--text-3)]">
+                Restam{" "}
+                <span className="font-medium text-[var(--amber)]">
+                  {remainingInstallments}x ({formatCurrency(remainingAmount)})
+                </span>
+              </p>
+            ) : null}
+          </div>
         </div>
 
-        <div className="flex shrink-0 flex-col items-start gap-2 md:items-end">
-          <span className={`text-lg font-semibold tracking-[-0.03em] ${isIncome ? "text-[#23916f]" : "text-[#d46770]"}`}>
-            {isIncome ? "+" : "-"} {formatCurrency(tx.value)}
+        {/* Right: amount + actions */}
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <span
+            className={`ui-amount text-sm ${isIncome ? "text-[var(--green)]" : "text-[var(--red)]"}`}
+          >
+            {isIncome ? "+" : "-"}{formatCurrency(tx.value)}
           </span>
 
-          {isInstallmentExpense && remainingInstallments > 0 && (installmentIndex === null || installmentIndex === tx.installmentsPaid) ? (
-            <button type="button" onClick={handleMarkInstallmentPaid} disabled={saving} className="app-button app-button-secondary px-3 py-1.5 text-[11px]">
-              {saving ? "A registar..." : "Registrar parcela"}
-            </button>
-          ) : null}
+          <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+            {isInstallmentExpense && remainingInstallments > 0 && (installmentIndex === null || installmentIndex === tx.installmentsPaid) ? (
+              <button
+                type="button"
+                onClick={handleMarkInstallmentPaid}
+                disabled={saving}
+                className="ui-btn ui-btn-secondary ui-btn-sm"
+              >
+                {saving ? "..." : "Parcela"}
+              </button>
+            ) : null}
 
-          {isInstallmentExpense && allPaid ? (
-            <span className="rounded-full bg-[#e5f7f1] px-3 py-1 text-[10px] font-semibold text-[#23916f]">
-              Parcelas concluidas
-            </span>
-          ) : null}
+            {!isInstallmentExpense && isExpense ? (
+              <button
+                type="button"
+                onClick={handleTogglePaid}
+                disabled={saving}
+                className="ui-btn ui-btn-secondary ui-btn-sm"
+              >
+                {saving ? "..." : tx.isPaid ? "Reabrir" : "Pagar"}
+              </button>
+            ) : null}
 
-          {!isInstallmentExpense && isExpense ? (
-            <button type="button" onClick={handleTogglePaid} disabled={saving} className="app-button app-button-secondary px-3 py-1.5 text-[11px]">
-              {saving ? "A atualizar..." : tx.isPaid ? "Marcar em aberto" : "Marcar como pago"}
-            </button>
-          ) : null}
-
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={openEdit} className="app-button app-button-secondary px-3 py-1.5 text-[11px]">
+            <button
+              type="button"
+              onClick={openEdit}
+              className="ui-btn ui-btn-ghost ui-btn-sm text-[var(--text-2)]"
+            >
               Editar
             </button>
-            <button type="button" onClick={handleDelete} disabled={deleting} className="app-button app-button-secondary px-3 py-1.5 text-[11px] text-[#b45f68]">
-              {deleting ? "A apagar..." : "Apagar"}
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="ui-btn ui-btn-ghost ui-btn-sm text-[var(--red)]"
+            >
+              {deleting ? "..." : "×"}
             </button>
           </div>
         </div>
       </div>
 
+      {/* Edit modal */}
       {editing ? (
-        <div className="app-modal-backdrop fixed inset-0 z-40 flex items-center justify-center px-4">
-          <div className="app-surface app-card w-full max-w-md p-5" onClick={(event) => event.stopPropagation()}>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-[#122033]">Editar transacao</h2>
-              <button type="button" onClick={closeEdit} className="text-xs text-[#69798e]">
+        <div
+          className="ui-modal-backdrop fixed inset-0 z-40 flex items-end justify-center sm:items-center"
+          onClick={closeEdit}
+        >
+          <div
+            className="ui-card-2 ui-slide-up w-full max-w-md rounded-t-2xl p-5 sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-[var(--text-1)]">Editar transação</h2>
+              <button
+                type="button"
+                onClick={closeEdit}
+                className="ui-btn ui-btn-ghost ui-btn-sm"
+              >
                 Fechar
               </button>
             </div>
 
-            <form className="space-y-4" onSubmit={handleEditSubmit}>
-              <div className="space-y-1 text-sm">
-                <label className="text-xs text-[#69798e]">Descricao</label>
-                <input type="text" value={editDescription} onChange={(event) => setEditDescription(event.target.value)} className="app-input px-4 py-3 text-sm" />
+            <form className="flex flex-col gap-3" onSubmit={handleEditSubmit}>
+              <div className="flex flex-col gap-1.5">
+                <label className="ui-label">Descrição</label>
+                <input
+                  type="text"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="ui-input"
+                />
               </div>
 
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="space-y-1">
-                  <label className="text-xs text-[#69798e]">Valor ({currency})</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="ui-label">Valor ({currency})</label>
                   <input
                     type="text"
                     value={editValue}
-                    onChange={(event) => setEditValue(formatCentsInput(event.target.value, currency))}
+                    onChange={(e) => setEditValue(formatCentsInput(e.target.value, currency))}
                     inputMode="numeric"
-                    pattern="[0-9]*"
-                    className="app-input px-4 py-3 text-sm"
+                    className="ui-input"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-[#69798e]">Data</label>
-                  <input type="date" value={editDate} onChange={(event) => setEditDate(event.target.value)} className="app-input px-4 py-3 text-sm" />
+                <div className="flex flex-col gap-1.5">
+                  <label className="ui-label">Data</label>
+                  <input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    className="ui-input"
+                  />
                 </div>
               </div>
 
-              <div className="space-y-1 text-sm">
-                <label className="text-xs text-[#69798e]">Categoria (opcional)</label>
+              <div className="flex flex-col gap-1.5">
+                <label className="ui-label">Categoria (opcional)</label>
                 <input
                   type="text"
                   value={editCategory}
-                  onChange={(event) => setEditCategory(event.target.value)}
-                  className="app-input px-4 py-3 text-sm"
+                  onChange={(e) => setEditCategory(e.target.value)}
                   placeholder="Ex: Mercado, Hardware..."
+                  className="ui-input"
                 />
               </div>
 
               {!isInstallmentExpense && isExpense ? (
-                <div className="flex items-center justify-between rounded-[20px] bg-white/45 px-4 py-3 text-xs">
-                  <span className="text-[#69798e]">Ja esta pago?</span>
+                <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface-3)] px-4 py-3">
+                  <span className="text-sm text-[var(--text-2)]">Já está pago?</span>
                   <button
                     type="button"
-                    onClick={() => setEditIsPaid((value) => !value)}
-                    className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors ${editIsPaid ? "bg-[#73b7ff]" : "bg-[#c4d1e0]"}`}
+                    onClick={() => setEditIsPaid((v) => !v)}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${editIsPaid ? "bg-[var(--accent)]" : "bg-[var(--surface-3)] border border-[var(--border-bright)]"}`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${editIsPaid ? "translate-x-5" : "translate-x-1"}`}
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${editIsPaid ? "translate-x-4" : "translate-x-0.5"}`}
                     />
                   </button>
                 </div>
               ) : null}
 
-              {editError ? <p className="text-xs text-red-500">{editError}</p> : null}
+              {editError ? (
+                <p className="text-xs text-[var(--red)]">{editError}</p>
+              ) : null}
 
-              <button type="submit" disabled={editSaving} className="app-button app-button-primary w-full px-4 py-3 text-sm font-semibold">
-                {editSaving ? "A guardar..." : "Guardar alteracoes"}
+              <button
+                type="submit"
+                disabled={editSaving}
+                className="ui-btn ui-btn-primary ui-btn-lg w-full"
+              >
+                {editSaving ? "A guardar..." : "Guardar alterações"}
               </button>
             </form>
           </div>

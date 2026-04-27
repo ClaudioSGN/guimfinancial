@@ -2375,31 +2375,20 @@ export function InvestmentsScreen() {
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.2em] text-[#7F8694]">
-            {t("investments.title")}
-          </p>
-          <p className="text-xl font-semibold text-[#E5E8EF]">
-            {t("investments.title")}
-          </p>
-          <p className="text-sm text-[#9CA3AF]">{t("investments.subtitle")}</p>
+          <p className="ui-eyebrow">{t("investments.title")}</p>
+          <p className="text-xl font-semibold text-[var(--text-1)]">{t("investments.title")}</p>
+          <p className="text-sm text-[var(--text-3)]">{t("investments.subtitle")}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setFilterOpen(true)}
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-[#1E232E] bg-[#121621] text-[#9AA3B2]"
-          aria-label={t("investments.filterButton")}
-          title={t("investments.filterButton")}
-        >
-          <AppIcon name="filter" size={16} />
+        <button type="button" onClick={() => setFilterOpen(true)} className="ui-btn ui-btn-secondary ui-btn-sm"
+          aria-label={t("investments.filterButton")} title={t("investments.filterButton")}>
+          <AppIcon name="filter" size={14} />
         </button>
       </div>
 
       {investmentFilter.enabled && assetsAboveLimit.length ? (
-        <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3">
-          <p className="text-sm font-semibold text-red-300">
-            {t("investments.warningAboveTitle")}
-          </p>
-          <p className="mt-1 text-xs text-red-200">
+        <div className="rounded-xl border border-[var(--red)] border-opacity-30 bg-[var(--red-dim)] px-4 py-3">
+          <p className="text-sm font-semibold text-[var(--red)]">{t("investments.warningAboveTitle")}</p>
+          <p className="mt-1 text-xs text-[var(--red)]">
             {t("investments.warningAbovePrefix")}{" "}
             {assetsAboveLimit.map((asset) => asset.name || asset.symbol.toUpperCase()).slice(0, 4).join(", ")}
             {assetsAboveLimit.length > 4 ? "..." : ""}.
@@ -2408,75 +2397,59 @@ export function InvestmentsScreen() {
       ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[1.45fr_1fr]">
-        <div className="rounded-2xl border border-[#1E232E] bg-[#121621] p-5">
+        <div className="ui-card p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-[#E5E8EF]">
+              <p className="text-sm font-semibold text-[var(--text-1)]">
                 {language === "pt" ? "Resumo da carteira" : "Portfolio summary"}
               </p>
-              <p className="text-xs text-[#8B94A6]">
-                {language === "pt"
-                  ? "Visao consolidada por moeda dos teus investimentos."
-                  : "Consolidated view by currency of your investments."}
+              <p className="text-xs text-[var(--text-3)]">
+                {language === "pt" ? "Visao consolidada por moeda dos teus investimentos." : "Consolidated view by currency of your investments."}
               </p>
             </div>
             <div className="flex flex-wrap gap-2 text-[11px]">
-              <span className="rounded-full border border-[#2A3344] bg-[#0F121A] px-3 py-1 text-[#9AA3B2]">
+              <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-0.5 text-[var(--text-3)]">
                 {portfolioTotals.assets} {language === "pt" ? "ativos" : "assets"}
               </span>
-              <span className="rounded-full border border-[#2A3344] bg-[#0F121A] px-3 py-1 text-[#9AA3B2]">
+              <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-0.5 text-[var(--text-3)]">
                 {portfolioTotals.categories} {language === "pt" ? "categorias" : "categories"}
               </span>
-              <span className="rounded-full border border-[#235245] bg-[#10241E] px-3 py-1 text-[#7FE3BB]">
+              <span className="rounded-full border border-[var(--green)] border-opacity-30 bg-[var(--green-dim)] px-2.5 py-0.5 text-[var(--green)]">
                 {portfolioTotals.positiveResults} {language === "pt" ? "no lucro" : "in profit"}
               </span>
             </div>
           </div>
 
           {portfolioSummaryByCurrency.length === 0 ? (
-            <div className="mt-4 rounded-2xl border border-dashed border-[#2A3445] bg-[#0F121A] p-5 text-sm text-[#8B94A6]">
+            <div className="mt-4 rounded-xl border border-dashed border-[var(--border)] p-5 text-sm text-[var(--text-3)]">
               {t("investments.empty")}
             </div>
           ) : (
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {portfolioSummaryByCurrency.map((bucket) => {
-                const tone =
-                  bucket.profit >= 0
-                    ? "text-emerald-300 border-emerald-500/25 bg-emerald-500/5"
-                    : "text-rose-300 border-rose-500/25 bg-rose-500/5";
+                const profitTone = bucket.profit >= 0
+                  ? "border-[var(--green)] border-opacity-20 bg-[var(--green-dim)] text-[var(--green)]"
+                  : "border-[var(--red)] border-opacity-20 bg-[var(--red-dim)] text-[var(--red)]";
                 return (
-                  <div
-                    key={`summary-${bucket.currency}`}
-                    className="rounded-2xl border border-[#1C2332] bg-[#0F121A] p-4"
-                  >
+                  <div key={`summary-${bucket.currency}`} className="ui-card-inner p-4">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-[#E5E8EF]">{bucket.currency}</p>
-                      <span className="rounded-full border border-[#2A3344] bg-[#111723] px-2.5 py-1 text-[11px] text-[#9AA3B2]">
+                      <p className="text-sm font-semibold text-[var(--text-1)]">{bucket.currency}</p>
+                      <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-0.5 text-[11px] text-[var(--text-3)]">
                         {bucket.assets} {language === "pt" ? "ativos" : "assets"}
                       </span>
                     </div>
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-xl border border-[#1C2332] bg-[#111723] p-3">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
-                          {language === "pt" ? "Investido" : "Invested"}
-                        </p>
-                        <p className="mt-2 text-lg font-semibold text-[#E5E8EF]">
-                          {formatCurrency(bucket.invested, language, bucket.currency)}
-                        </p>
+                      <div className="ui-card-inner p-3">
+                        <p className="ui-eyebrow">{language === "pt" ? "Investido" : "Invested"}</p>
+                        <p className="mt-2 text-lg font-semibold text-[var(--text-1)]">{formatCurrency(bucket.invested, language, bucket.currency)}</p>
                       </div>
-                      <div className="rounded-xl border border-[#1C2332] bg-[#111723] p-3">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
-                          {language === "pt" ? "Valor atual" : "Current value"}
-                        </p>
-                        <p className="mt-2 text-lg font-semibold text-[#E5E8EF]">
-                          {formatCurrency(bucket.current, language, bucket.currency)}
-                        </p>
+                      <div className="ui-card-inner p-3">
+                        <p className="ui-eyebrow">{language === "pt" ? "Valor atual" : "Current value"}</p>
+                        <p className="mt-2 text-lg font-semibold text-[var(--text-1)]">{formatCurrency(bucket.current, language, bucket.currency)}</p>
                       </div>
                     </div>
-                    <div className={`mt-3 rounded-xl border p-3 ${tone}`}>
-                      <p className="text-[11px] uppercase tracking-[0.18em] opacity-80">
-                        {language === "pt" ? "Resultado" : "Result"}
-                      </p>
+                    <div className={`mt-3 rounded-xl border p-3 ${profitTone}`}>
+                      <p className="text-[11px] uppercase tracking-[0.18em] opacity-80">{language === "pt" ? "Resultado" : "Result"}</p>
                       <p className="mt-1 text-sm font-semibold">
                         {bucket.profit >= 0 ? "+" : "-"}
                         {formatCurrency(Math.abs(bucket.profit), language, bucket.currency)}
@@ -2489,35 +2462,26 @@ export function InvestmentsScreen() {
           )}
         </div>
 
-        <div className="rounded-2xl border border-[#1E232E] bg-[#121621] p-5">
-          <div>
-            <p className="text-sm font-semibold text-[#E5E8EF]">
-              {language === "pt" ? "Distribuicao por categoria" : "Allocation by category"}
-            </p>
-            <p className="text-xs text-[#8B94A6]">
-              {language === "pt"
-                ? "Onde a carteira esta mais concentrada agora."
-                : "Where the portfolio is most concentrated right now."}
-            </p>
-          </div>
+        <div className="ui-card p-5">
+          <p className="text-sm font-semibold text-[var(--text-1)]">
+            {language === "pt" ? "Distribuicao por categoria" : "Allocation by category"}
+          </p>
+          <p className="text-xs text-[var(--text-3)]">
+            {language === "pt" ? "Onde a carteira esta mais concentrada agora." : "Where the portfolio is most concentrated right now."}
+          </p>
 
           {categoryAllocation.length === 0 ? (
-            <p className="mt-4 text-sm text-[#8B94A6]">{t("investments.empty")}</p>
+            <p className="mt-4 text-sm text-[var(--text-3)]">{t("investments.empty")}</p>
           ) : (
             <div className="mt-4 space-y-3">
               {categoryAllocation.slice(0, 6).map((row) => (
                 <div key={`allocation-${row.key}`} className="space-y-1.5">
                   <div className="flex items-center justify-between gap-3 text-xs">
-                    <span className="font-medium text-[#E5E8EF]">{row.label}</span>
-                    <span className="text-[#8B94A6]">
-                      {formatPercent(row.share, language)}
-                    </span>
+                    <span className="font-medium text-[var(--text-1)]">{row.label}</span>
+                    <span className="text-[var(--text-3)]">{formatPercent(row.share, language)}</span>
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-[#0F121A]">
-                    <div
-                      className="h-2 rounded-full bg-[#5DD6C7]"
-                      style={{ width: `${Math.max(4, Math.min(row.share, 100))}%` }}
-                    />
+                  <div className="h-2 overflow-hidden rounded-full bg-[var(--surface)]">
+                    <div className="h-2 rounded-full bg-[var(--accent)]" style={{ width: `${Math.max(4, Math.min(row.share, 100))}%` }} />
                   </div>
                 </div>
               ))}
@@ -2526,47 +2490,31 @@ export function InvestmentsScreen() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-[#1E232E] bg-[#121621] p-5">
+      <div className="ui-card p-5">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-[#E5E8EF]">
+            <p className="text-sm font-semibold text-[var(--text-1)]">
               {language === "pt" ? "Maiores posicoes" : "Top holdings"}
             </p>
-            <p className="text-xs text-[#8B94A6]">
-              {language === "pt"
-                ? "Os ativos com maior peso dentro da carteira."
-                : "Assets with the biggest weight in the portfolio."}
+            <p className="text-xs text-[var(--text-3)]">
+              {language === "pt" ? "Os ativos com maior peso dentro da carteira." : "Assets with the biggest weight in the portfolio."}
             </p>
           </div>
         </div>
         {topHoldings.length === 0 ? (
-          <p className="text-sm text-[#8B94A6]">{t("investments.empty")}</p>
+          <p className="text-sm text-[var(--text-3)]">{t("investments.empty")}</p>
         ) : (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             {topHoldings.map((asset) => (
-              <div
-                key={`top-${asset.id}`}
-                className="rounded-2xl border border-[#1C2332] bg-[#0F121A] p-4"
-              >
-                <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
-                  {asset.typeLabel}
+              <div key={`top-${asset.id}`} className="ui-card-inner p-4">
+                <p className="ui-eyebrow">{asset.typeLabel}</p>
+                <p className="mt-2 text-sm font-semibold text-[var(--text-1)]">{asset.name}</p>
+                <p className="mt-3 text-lg font-semibold text-[var(--text-1)]">{formatCurrency(asset.current, language, asset.currency)}</p>
+                <p className="mt-1 text-xs text-[var(--text-3)]">
+                  {language === "pt" ? "Investido" : "Invested"}: {formatCurrency(asset.invested, language, asset.currency)}
                 </p>
-                <p className="mt-2 text-sm font-semibold text-[#E5E8EF]">{asset.name}</p>
-                <p className="mt-3 text-lg font-semibold text-[#E5E8EF]">
-                  {formatCurrency(asset.current, language, asset.currency)}
-                </p>
-                <p className="mt-1 text-xs text-[#8B94A6]">
-                  {language === "pt" ? "Investido" : "Invested"}:{" "}
-                  {formatCurrency(asset.invested, language, asset.currency)}
-                </p>
-                <p
-                  className={`mt-2 text-xs font-semibold ${
-                    asset.profit >= 0 ? "text-emerald-300" : "text-rose-300"
-                  }`}
-                >
-                  {language === "pt" ? "Resultado" : "Result"}:{" "}
-                  {asset.profit >= 0 ? "+" : "-"}
-                  {formatCurrency(Math.abs(asset.profit), language, asset.currency)}
+                <p className={`mt-2 text-xs font-semibold ${asset.profit >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                  {language === "pt" ? "Resultado" : "Result"}: {asset.profit >= 0 ? "+" : "-"}{formatCurrency(Math.abs(asset.profit), language, asset.currency)}
                 </p>
               </div>
             ))}
@@ -2575,37 +2523,21 @@ export function InvestmentsScreen() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <p className="text-xs text-[#8B94A6]">{t("investments.organizeByLabel")}</p>
-        <button
-          type="button"
-          onClick={() => setOrganizeBy("alphabetical")}
-          className={`rounded-full border px-3 py-1 text-xs ${
-            organizeBy === "alphabetical"
-              ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
-              : "border-[#2A3344] bg-[#0F121A] text-[#8B94A6]"
-          }`}
-        >
+        <p className="text-xs text-[var(--text-3)]">{t("investments.organizeByLabel")}</p>
+        <button type="button" onClick={() => setOrganizeBy("alphabetical")}
+          className={`ui-btn ui-btn-sm ${organizeBy === "alphabetical" ? "ui-btn-primary" : "ui-btn-secondary"}`}>
           {t("investments.organizeAlphabetical")}
         </button>
-        <button
-          type="button"
-          onClick={() => setOrganizeBy("category")}
-          className={`rounded-full border px-3 py-1 text-xs ${
-            organizeBy === "category"
-              ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
-              : "border-[#2A3344] bg-[#0F121A] text-[#8B94A6]"
-          }`}
-        >
+        <button type="button" onClick={() => setOrganizeBy("category")}
+          className={`ui-btn ui-btn-sm ${organizeBy === "category" ? "ui-btn-primary" : "ui-btn-secondary"}`}>
           {t("investments.organizeCategory")}
         </button>
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         {organizedAssets.length === 0 ? (
-          <div className="col-span-2 rounded-2xl border border-dashed border-[#2A3445] bg-[#121621] p-6 text-sm text-[#8B94A6] sm:col-span-3">
-            {investmentFilter.enabled && investmentFilter.showOnlyAbove
-              ? t("investments.filterEmptyAbove")
-              : t("investments.empty")}
+          <div className="col-span-2 rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-6 text-sm text-[var(--text-3)] sm:col-span-3">
+            {investmentFilter.enabled && investmentFilter.showOnlyAbove ? t("investments.filterEmptyAbove") : t("investments.empty")}
           </div>
         ) : organizedAssets.map((asset) => {
           const key = getAssetQuoteKey(asset);
@@ -2614,129 +2546,72 @@ export function InvestmentsScreen() {
           const fixedSnapshot = fixedSnapshotByAssetId[asset.id];
           const assetCurrency = getAssetCurrency(asset);
           const current = quote?.price ?? getLatestPrice(history);
-          const value =
-            asset.type === "fixed_income"
-              ? fixedSnapshot?.currentValue ?? null
-              : current != null
-                ? current * asset.quantity
-                : null;
+          const value = asset.type === "fixed_income"
+            ? fixedSnapshot?.currentValue ?? null
+            : current != null ? current * asset.quantity : null;
           const categoryLabel = categoryLabelByKey[getInvestmentCategory(asset)];
           const summary = buildChartSummary(history);
           const exceededMetrics = exceededMetricsByAssetId[asset.id] ?? [];
           const hasExceededMetrics = investmentFilter.enabled && exceededMetrics.length > 0;
-          const exceededLabelText = exceededMetrics
-            .map((metricKey) => metricLabelByKey[metricKey])
-            .join(", ");
+          const exceededLabelText = exceededMetrics.map((metricKey) => metricLabelByKey[metricKey]).join(", ");
           const exchangeLabel = asset.type === "b3"
             ? `BVMF - ${normalizeB3Symbol(asset.symbol)} · ${assetCurrency}`
             : asset.type === "crypto"
               ? `CRYPTO - ${normalizeCryptoId(asset.symbol).toUpperCase()} · ${assetCurrency}`
-              : language === "pt"
-                ? `RENDA FIXA - CDI · ${assetCurrency}`
-                : `FIXED INCOME - CDI · ${assetCurrency}`;
+              : language === "pt" ? `RENDA FIXA - CDI · ${assetCurrency}` : `FIXED INCOME - CDI · ${assetCurrency}`;
           return (
-            <button
-              key={asset.id}
-              type="button"
-              onClick={() => openDetails(asset)}
-              className="flex min-h-[260px] min-w-0 flex-col justify-between gap-3 rounded-2xl border border-[#1E232E] bg-[#121621] p-4 text-left"
-            >
+            <button key={asset.id} type="button" onClick={() => openDetails(asset)}
+              className="ui-card flex min-h-[260px] min-w-0 flex-col justify-between gap-3 p-4 text-left transition-colors hover:border-[var(--border-bright)] hover:bg-[var(--surface-2)]">
               <div className="space-y-1">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-[#8B94A6]">
-                  {exchangeLabel}
-                </p>
+                <p className="ui-eyebrow">{exchangeLabel}</p>
                 <div className="flex items-center gap-2">
                   {asset.type === "b3" ? (
                     quote?.logoUrl ? (
-                      <>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={quote.logoUrl}
-                          alt={asset.symbol.toUpperCase()}
-                          className="h-5 w-5 rounded-full object-cover"
-                        />
-                      </>
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={quote.logoUrl} alt={asset.symbol.toUpperCase()} className="h-5 w-5 rounded-full object-cover" />
                     ) : (
-                      <span className="h-5 w-5 rounded-full border border-[#273244] bg-[#151A27]" />
+                      <span className="h-5 w-5 rounded-full border border-[var(--border)] bg-[var(--surface-3)]" />
                     )
                   ) : null}
-                  <p className="text-sm font-semibold text-[#E4E7EC]">
-                    {asset.name || asset.symbol.toUpperCase()}
-                  </p>
+                  <p className="text-sm font-semibold text-[var(--text-1)]">{asset.name || asset.symbol.toUpperCase()}</p>
                 </div>
-                <p className="text-[10px] text-[#8B94A6]">{categoryLabel}</p>
+                <p className="text-[10px] text-[var(--text-3)]">{categoryLabel}</p>
                 {hasExceededMetrics ? (
                   <div className="mt-1 space-y-1">
-                    <span className="inline-flex rounded-full border border-red-500/50 px-2 py-0.5 text-[10px] font-semibold text-red-300">
+                    <span className="inline-flex rounded-full border border-[var(--red)] border-opacity-50 px-2 py-0.5 text-[10px] font-semibold text-[var(--red)]">
                       {t("investments.aboveLimitTag")}
                     </span>
-                    <p className="text-[10px] text-red-200">{exceededLabelText}</p>
+                    <p className="text-[10px] text-[var(--red)]">{exceededLabelText}</p>
                   </div>
                 ) : null}
                 <div className="flex items-baseline gap-2">
-                  <span className="text-xl font-semibold text-[#E5E8EF]">
-                    {summary.current != null
-                      ? formatCurrency(summary.current, language, assetCurrency)
-                      : "--"}
+                  <span className="text-xl font-semibold text-[var(--text-1)]">
+                    {summary.current != null ? formatCurrency(summary.current, language, assetCurrency) : "--"}
                   </span>
                   {summary.changePct != null ? (
-                    <span
-                      className={`text-xs font-semibold ${
-                        summary.changePct >= 0 ? "text-emerald-300" : "text-rose-300"
-                      }`}
-                    >
+                    <span className={`text-xs font-semibold ${summary.changePct >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
                       {formatPercent(summary.changePct, language)}{" "}
-                      {asset.type === "fixed_income"
-                        ? language === "pt"
-                          ? "(desde o inicio)"
-                          : "(since start)"
-                        : language === "pt"
-                          ? "(1 ano)"
-                          : "(1 year)"}
+                      {asset.type === "fixed_income" ? (language === "pt" ? "(desde o inicio)" : "(since start)") : (language === "pt" ? "(1 ano)" : "(1 year)")}
                     </span>
                   ) : null}
                 </div>
                 {asset.type === "fixed_income" ? (
                   <div className="mt-2 grid grid-cols-2 gap-1.5">
-                    <div className="rounded-md border border-[#232D3F] bg-[#0F121A] px-2 py-1">
-                      <p className="text-[10px] text-[#8B94A6]">
-                        {language === "pt" ? "CDI anual" : "Annual CDI"}
-                      </p>
-                      <p className="text-[11px] font-semibold text-[#D8DEE9]">
-                        {fixedSnapshot
-                          ? formatPlainPercent(fixedSnapshot.annualCdiPct, language)
-                          : "--"}
-                      </p>
+                    <div className="ui-card-inner px-2 py-1">
+                      <p className="text-[10px] text-[var(--text-3)]">{language === "pt" ? "CDI anual" : "Annual CDI"}</p>
+                      <p className="text-[11px] font-semibold text-[var(--text-1)]">{fixedSnapshot ? formatPlainPercent(fixedSnapshot.annualCdiPct, language) : "--"}</p>
                     </div>
-                    <div className="rounded-md border border-[#232D3F] bg-[#0F121A] px-2 py-1">
-                      <p className="text-[10px] text-[#8B94A6]">
-                        {language === "pt" ? "% do CDI" : "% of CDI"}
-                      </p>
-                      <p className="text-[11px] font-semibold text-[#D8DEE9]">
-                        {fixedSnapshot
-                          ? formatPlainPercent(fixedSnapshot.cdiMultiplierPct, language)
-                          : "--"}
-                      </p>
+                    <div className="ui-card-inner px-2 py-1">
+                      <p className="text-[10px] text-[var(--text-3)]">{language === "pt" ? "% do CDI" : "% of CDI"}</p>
+                      <p className="text-[11px] font-semibold text-[var(--text-1)]">{fixedSnapshot ? formatPlainPercent(fixedSnapshot.cdiMultiplierPct, language) : "--"}</p>
                     </div>
-                    <div className="rounded-md border border-[#232D3F] bg-[#0F121A] px-2 py-1">
-                      <p className="text-[10px] text-[#8B94A6]">
-                        {language === "pt" ? "Taxa efetiva" : "Effective rate"}
-                      </p>
-                      <p className="text-[11px] font-semibold text-[#D8DEE9]">
-                        {fixedSnapshot
-                          ? formatPlainPercent(fixedSnapshot.effectiveAnnualPct, language)
-                          : "--"}
-                      </p>
+                    <div className="ui-card-inner px-2 py-1">
+                      <p className="text-[10px] text-[var(--text-3)]">{language === "pt" ? "Taxa efetiva" : "Effective rate"}</p>
+                      <p className="text-[11px] font-semibold text-[var(--text-1)]">{fixedSnapshot ? formatPlainPercent(fixedSnapshot.effectiveAnnualPct, language) : "--"}</p>
                     </div>
-                    <div className="rounded-md border border-[#232D3F] bg-[#0F121A] px-2 py-1">
-                      <p className="text-[10px] text-[#8B94A6]">
-                        {language === "pt" ? "Rendimento" : "Profit"}
-                      </p>
-                      <p className="text-[11px] font-semibold text-emerald-300">
-                        {fixedSnapshot
-                          ? formatCurrency(fixedSnapshot.profit, language, assetCurrency)
-                          : "--"}
-                      </p>
+                    <div className="ui-card-inner px-2 py-1">
+                      <p className="text-[10px] text-[var(--text-3)]">{language === "pt" ? "Rendimento" : "Profit"}</p>
+                      <p className="text-[11px] font-semibold text-[var(--green)]">{fixedSnapshot ? formatCurrency(fixedSnapshot.profit, language, assetCurrency) : "--"}</p>
                     </div>
                   </div>
                 ) : (
@@ -2753,29 +2628,14 @@ export function InvestmentsScreen() {
                         } else if (metric.key === "sharesOutstanding") {
                           display = formatCompactNumber(metricValue, language);
                         } else {
-                          display = new Intl.NumberFormat(
-                            language === "pt" ? "pt-BR" : "en-US",
-                            { minimumFractionDigits: 2, maximumFractionDigits: 2 },
-                          ).format(metricValue);
+                          display = new Intl.NumberFormat(language === "pt" ? "pt-BR" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(metricValue);
                         }
                       }
                       return (
-                        <div
-                          key={`${asset.id}-${metric.key}`}
-                          className={`rounded-md border px-2 py-1 ${
-                            isExceeded
-                              ? "border-red-500/40 bg-red-500/10"
-                              : "border-[#232D3F] bg-[#0F121A]"
-                          }`}
-                        >
-                          <p className="text-[10px] text-[#8B94A6]">{metric.label}</p>
-                          <p
-                            className={`text-[11px] font-semibold ${
-                              isExceeded ? "text-red-300" : "text-[#D8DEE9]"
-                            }`}
-                          >
-                            {display}
-                          </p>
+                        <div key={`${asset.id}-${metric.key}`}
+                          className={`rounded-md border px-2 py-1 ${isExceeded ? "border-[var(--red)] border-opacity-40 bg-[var(--red-dim)]" : "border-[var(--border)] bg-[var(--surface)]"}`}>
+                          <p className="text-[10px] text-[var(--text-3)]">{metric.label}</p>
+                          <p className={`text-[11px] font-semibold ${isExceeded ? "text-[var(--red)]" : "text-[var(--text-1)]"}`}>{display}</p>
                         </div>
                       );
                     })}
@@ -2788,160 +2648,87 @@ export function InvestmentsScreen() {
                     <AreaChart data={history}>
                       <defs>
                         <linearGradient id={`asset-${asset.id}`} x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#C49A5A" stopOpacity={0.35} />
-                          <stop offset="100%" stopColor="#C49A5A" stopOpacity={0} />
+                          <stop offset="0%" stopColor="#4f8eff" stopOpacity={0.35} />
+                          <stop offset="100%" stopColor="#4f8eff" stopOpacity={0} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1F2632" />
-                      <XAxis
-                        dataKey="time"
-                        type="number"
-                        domain={["dataMin", "dataMax"]}
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.055)" />
+                      <XAxis dataKey="time" type="number" domain={["dataMin", "dataMax"]}
                         tickFormatter={(value) => formatChartDate(value, language)}
-                        tick={{ fill: "#7F8694", fontSize: 10 }}
-                        axisLine={{ stroke: "#1F2632" }}
-                        tickLine={{ stroke: "#1F2632" }}
+                        tick={{ fill: "#4a6278", fontSize: 10 }}
+                        axisLine={{ stroke: "rgba(255,255,255,0.055)" }}
+                        tickLine={{ stroke: "rgba(255,255,255,0.055)" }}
                       />
-                      <YAxis
-                        tickFormatter={(value) =>
-                          formatAxisCurrency(value, language, assetCurrency)
-                        }
-                        tick={{ fill: "#7F8694", fontSize: 10 }}
-                        axisLine={{ stroke: "#1F2632" }}
-                        tickLine={{ stroke: "#1F2632" }}
+                      <YAxis tickFormatter={(value) => formatAxisCurrency(value, language, assetCurrency)}
+                        tick={{ fill: "#4a6278", fontSize: 10 }}
+                        axisLine={{ stroke: "rgba(255,255,255,0.055)" }}
+                        tickLine={{ stroke: "rgba(255,255,255,0.055)" }}
                         width={50}
                       />
                       {summary.current != null ? (
-                        <ReferenceLine
-                          y={summary.current}
-                          stroke="#5E6777"
-                          strokeDasharray="3 3"
-                        />
+                        <ReferenceLine y={summary.current} stroke="rgba(255,255,255,0.12)" strokeDasharray="3 3" />
                       ) : null}
                       <Tooltip
-                        formatter={(value) =>
-                          formatCurrency(Number(value ?? 0), language, assetCurrency)
-                        }
+                        formatter={(value) => formatCurrency(Number(value ?? 0), language, assetCurrency)}
                         labelFormatter={(label) => formatShortDate(String(label), language)}
-                        contentStyle={{
-                          background: "#0F121A",
-                          border: "1px solid #1E232E",
-                          borderRadius: 8,
-                          color: "#E4E7EC",
-                          fontSize: 12,
-                        }}
-                        labelStyle={{ color: "#8B94A6" }}
+                        contentStyle={{ background: "#131e30", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 8, color: "#edf3fc", fontSize: 12 }}
+                        labelStyle={{ color: "#4a6278" }}
                       />
-                      <Area
-                        type="monotone"
-                        dataKey="price"
-                        stroke="#C49A5A"
-                        fill={`url(#asset-${asset.id})`}
-                        strokeWidth={2}
-                        dot={false}
-                        isAnimationActive={false}
-                      />
+                      <Area type="monotone" dataKey="price" stroke="#4f8eff" fill={`url(#asset-${asset.id})`} strokeWidth={2} dot={false} isAnimationActive={false} />
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="flex h-full items-center justify-center text-[11px] text-[#8B94A6]">
-                    --
-                  </div>
+                  <div className="flex h-full items-center justify-center text-[11px] text-[var(--text-3)]">--</div>
                 )}
               </div>
               <div>
-                <p className="text-xs text-[#8B94A6]">{t("investments.totalValue")}</p>
-                <p className="text-sm font-semibold text-[#E5E8EF]">
-                  {value != null ? formatCurrency(value, language, assetCurrency) : "--"}
-                </p>
+                <p className="text-xs text-[var(--text-3)]">{t("investments.totalValue")}</p>
+                <p className="text-sm font-semibold text-[var(--text-1)]">{value != null ? formatCurrency(value, language, assetCurrency) : "--"}</p>
               </div>
             </button>
           );
         })}
-
       </div>
 
-      {quoteError ? <p className="text-xs text-red-400">{quoteError}</p> : null}
+      {quoteError ? <p className="text-xs text-[var(--red)]">{quoteError}</p> : null}
 
       {filterOpen ? (
-        <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-6"
-        >
-          <div
-            className="w-full max-w-2xl rounded-3xl border border-[#1E232E] bg-[#0F121A] p-5"
-            onClick={(event) => event.stopPropagation()}
-          >
+        <div className="ui-modal-backdrop fixed inset-0 z-40 flex items-center justify-center px-6" onClick={() => setFilterOpen(false)}>
+          <div className="ui-card-2 w-full max-w-2xl rounded-2xl p-5" onClick={(event) => event.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-[#E5E8EF]">
-                  {t("investments.filterModalTitle")}
-                </p>
-                <p className="text-xs text-[#8B94A6]">
-                  {t("investments.filterModalSubtitle")}
-                </p>
+                <p className="text-sm font-semibold text-[var(--text-1)]">{t("investments.filterModalTitle")}</p>
+                <p className="text-xs text-[var(--text-3)]">{t("investments.filterModalSubtitle")}</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setFilterOpen(false)}
-                className="text-xs text-[#8B94A6]"
-              >
+              <button type="button" onClick={() => setFilterOpen(false)} className="ui-btn ui-btn-ghost ui-btn-sm">
                 {t("common.cancel")}
               </button>
             </div>
-
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setInvestmentFilter((current) => ({
-                      ...current,
-                      enabled: !current.enabled,
-                    }))
-                  }
-                  className={`rounded-full border px-3 py-1 text-xs ${
-                    investmentFilter.enabled
-                      ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300"
-                      : "border-[#2A3344] bg-[#0F121A] text-[#8B94A6]"
-                  }`}
-                >
-                  {investmentFilter.enabled
-                    ? t("investments.filterEnabled")
-                    : t("investments.filterDisabled")}
+                <button type="button"
+                  onClick={() => setInvestmentFilter((current) => ({ ...current, enabled: !current.enabled }))}
+                  className={`ui-btn ui-btn-sm ${investmentFilter.enabled ? "ui-btn-primary" : "ui-btn-secondary"}`}>
+                  {investmentFilter.enabled ? t("investments.filterEnabled") : t("investments.filterDisabled")}
                 </button>
-                <label className="flex items-center gap-2 text-xs text-[#8B94A6]">
-                  <input
-                    type="checkbox"
+                <label className="flex items-center gap-2 text-xs text-[var(--text-3)]">
+                  <input type="checkbox"
                     checked={investmentFilter.showOnlyAbove}
-                    onChange={(event) =>
-                      setInvestmentFilter((current) => ({
-                        ...current,
-                        showOnlyAbove: event.target.checked,
-                      }))
-                    }
-                    className="h-4 w-4 rounded border-[#2A3344] bg-[#0F121A]"
+                    onChange={(event) => setInvestmentFilter((current) => ({ ...current, showOnlyAbove: event.target.checked }))}
+                    className="h-4 w-4 rounded border-[var(--border)] bg-[var(--surface)]"
                   />
                   {t("investments.filterShowOnlyAbove")}
                 </label>
               </div>
-
               <div className="grid min-w-0 gap-3 md:grid-cols-2">
                 {metricConfig.map((metric) => (
-                  <div key={`filter-${metric.key}`} className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
-                    <p className="text-[11px] text-[#8B94A6]">{metric.label}</p>
+                  <div key={`filter-${metric.key}`} className="ui-card-inner px-3 py-2">
+                    <p className="text-[11px] text-[var(--text-3)]">{metric.label}</p>
                     <input
                       value={investmentFilter.limits[metric.key]}
-                      onChange={(event) =>
-                        setInvestmentFilter((current) => ({
-                          ...current,
-                          limits: {
-                            ...current.limits,
-                            [metric.key]: event.target.value,
-                          },
-                        }))
-                      }
+                      onChange={(event) => setInvestmentFilter((current) => ({ ...current, limits: { ...current.limits, [metric.key]: event.target.value } }))}
                       placeholder={t("investments.metricLimitPlaceholder")}
-                      className="mt-2 w-full rounded-xl border border-[#1E232E] bg-[#0F121A] px-3 py-2 text-sm text-[#E4E7EC]"
+                      className="ui-input mt-2 w-full"
                     />
                   </div>
                 ))}
@@ -2952,286 +2739,125 @@ export function InvestmentsScreen() {
       ) : null}
 
       {showModal ? (
-        <div
-          className="fixed inset-0 z-40 overflow-x-hidden overflow-y-auto bg-black/70 px-4 md:flex md:items-center md:justify-center md:px-6"
-          style={{
-            paddingTop: "max(1rem, env(safe-area-inset-top))",
-            paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
-          }}
-        >
-          <div
-            className="mx-auto w-full max-w-lg overflow-x-hidden overflow-y-auto rounded-3xl border border-[#1E232E] bg-[#0F121A] p-4 sm:p-5"
+        <div className="ui-modal-backdrop fixed inset-0 z-40 overflow-x-hidden overflow-y-auto px-4 md:flex md:items-center md:justify-center md:px-6"
+          style={{ paddingTop: "max(1rem, env(safe-area-inset-top))", paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+          onClick={() => setShowModal(false)}>
+          <div className="ui-card-2 mx-auto w-full max-w-lg overflow-x-hidden overflow-y-auto rounded-2xl p-4 sm:p-5"
             style={{ maxHeight: "calc(100dvh - 2rem)" }}
-          >
+            onClick={(e) => e.stopPropagation()}>
             {isCreate ? (
               <div className="min-w-0 space-y-4">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-[#E5E8EF]">
-                    {t("investments.addTitle")}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setShowModal(false)}
-                    className="text-xs text-[#8B94A6]"
-                  >
-                    {t("common.cancel")}
-                  </button>
+                  <p className="text-sm font-semibold text-[var(--text-1)]">{t("investments.addTitle")}</p>
+                  <button type="button" onClick={() => setShowModal(false)} className="ui-btn ui-btn-ghost ui-btn-sm">{t("common.cancel")}</button>
                 </div>
 
                 <div className="grid min-w-0 gap-3 md:grid-cols-2">
                   <div className="flex min-w-0 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setType("b3");
-                        setMode("quantity");
-                        setSymbol("");
-                        setPreviewQuote(null);
-                        setCryptoPickerOpen(false);
-                      }}
-                      className={`min-w-0 flex-1 rounded-xl border px-3 py-2 text-xs ${
-                        type === "b3"
-                          ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
-                          : "border-[#1C2332] bg-[#0F121A] text-[#DCE3EE]"
-                      }`}
-                    >
+                    <button type="button"
+                      onClick={() => { setType("b3"); setMode("quantity"); setSymbol(""); setPreviewQuote(null); setCryptoPickerOpen(false); }}
+                      className={`min-w-0 flex-1 ui-btn ui-btn-sm ${type === "b3" ? "ui-btn-primary" : "ui-btn-secondary"}`}>
                       {t("investments.b3")}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setType("crypto");
-                        if (type === "b3") {
-                          setCurrency(preferredNewInvestmentCurrency);
-                        }
-                        setMode("quantity");
-                        setSymbol("");
-                        setSelectedCrypto(null);
-                        setCryptoMarket(null);
-                        setPreviewQuote(null);
-                        setFeaturedCryptoOptions([]);
-                        setCryptoPickerOpen(false);
-                      }}
-                      className={`min-w-0 flex-1 rounded-xl border px-3 py-2 text-xs ${
-                        type === "crypto"
-                          ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
-                          : "border-[#1C2332] bg-[#0F121A] text-[#DCE3EE]"
-                      }`}
-                    >
+                    <button type="button"
+                      onClick={() => { setType("crypto"); if (type === "b3") { setCurrency(preferredNewInvestmentCurrency); } setMode("quantity"); setSymbol(""); setSelectedCrypto(null); setCryptoMarket(null); setPreviewQuote(null); setFeaturedCryptoOptions([]); setCryptoPickerOpen(false); }}
+                      className={`min-w-0 flex-1 ui-btn ui-btn-sm ${type === "crypto" ? "ui-btn-primary" : "ui-btn-secondary"}`}>
                       {t("investments.crypto")}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setType("fixed_income");
-                        if (type === "b3") {
-                          setCurrency(preferredNewInvestmentCurrency);
-                        }
-                        setMode("value");
-                        setSymbol("CDI");
-                        setSelectedCrypto(null);
-                        setCryptoMarket(null);
-                        setPreviewQuote(null);
-                        setFeaturedCryptoOptions([]);
-                        setCryptoPickerOpen(false);
-                      }}
-                      className={`min-w-0 flex-1 rounded-xl border px-3 py-2 text-xs ${
-                        type === "fixed_income"
-                          ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
-                          : "border-[#1C2332] bg-[#0F121A] text-[#DCE3EE]"
-                      }`}
-                    >
+                    <button type="button"
+                      onClick={() => { setType("fixed_income"); if (type === "b3") { setCurrency(preferredNewInvestmentCurrency); } setMode("value"); setSymbol("CDI"); setSelectedCrypto(null); setCryptoMarket(null); setPreviewQuote(null); setFeaturedCryptoOptions([]); setCryptoPickerOpen(false); }}
+                      className={`min-w-0 flex-1 ui-btn ui-btn-sm ${type === "fixed_income" ? "ui-btn-primary" : "ui-btn-secondary"}`}>
                       {t("investments.fixedIncome")}
                     </button>
                   </div>
                   <div>
                     {type === "crypto" ? (
                       <div>
-                        <button
-                          type="button"
-                          onClick={() => setCryptoPickerOpen((current) => !current)}
-                          className="flex w-full items-center justify-between rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
-                        >
+                        <button type="button" onClick={() => setCryptoPickerOpen((current) => !current)}
+                          className="flex w-full items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-1)]">
                           <span className="min-w-0 truncate text-left">
-                            {selectedCrypto
-                              ? `${selectedCrypto.symbol.toUpperCase()} - ${selectedCrypto.name}`
-                              : language === "pt"
-                                ? "Selecionar cripto"
-                                : "Select crypto"}
+                            {selectedCrypto ? `${selectedCrypto.symbol.toUpperCase()} - ${selectedCrypto.name}` : language === "pt" ? "Selecionar cripto" : "Select crypto"}
                           </span>
-                          <AppIcon name="chevron-down" size={16} color="#8B94A6" />
+                          <AppIcon name="chevron-down" size={16} color="#4a6278" />
                         </button>
-                        <p className="mt-1 text-[11px] text-[#8B94A6]">
-                          {language === "pt"
-                            ? "Selecione uma cripto da lista de destaque."
-                            : "Select a crypto from the featured list."}
+                        <p className="mt-1 text-[11px] text-[var(--text-3)]">
+                          {language === "pt" ? "Selecione uma cripto da lista de destaque." : "Select a crypto from the featured list."}
                         </p>
                         {cryptoPickerOpen ? (
-                          <div className="mt-2 max-h-44 space-y-1 overflow-y-auto rounded-xl border border-[#1E232E] bg-[#0F121A] p-2">
+                          <div className="mt-2 max-h-44 space-y-1 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2">
                             {featuredCryptoLoading ? (
-                              <p className="px-2 py-1 text-[11px] text-[#8B94A6]">
-                                {language === "pt" ? "Carregando criptos..." : "Loading cryptos..."}
-                              </p>
+                              <p className="px-2 py-1 text-[11px] text-[var(--text-3)]">{language === "pt" ? "Carregando criptos..." : "Loading cryptos..."}</p>
                             ) : featuredCryptoOptions.length ? (
                               featuredCryptoOptions.map((item) => (
-                                <button
-                                  key={item.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setSymbol(item.id);
-                                    setSelectedCrypto({
-                                      id: item.id,
-                                      symbol: item.symbol,
-                                      name: item.name,
-                                      thumb: item.image,
-                                      rank: item.rank,
-                                    });
-                                    setCryptoMarket(item);
-                                    setPreviewQuote({
-                                      price: item.price,
-                                      changePct: item.changePct24h,
-                                    });
-                                    setName((current) => (current.trim() ? current : item.name));
-                                    setCryptoPickerOpen(false);
-                                  }}
-                                  className={`flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left transition ${
-                                    selectedCrypto?.id === item.id
-                                      ? "bg-[#163137] text-[#DCE3EE]"
-                                      : "hover:bg-[#151A27] text-[#C8D0DC]"
-                                  }`}
-                                >
+                                <button key={item.id} type="button"
+                                  onClick={() => { setSymbol(item.id); setSelectedCrypto({ id: item.id, symbol: item.symbol, name: item.name, thumb: item.image, rank: item.rank }); setCryptoMarket(item); setPreviewQuote({ price: item.price, changePct: item.changePct24h }); setName((current) => (current.trim() ? current : item.name)); setCryptoPickerOpen(false); }}
+                                  className={`flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left transition ${selectedCrypto?.id === item.id ? "bg-[var(--accent-dim)] text-[var(--text-1)]" : "hover:bg-[var(--surface-2)] text-[var(--text-2)]"}`}>
                                   <span className="flex min-w-0 items-center gap-2">
                                     {item.image ? (
                                       // eslint-disable-next-line @next/next/no-img-element
-                                      <img
-                                        src={item.image}
-                                        alt={item.name}
-                                        className="h-5 w-5 rounded-full object-cover"
-                                      />
+                                      <img src={item.image} alt={item.name} className="h-5 w-5 rounded-full object-cover" />
                                     ) : (
-                                      <span className="h-5 w-5 rounded-full bg-[#1E232E]" />
+                                      <span className="h-5 w-5 rounded-full bg-[var(--surface-3)]" />
                                     )}
                                     <span className="min-w-0">
-                                      <span className="block truncate text-xs font-semibold">
-                                        {item.name}
-                                      </span>
-                                      <span className="block truncate text-[11px] text-[#8B94A6]">
-                                        {item.symbol.toUpperCase()} - {item.id}
-                                      </span>
+                                      <span className="block truncate text-xs font-semibold">{item.name}</span>
+                                      <span className="block truncate text-[11px] text-[var(--text-3)]">{item.symbol.toUpperCase()} - {item.id}</span>
                                     </span>
                                   </span>
-                                  {item.rank ? (
-                                    <span className="text-[10px] text-[#8B94A6]">#{item.rank}</span>
-                                  ) : null}
+                                  {item.rank ? <span className="text-[10px] text-[var(--text-3)]">#{item.rank}</span> : null}
                                 </button>
                               ))
                             ) : (
-                              <p className="px-2 py-1 text-[11px] text-[#8B94A6]">
-                                {language === "pt"
-                                  ? "Sem criptos disponiveis no momento."
-                                  : "No cryptos available right now."}
-                              </p>
+                              <p className="px-2 py-1 text-[11px] text-[var(--text-3)]">{language === "pt" ? "Sem criptos disponiveis no momento." : "No cryptos available right now."}</p>
                             )}
                           </div>
                         ) : null}
                       </div>
                     ) : type === "fixed_income" ? (
-                      <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
-                        <p className="text-sm font-semibold text-[#E4E7EC]">
-                          {t("investments.fixedIncome")}
-                        </p>
-                        <p className="mt-1 text-[11px] text-[#8B94A6]">
-                          {t("investments.fixedIncomeHint")}
-                        </p>
-                        <p className="mt-1 text-[11px] text-[#8B94A6]">CDI</p>
+                      <div className="ui-card-inner px-3 py-2">
+                        <p className="text-sm font-semibold text-[var(--text-1)]">{t("investments.fixedIncome")}</p>
+                        <p className="mt-1 text-[11px] text-[var(--text-3)]">{t("investments.fixedIncomeHint")}</p>
+                        <p className="mt-1 text-[11px] text-[var(--text-3)]">CDI</p>
                       </div>
                     ) : (
                       <div>
-                        <input
-                          value={symbol}
-                          onChange={(event) => setSymbol(event.target.value)}
-                          placeholder={t("investments.symbol")}
-                          className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
-                        />
-                        <p className="mt-1 text-[11px] text-[#8B94A6]">
-                          {t("investments.symbolHint")}
-                        </p>
+                        <input value={symbol} onChange={(event) => setSymbol(event.target.value)} placeholder={t("investments.symbol")} className="ui-input w-full" />
+                        <p className="mt-1 text-[11px] text-[var(--text-3)]">{t("investments.symbolHint")}</p>
                       </div>
                     )}
                   </div>
-                  <input
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    placeholder={t("investments.name")}
-                    className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
-                  />
-                  <input
-                    type="date"
-                    value={date}
-                    onChange={(event) => setDate(event.target.value)}
-                    className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
-                  />
+                  <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t("investments.name")} className="ui-input w-full" />
+                  <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="ui-input w-full" />
                 </div>
 
                 <div className="space-y-2">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-[#8B94A6]">
-                    {t("investments.currency")}
-                  </p>
+                  <p className="ui-eyebrow">{t("investments.currency")}</p>
                   <div className="flex min-w-0 gap-2">
                     {(["BRL", "EUR"] as const).map((option) => {
                       const disabled = !canSelectInvestmentCurrency(type) && option !== "BRL";
                       const active = formCurrency === option;
                       return (
-                        <button
-                          key={option}
-                          type="button"
-                          onClick={() => setCurrency(option)}
-                          disabled={disabled}
-                          className={`flex-1 rounded-xl border px-3 py-2 text-left text-xs transition ${
-                            active
-                              ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
-                              : "border-[#1C2332] bg-[#0F121A] text-[#DCE3EE]"
-                          } ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
-                        >
+                        <button key={option} type="button" onClick={() => setCurrency(option)} disabled={disabled}
+                          className={`flex-1 ui-btn ui-btn-sm text-left ${active ? "ui-btn-primary" : "ui-btn-secondary"} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}>
                           <span className="block font-semibold">{option}</span>
-                          <span className="block text-[10px] text-[#8B94A6]">
-                            {option === "BRL"
-                              ? t("investments.currencyBrl")
-                              : t("investments.currencyEur")}
-                          </span>
+                          <span className="block text-[10px] opacity-70">{option === "BRL" ? t("investments.currencyBrl") : t("investments.currencyEur")}</span>
                         </button>
                       );
                     })}
                   </div>
                   {!canSelectInvestmentCurrency(type) ? (
-                    <p className="text-[11px] text-[#8B94A6]">
-                      {t("investments.currencyLockedB3")}
-                    </p>
+                    <p className="text-[11px] text-[var(--text-3)]">{t("investments.currencyLockedB3")}</p>
                   ) : null}
                 </div>
 
                 {type !== "fixed_income" ? (
                   <div className="flex min-w-0 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setMode("quantity")}
-                      className={`min-w-0 flex-1 rounded-xl border px-3 py-2 text-xs ${
-                        mode === "quantity"
-                          ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
-                          : "border-[#1C2332] bg-[#0F121A] text-[#DCE3EE]"
-                      }`}
-                    >
+                    <button type="button" onClick={() => setMode("quantity")}
+                      className={`min-w-0 flex-1 ui-btn ui-btn-sm ${mode === "quantity" ? "ui-btn-primary" : "ui-btn-secondary"}`}>
                       {t("investments.modeQuantity")}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setMode("value")}
-                      className={`min-w-0 flex-1 rounded-xl border px-3 py-2 text-xs ${
-                        mode === "value"
-                          ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
-                          : "border-[#1C2332] bg-[#0F121A] text-[#DCE3EE]"
-                      }`}
-                    >
+                    <button type="button" onClick={() => setMode("value")}
+                      className={`min-w-0 flex-1 ui-btn ui-btn-sm ${mode === "value" ? "ui-btn-primary" : "ui-btn-secondary"}`}>
                       {t("investments.modeValue")}
                     </button>
                   </div>
@@ -3240,322 +2866,146 @@ export function InvestmentsScreen() {
                 <div className="grid min-w-0 gap-3 md:grid-cols-2">
                   {type === "fixed_income" ? (
                     <>
-                      <input
-                        value={investedValue}
-                        onChange={(event) =>
-                          setInvestedValue(
-                            formatCentsInputForCurrency(event.target.value, formCurrency),
-                          )
-                        }
-                        placeholder={t("investments.investedValue")}
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
-                      />
-                      <input
-                        value={fixedCdiRatePct}
-                        onChange={(event) => setFixedCdiRatePct(event.target.value)}
-                        placeholder={t("investments.fixedCdiRate")}
-                        inputMode="decimal"
-                        className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
-                      />
-                      <input
-                        value={fixedCdiMultiplierPct}
-                        onChange={(event) => setFixedCdiMultiplierPct(event.target.value)}
-                        placeholder={t("investments.fixedCdiMultiplier")}
-                        inputMode="decimal"
-                        className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
-                      />
-                      <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
-                        <p className="text-[11px] text-[#8B94A6]">
-                          {t("investments.fixedEffectiveRate")}
-                        </p>
-                        <p className="text-sm font-semibold text-[#E5E8EF]">
-                          {fixedPreviewSnapshot
-                            ? formatPlainPercent(fixedPreviewSnapshot.effectiveAnnualPct, language)
-                            : "--"}
-                        </p>
+                      <input value={investedValue} onChange={(event) => setInvestedValue(formatCentsInputForCurrency(event.target.value, formCurrency))} placeholder={t("investments.investedValue")} inputMode="numeric" pattern="[0-9]*" className="ui-input w-full" />
+                      <input value={fixedCdiRatePct} onChange={(event) => setFixedCdiRatePct(event.target.value)} placeholder={t("investments.fixedCdiRate")} inputMode="decimal" className="ui-input w-full" />
+                      <input value={fixedCdiMultiplierPct} onChange={(event) => setFixedCdiMultiplierPct(event.target.value)} placeholder={t("investments.fixedCdiMultiplier")} inputMode="decimal" className="ui-input w-full" />
+                      <div className="ui-card-inner px-3 py-2">
+                        <p className="text-[11px] text-[var(--text-3)]">{t("investments.fixedEffectiveRate")}</p>
+                        <p className="text-sm font-semibold text-[var(--text-1)]">{fixedPreviewSnapshot ? formatPlainPercent(fixedPreviewSnapshot.effectiveAnnualPct, language) : "--"}</p>
                       </div>
                     </>
                   ) : (
                     <>
                       {mode === "quantity" ? (
-                        <input
-                          value={quantity}
-                          onChange={(event) => setQuantity(event.target.value)}
-                          placeholder={t("investments.quantity")}
-                          className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
-                        />
+                        <input value={quantity} onChange={(event) => setQuantity(event.target.value)} placeholder={t("investments.quantity")} className="ui-input w-full" />
                       ) : (
-                        <input
-                          value={investedValue}
-                          onChange={(event) =>
-                            setInvestedValue(
-                              formatCentsInputForCurrency(event.target.value, formCurrency),
-                            )
-                          }
-                          placeholder={t("investments.investedValue")}
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
-                        />
+                        <input value={investedValue} onChange={(event) => setInvestedValue(formatCentsInputForCurrency(event.target.value, formCurrency))} placeholder={t("investments.investedValue")} inputMode="numeric" pattern="[0-9]*" className="ui-input w-full" />
                       )}
                       <div>
-                        <input
-                        value={manualPrice}
-                        onChange={(event) =>
-                          setManualPrice(
-                            formatCentsInputForCurrency(event.target.value, formCurrency),
-                          )
-                        }
-                          placeholder={t("investments.manualPrice")}
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-sm text-[#E4E7EC]"
-                        />
-                        <p className="mt-1 text-[11px] text-[#8B94A6]">
-                          {t("investments.manualPriceHint")}
-                        </p>
+                        <input value={manualPrice} onChange={(event) => setManualPrice(formatCentsInputForCurrency(event.target.value, formCurrency))} placeholder={t("investments.manualPrice")} inputMode="numeric" pattern="[0-9]*" className="ui-input w-full" />
+                        <p className="mt-1 text-[11px] text-[var(--text-3)]">{t("investments.manualPriceHint")}</p>
                       </div>
                     </>
                   )}
                 </div>
 
                 <div className="grid min-w-0 gap-3 md:grid-cols-2">
-                  <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
-                    <p className="text-[11px] text-[#8B94A6]">
-                      {t("investments.total")}
-                    </p>
-                    <p className="text-sm font-semibold text-[#E5E8EF]">
-                      {(type === "fixed_income" || priceBig) && computed.qty.gt(0)
-                        ? formatCurrency(Number(computed.total.toString()), language, formCurrency)
-                        : "--"}
+                  <div className="ui-card-inner px-3 py-2">
+                    <p className="text-[11px] text-[var(--text-3)]">{t("investments.total")}</p>
+                    <p className="text-sm font-semibold text-[var(--text-1)]">
+                      {(type === "fixed_income" || priceBig) && computed.qty.gt(0) ? formatCurrency(Number(computed.total.toString()), language, formCurrency) : "--"}
                     </p>
                   </div>
                   {type === "fixed_income" ? (
                     <>
-                      <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
-                        <p className="text-[11px] text-[#8B94A6]">
-                          {t("investments.fixedLiveValue")}
-                        </p>
-                        <p className="text-sm font-semibold text-[#E5E8EF]">
-                          {fixedPreviewSnapshot
-                            ? formatCurrency(
-                                fixedPreviewSnapshot.currentValue,
-                                language,
-                                formCurrency,
-                              )
-                            : "--"}
-                        </p>
+                      <div className="ui-card-inner px-3 py-2">
+                        <p className="text-[11px] text-[var(--text-3)]">{t("investments.fixedLiveValue")}</p>
+                        <p className="text-sm font-semibold text-[var(--text-1)]">{fixedPreviewSnapshot ? formatCurrency(fixedPreviewSnapshot.currentValue, language, formCurrency) : "--"}</p>
                       </div>
-                      <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
-                        <p className="text-[11px] text-[#8B94A6]">
-                          {t("investments.fixedProfit")}
-                        </p>
-                        <p className="text-sm font-semibold text-emerald-300">
-                          {fixedPreviewSnapshot
-                            ? formatCurrency(
-                                fixedPreviewSnapshot.profit,
-                                language,
-                                formCurrency,
-                              )
-                            : "--"}
-                        </p>
+                      <div className="ui-card-inner px-3 py-2">
+                        <p className="text-[11px] text-[var(--text-3)]">{t("investments.fixedProfit")}</p>
+                        <p className="text-sm font-semibold text-[var(--green)]">{fixedPreviewSnapshot ? formatCurrency(fixedPreviewSnapshot.profit, language, formCurrency) : "--"}</p>
                       </div>
-                      <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
-                        <p className="text-[11px] text-[#8B94A6]">
-                          {t("investments.fixedDailyEstimate")}
-                        </p>
-                        <p className="text-sm font-semibold text-[#E5E8EF]">
-                          {fixedPreviewSnapshot
-                            ? formatCurrency(
-                                fixedPreviewSnapshot.estimatedDailyProfit,
-                                language,
-                                formCurrency,
-                              )
-                            : "--"}
-                        </p>
+                      <div className="ui-card-inner px-3 py-2">
+                        <p className="text-[11px] text-[var(--text-3)]">{t("investments.fixedDailyEstimate")}</p>
+                        <p className="text-sm font-semibold text-[var(--text-1)]">{fixedPreviewSnapshot ? formatCurrency(fixedPreviewSnapshot.estimatedDailyProfit, language, formCurrency) : "--"}</p>
                       </div>
                     </>
                   ) : (
                     <>
-                      <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
-                        <p className="text-[11px] text-[#8B94A6]">
-                          {t("investments.currentPrice")}
-                        </p>
-                        <p className="text-sm font-semibold text-[#E5E8EF]">
-                          {displayPrice != null
-                            ? formatCurrency(displayPrice, language, formCurrency)
-                            : "--"}
-                        </p>
+                      <div className="ui-card-inner px-3 py-2">
+                        <p className="text-[11px] text-[var(--text-3)]">{t("investments.currentPrice")}</p>
+                        <p className="text-sm font-semibold text-[var(--text-1)]">{displayPrice != null ? formatCurrency(displayPrice, language, formCurrency) : "--"}</p>
                       </div>
-                      <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
-                        <p className="text-[11px] text-[#8B94A6]">
-                          {t("investments.currentAvg")}
-                        </p>
-                        <p className="text-sm font-semibold text-[#E5E8EF]">
-                          {currentAvg.gt(0)
-                            ? formatCurrency(Number(currentAvg.toString()), language, formCurrency)
-                            : "--"}
-                        </p>
+                      <div className="ui-card-inner px-3 py-2">
+                        <p className="text-[11px] text-[var(--text-3)]">{t("investments.currentAvg")}</p>
+                        <p className="text-sm font-semibold text-[var(--text-1)]">{currentAvg.gt(0) ? formatCurrency(Number(currentAvg.toString()), language, formCurrency) : "--"}</p>
                       </div>
-                      <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
-                        <p className="text-[11px] text-[#8B94A6]">
-                          {t("investments.newAvg")}
-                        </p>
-                        <p className="text-sm font-semibold text-[#E5E8EF]">
-                          {computed.newAvg.gt(0)
-                            ? formatCurrency(
-                                Number(computed.newAvg.toString()),
-                                language,
-                                formCurrency,
-                              )
-                            : "--"}
-                        </p>
+                      <div className="ui-card-inner px-3 py-2">
+                        <p className="text-[11px] text-[var(--text-3)]">{t("investments.newAvg")}</p>
+                        <p className="text-sm font-semibold text-[var(--text-1)]">{computed.newAvg.gt(0) ? formatCurrency(Number(computed.newAvg.toString()), language, formCurrency) : "--"}</p>
                       </div>
                     </>
                   )}
                 </div>
 
                 {type === "b3" ? (
-                  <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
-                    <p className="text-[11px] text-[#8B94A6]">
-                      {language === "pt" ? "Ativo selecionado" : "Selected asset"}
-                    </p>
+                  <div className="ui-card-inner px-3 py-2">
+                    <p className="text-[11px] text-[var(--text-3)]">{language === "pt" ? "Ativo selecionado" : "Selected asset"}</p>
                     <div className="mt-1 flex items-center gap-2">
                       {preview?.logoUrl ? (
-                        <>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={preview.logoUrl}
-                            alt={symbol.toUpperCase()}
-                            className="h-6 w-6 rounded-full object-cover"
-                          />
-                        </>
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={preview.logoUrl} alt={symbol.toUpperCase()} className="h-6 w-6 rounded-full object-cover" />
                       ) : (
-                        <span className="h-6 w-6 rounded-full border border-[#273244] bg-[#151A27]" />
+                        <span className="h-6 w-6 rounded-full border border-[var(--border)] bg-[var(--surface-3)]" />
                       )}
-                      <p className="text-sm font-semibold text-[#E5E8EF]">
-                        {name.trim() || symbol.toUpperCase() || "--"}
-                      </p>
+                      <p className="text-sm font-semibold text-[var(--text-1)]">{name.trim() || symbol.toUpperCase() || "--"}</p>
                     </div>
-                    <p className="text-[11px] text-[#8B94A6]">
-                      {symbol ? `B3 - ${normalizeB3Symbol(symbol)}` : "--"}
-                    </p>
+                    <p className="text-[11px] text-[var(--text-3)]">{symbol ? `B3 - ${normalizeB3Symbol(symbol)}` : "--"}</p>
                   </div>
                 ) : null}
 
                 {type === "crypto" ? (
                   <div className="grid min-w-0 gap-3 md:grid-cols-2">
-                    <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
-                      <p className="text-[11px] text-[#8B94A6]">
-                        {language === "pt" ? "Cripto selecionada" : "Selected crypto"}
-                      </p>
+                    <div className="ui-card-inner px-3 py-2">
+                      <p className="text-[11px] text-[var(--text-3)]">{language === "pt" ? "Cripto selecionada" : "Selected crypto"}</p>
                       <div className="mt-1 flex items-center gap-2">
                         {cryptoMarket?.image || selectedCrypto?.thumb ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={cryptoMarket?.image ?? selectedCrypto?.thumb ?? ""}
-                            alt={cryptoMarket?.name ?? selectedCrypto?.name ?? "crypto"}
-                            className="h-6 w-6 rounded-full object-cover"
-                          />
+                          <img src={cryptoMarket?.image ?? selectedCrypto?.thumb ?? ""} alt={cryptoMarket?.name ?? selectedCrypto?.name ?? "crypto"} className="h-6 w-6 rounded-full object-cover" />
                         ) : (
-                          <span className="h-6 w-6 rounded-full bg-[#1E232E]" />
+                          <span className="h-6 w-6 rounded-full bg-[var(--surface-3)]" />
                         )}
-                        <p className="text-sm font-semibold text-[#E5E8EF]">
-                          {cryptoMarket?.name ?? selectedCrypto?.name ?? "--"}
-                        </p>
+                        <p className="text-sm font-semibold text-[var(--text-1)]">{cryptoMarket?.name ?? selectedCrypto?.name ?? "--"}</p>
                       </div>
-                      <p className="text-[11px] text-[#8B94A6]">
-                        {cryptoMarket?.symbol
-                          ? `${cryptoMarket.symbol.toUpperCase()} - ${cryptoMarket.id}`
-                          : selectedCrypto
-                            ? `${selectedCrypto.symbol.toUpperCase()} - ${selectedCrypto.id}`
-                            : "--"}
+                      <p className="text-[11px] text-[var(--text-3)]">
+                        {cryptoMarket?.symbol ? `${cryptoMarket.symbol.toUpperCase()} - ${cryptoMarket.id}` : selectedCrypto ? `${selectedCrypto.symbol.toUpperCase()} - ${selectedCrypto.id}` : "--"}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
-                      <p className="text-[11px] text-[#8B94A6]">
-                        {language === "pt" ? "Ranking de mercado" : "Market rank"}
-                      </p>
-                      <p className="text-sm font-semibold text-[#E5E8EF]">
-                        {cryptoMarket?.rank ? `#${cryptoMarket.rank}` : "--"}
-                      </p>
-                      <p className="text-[11px] text-[#8B94A6]">
-                        {language === "pt" ? "Atualizacao em tempo real" : "Live market update"}
-                      </p>
+                    <div className="ui-card-inner px-3 py-2">
+                      <p className="text-[11px] text-[var(--text-3)]">{language === "pt" ? "Ranking de mercado" : "Market rank"}</p>
+                      <p className="text-sm font-semibold text-[var(--text-1)]">{cryptoMarket?.rank ? `#${cryptoMarket.rank}` : "--"}</p>
+                      <p className="text-[11px] text-[var(--text-3)]">{language === "pt" ? "Atualizacao em tempo real" : "Live market update"}</p>
                     </div>
-                    <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
-                      <p className="text-[11px] text-[#8B94A6]">
-                        {language === "pt" ? "Market cap" : "Market cap"}
-                      </p>
-                      <p className="text-sm font-semibold text-[#E5E8EF]">
-                        {cryptoMarket?.marketCap != null
-                          ? formatCurrency(cryptoMarket.marketCap, language, formCurrency)
-                          : "--"}
-                      </p>
-                      <p className="text-[11px] text-[#8B94A6]">
+                    <div className="ui-card-inner px-3 py-2">
+                      <p className="text-[11px] text-[var(--text-3)]">{language === "pt" ? "Market cap" : "Market cap"}</p>
+                      <p className="text-sm font-semibold text-[var(--text-1)]">{cryptoMarket?.marketCap != null ? formatCurrency(cryptoMarket.marketCap, language, formCurrency) : "--"}</p>
+                      <p className="text-[11px] text-[var(--text-3)]">
                         {language === "pt" ? "Volume 24h" : "24h volume"}:{" "}
                         {cryptoMarket?.volume24h != null
                           ? formatCompactNumber(cryptoMarket.volume24h, language)
                           : "--"}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
-                      <p className="text-[11px] text-[#8B94A6]">
-                        {language === "pt" ? "Faixa 24h" : "24h range"}
+                    <div className="ui-card-inner px-3 py-2">
+                      <p className="text-[11px] text-[var(--text-3)]">{language === "pt" ? "Faixa 24h" : "24h range"}</p>
+                      <p className="text-sm font-semibold text-[var(--text-1)]">
+                        {cryptoMarket?.low24h != null ? formatCurrency(cryptoMarket.low24h, language, formCurrency) : "--"}{" "}-{" "}
+                        {cryptoMarket?.high24h != null ? formatCurrency(cryptoMarket.high24h, language, formCurrency) : "--"}
                       </p>
-                      <p className="text-sm font-semibold text-[#E5E8EF]">
-                        {cryptoMarket?.low24h != null
-                          ? formatCurrency(cryptoMarket.low24h, language, formCurrency)
-                          : "--"}{" "}
-                        -{" "}
-                        {cryptoMarket?.high24h != null
-                          ? formatCurrency(cryptoMarket.high24h, language, formCurrency)
-                          : "--"}
-                      </p>
-                      <p
-                        className={`text-[11px] ${
-                          (cryptoMarket?.changePct24h ?? 0) >= 0
-                            ? "text-emerald-300"
-                            : "text-rose-300"
-                        }`}
-                      >
+                      <p className={`text-[11px] ${(cryptoMarket?.changePct24h ?? 0) >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
                         {language === "pt" ? "Variação 24h" : "24h change"}:{" "}
-                        {cryptoMarket?.changePct24h != null
-                          ? formatPercent(cryptoMarket.changePct24h, language)
-                          : "--"}
+                        {cryptoMarket?.changePct24h != null ? formatPercent(cryptoMarket.changePct24h, language) : "--"}
                       </p>
                     </div>
                   </div>
                 ) : null}
 
                 {type === "fixed_income" ? (
-                  <div className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2">
-                    <p className="text-[11px] text-[#8B94A6]">
-                      {t("investments.fixedRealtimeNote")}
+                  <div className="ui-card-inner px-3 py-2">
+                    <p className="text-[11px] text-[var(--text-3)]">{t("investments.fixedRealtimeNote")}</p>
+                    <p className="mt-1 text-sm font-semibold text-[var(--text-1)]">
+                      {fixedPreviewSnapshot ? `${formatCurrency(fixedPreviewSnapshot.currentValue, language, formCurrency)} · ${formatPlainPercent(fixedPreviewSnapshot.effectiveAnnualPct, language)}` : "--"}
                     </p>
-                    <p className="mt-1 text-sm font-semibold text-[#E5E8EF]">
-                      {fixedPreviewSnapshot
-                        ? `${formatCurrency(fixedPreviewSnapshot.currentValue, language, formCurrency)} · ${formatPlainPercent(fixedPreviewSnapshot.effectiveAnnualPct, language)}`
-                        : "--"}
-                    </p>
-                    <p className="mt-1 text-[11px] text-[#8B94A6]">
-                      {fixedPreviewSnapshot
-                        ? `${language === "pt" ? "Dias corridos" : "Elapsed days"}: ${Math.floor(fixedPreviewSnapshot.elapsedDays)}`
-                        : "--"}
+                    <p className="mt-1 text-[11px] text-[var(--text-3)]">
+                      {fixedPreviewSnapshot ? `${language === "pt" ? "Dias corridos" : "Elapsed days"}: ${Math.floor(fixedPreviewSnapshot.elapsedDays)}` : "--"}
                     </p>
                   </div>
                 ) : null}
 
-                {errorMsg ? <p className="text-xs text-red-400">{errorMsg}</p> : null}
+                {errorMsg ? <p className="text-xs text-[var(--red)]">{errorMsg}</p> : null}
 
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="w-full rounded-xl bg-[#E6EDF3] py-2 text-sm font-semibold text-[#0C1018] disabled:opacity-60"
-                >
+                <button type="button" onClick={handleSave} disabled={saving} className="ui-btn ui-btn-primary ui-btn-lg w-full">
                   {saving ? t("common.saving") : t("common.save")}
                 </button>
               </div>
@@ -3563,163 +3013,78 @@ export function InvestmentsScreen() {
               <div className="min-w-0 space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-[#E5E8EF]">
-                      {activeAsset.name || activeAsset.symbol.toUpperCase()}
-                    </p>
-                    <p className="text-xs text-[#8B94A6]">
-                      {activeAsset.type === "b3"
-                        ? "B3"
-                        : activeAsset.type === "crypto"
-                          ? "Cripto"
-                          : language === "pt"
-                            ? "Renda fixa"
-                            : "Fixed income"} -{" "}
+                    <p className="text-sm font-semibold text-[var(--text-1)]">{activeAsset.name || activeAsset.symbol.toUpperCase()}</p>
+                    <p className="text-xs text-[var(--text-3)]">
+                      {activeAsset.type === "b3" ? "B3" : activeAsset.type === "crypto" ? "Cripto" : language === "pt" ? "Renda fixa" : "Fixed income"} -{" "}
                       {activeAsset.symbol} · {activeAssetCurrency}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowModal(false)}
-                    className="text-xs text-[#8B94A6]"
-                  >
-                    {t("common.cancel")}
-                  </button>
+                  <button type="button" onClick={() => setShowModal(false)} className="ui-btn ui-btn-ghost ui-btn-sm">{t("common.cancel")}</button>
                 </div>
 
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold text-[#E5E8EF]">
-                    {t("investments.purchaseTitle")}
-                  </p>
+                  <p className="text-xs font-semibold text-[var(--text-1)]">{t("investments.purchaseTitle")}</p>
                   {purchasesLoading ? (
-                    <p className="text-xs text-[#8B94A6]">{t("common.loading")}</p>
+                    <p className="text-xs text-[var(--text-3)]">{t("common.loading")}</p>
                   ) : purchasesError ? (
-                    <p className="text-xs text-red-400">{purchasesError}</p>
+                    <p className="text-xs text-[var(--red)]">{purchasesError}</p>
                   ) : activePurchases.length ? (
                     <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
                       {activePurchases.map((purchase) => (
-                        <div
-                          key={purchase.id}
-                          className="rounded-xl border border-[#1E232E] bg-[#121621] px-3 py-2 text-xs"
-                        >
-                          <div className="flex items-center justify-between text-[#8B94A6]">
+                        <div key={purchase.id} className="ui-card-inner px-3 py-2 text-xs">
+                          <div className="flex items-center justify-between text-[var(--text-3)]">
                             <span>{formatShortDate(purchase.date, language)}</span>
-                            <span>
-                              {purchase.mode_used === "quantity"
-                                ? t("investments.modeQuantity")
-                                : t("investments.modeValue")}
-                            </span>
+                            <span>{purchase.mode_used === "quantity" ? t("investments.modeQuantity") : t("investments.modeValue")}</span>
                           </div>
-                          <div className="mt-2 grid grid-cols-2 gap-2 text-[#E5E8EF]">
-                            <div>
-                              {t("investments.pricePerShare")}{" "}
-                              {formatCurrency(
-                                Number(purchase.price_per_share) || 0,
-                                language,
-                                activeAssetCurrency,
-                              )}
-                            </div>
-                            <div>
-                              {t("investments.quantity")}{" "}
-                              {Number(purchase.quantity) || 0}
-                            </div>
-                            <div>
-                              {t("investments.total")}{" "}
-                              {formatCurrency(
-                                Number(purchase.total_invested) || 0,
-                                language,
-                                activeAssetCurrency,
-                              )}
-                            </div>
+                          <div className="mt-2 grid grid-cols-2 gap-2 text-[var(--text-1)]">
+                            <div>{t("investments.pricePerShare")} {formatCurrency(Number(purchase.price_per_share) || 0, language, activeAssetCurrency)}</div>
+                            <div>{t("investments.quantity")} {Number(purchase.quantity) || 0}</div>
+                            <div>{t("investments.total")} {formatCurrency(Number(purchase.total_invested) || 0, language, activeAssetCurrency)}</div>
                             {purchase.input_value ? (
-                              <div>
-                                {t("investments.investedValue")}{" "}
-                                {formatCurrency(
-                                  Number(purchase.input_value) || 0,
-                                  language,
-                                  activeAssetCurrency,
-                                )}
-                              </div>
+                              <div>{t("investments.investedValue")} {formatCurrency(Number(purchase.input_value) || 0, language, activeAssetCurrency)}</div>
                             ) : null}
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-[#8B94A6]">--</p>
+                    <p className="text-xs text-[var(--text-3)]">--</p>
                   )}
                 </div>
 
-                <div className="space-y-2 rounded-2xl border border-[#1E232E] bg-[#121621] p-3">
-                  <p className="text-xs font-semibold text-[#E5E8EF]">
-                    {t("investments.title")}
-                  </p>
+                <div className="space-y-2 ui-card-inner p-3">
+                  <p className="text-xs font-semibold text-[var(--text-1)]">{t("investments.title")}</p>
                   <div className="grid gap-2 md:grid-cols-2">
-                    <input
-                      value={editSymbol}
-                      onChange={(event) => setEditSymbol(event.target.value)}
-                      placeholder={t("investments.symbol")}
-                      className="w-full rounded-xl border border-[#1E232E] bg-[#0F121A] px-3 py-2 text-sm text-[#E4E7EC]"
-                    />
-                    <input
-                      value={editName}
-                      onChange={(event) => setEditName(event.target.value)}
-                      placeholder={t("investments.name")}
-                      className="w-full rounded-xl border border-[#1E232E] bg-[#0F121A] px-3 py-2 text-sm text-[#E4E7EC]"
-                    />
+                    <input value={editSymbol} onChange={(event) => setEditSymbol(event.target.value)} placeholder={t("investments.symbol")} className="ui-input w-full" />
+                    <input value={editName} onChange={(event) => setEditName(event.target.value)} placeholder={t("investments.name")} className="ui-input w-full" />
                   </div>
                   <div className="space-y-2">
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-[#8B94A6]">
-                      {t("investments.currency")}
-                    </p>
+                    <p className="ui-eyebrow">{t("investments.currency")}</p>
                     <div className="flex min-w-0 gap-2">
                       {(["BRL", "EUR"] as const).map((option) => {
-                        const disabled =
-                          !canSelectInvestmentCurrency(activeAsset.type) && option !== "BRL";
+                        const disabled = !canSelectInvestmentCurrency(activeAsset.type) && option !== "BRL";
                         const active = editAssetCurrency === option;
                         return (
-                          <button
-                            key={`${activeAsset.id}-${option}`}
-                            type="button"
-                            onClick={() => setEditCurrency(option)}
-                            disabled={disabled}
-                            className={`flex-1 rounded-xl border px-3 py-2 text-left text-xs transition ${
-                              active
-                                ? "border-[#3A8F8A] bg-[#163137] text-[#DCE3EE]"
-                                : "border-[#1C2332] bg-[#0F121A] text-[#DCE3EE]"
-                            } ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
-                          >
+                          <button key={`${activeAsset.id}-${option}`} type="button" onClick={() => setEditCurrency(option)} disabled={disabled}
+                            className={`flex-1 ui-btn ui-btn-sm text-left ${active ? "ui-btn-primary" : "ui-btn-secondary"} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}>
                             <span className="block font-semibold">{option}</span>
-                            <span className="block text-[10px] text-[#8B94A6]">
-                              {option === "BRL"
-                                ? t("investments.currencyBrl")
-                                : t("investments.currencyEur")}
-                            </span>
+                            <span className="block text-[10px] opacity-70">{option === "BRL" ? t("investments.currencyBrl") : t("investments.currencyEur")}</span>
                           </button>
                         );
                       })}
                     </div>
                     {!canSelectInvestmentCurrency(activeAsset.type) ? (
-                      <p className="text-[11px] text-[#8B94A6]">
-                        {t("investments.currencyLockedB3")}
-                      </p>
+                      <p className="text-[11px] text-[var(--text-3)]">{t("investments.currencyLockedB3")}</p>
                     ) : null}
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleUpdateAsset}
-                    disabled={editSaving}
-                    className="w-full rounded-xl bg-[#E6EDF3] py-2 text-sm font-semibold text-[#0C1018] disabled:opacity-60"
-                  >
+                  <button type="button" onClick={handleUpdateAsset} disabled={editSaving} className="ui-btn ui-btn-primary ui-btn-lg w-full">
                     {editSaving ? t("common.saving") : t("common.save")}
                   </button>
                 </div>
 
                 <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => handleRemove(activeAsset.id)}
-                    className="rounded-full border border-[#1E232E] bg-[#0F121A] px-3 py-1 text-xs text-[#8B94A6] hover:border-red-500/60 hover:text-red-400"
-                  >
+                  <button type="button" onClick={() => handleRemove(activeAsset.id)}
+                    className="ui-btn ui-btn-ghost ui-btn-sm text-[var(--text-3)] hover:text-[var(--red)]">
                     {t("investments.remove")}
                   </button>
                 </div>

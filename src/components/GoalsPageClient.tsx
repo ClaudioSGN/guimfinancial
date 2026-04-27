@@ -355,7 +355,6 @@ export function GoalsPageClient({
       if (status === "overdue") return "Prazo vencido";
       return "Flexivel";
     }
-
     if (status === "complete") return "Complete";
     if (status === "healthy") return "On track";
     if (status === "attention") return "Needs attention";
@@ -364,251 +363,267 @@ export function GoalsPageClient({
   }
 
   function getStatusClasses(status: GoalInsight["status"]) {
-    if (status === "complete") return "border-emerald-400/30 bg-emerald-500/12 text-emerald-200";
-    if (status === "healthy") return "border-cyan-400/30 bg-cyan-500/12 text-cyan-200";
-    if (status === "attention") return "border-amber-400/30 bg-amber-500/12 text-amber-200";
-    if (status === "overdue") return "border-rose-400/30 bg-rose-500/12 text-rose-200";
-    return "border-white/10 bg-white/[0.04] text-[#B5C2D7]";
+    if (status === "complete") return "border-[var(--green)] border-opacity-30 bg-[var(--green-dim)] text-[var(--green)]";
+    if (status === "healthy") return "border-[var(--accent)] border-opacity-30 bg-[var(--accent-dim)] text-[var(--accent)]";
+    if (status === "attention") return "border-[var(--amber)] border-opacity-30 bg-[var(--amber-dim)] text-[var(--amber)]";
+    if (status === "overdue") return "border-[var(--red)] border-opacity-30 bg-[var(--red-dim)] text-[var(--red)]";
+    return "border-[var(--border)] bg-[var(--surface-3)] text-[var(--text-2)]";
   }
+
+  function getProgressColor(status: GoalInsight["status"]) {
+    if (status === "complete") return "bg-[var(--green)]";
+    if (status === "attention" || status === "overdue") return "bg-[var(--amber)]";
+    return "bg-[var(--accent)]";
+  }
+
+  const isModalOpen = creating || editingGoal !== null;
 
   return (
     <>
-      <div className="grid gap-4 xl:grid-cols-[1.3fr_0.9fr]">
-        <section className="glass-dark glass-dark-card p-5">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-[#E7ECF2]">
-                {language === "pt" ? "Painel conectado de metas" : "Connected goals board"}
-              </p>
-              <p className="mt-1 max-w-2xl text-sm text-[#8B94A6]">
-                {language === "pt"
-                  ? "Agora as metas leem seu saldo, investimentos e resultado do mes para ajudar na decisao."
-                  : "Goals now read your balances, investments, and monthly result to guide decisions."}
-              </p>
+      <div className="flex flex-col gap-4">
+        {/* Top grid: summary + connected reading */}
+        <div className="grid gap-4 xl:grid-cols-[1.3fr_0.9fr]">
+          {/* Summary panel */}
+          <div className="ui-card p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-[var(--text-1)]">
+                  {language === "pt" ? "Painel de metas" : "Goals board"}
+                </p>
+                <p className="mt-1 max-w-2xl text-xs text-[var(--text-3)]">
+                  {language === "pt"
+                    ? "Suas metas conectadas ao saldo, investimentos e resultado do mes."
+                    : "Goals connected to your balances, investments, and monthly result."}
+                </p>
+              </div>
+              <button type="button" onClick={openCreate} className="ui-btn ui-btn-primary shrink-0">
+                {language === "pt" ? "Nova meta" : "New goal"}
+              </button>
             </div>
-            <button
-              onClick={openCreate}
-              className="inline-flex items-center justify-center rounded-full border border-[#2D6AE3]/50 bg-[#1C4EA8] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#245DC3]"
-            >
-              {language === "pt" ? "Nova meta" : "New goal"}
-            </button>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="ui-card-inner p-4">
+                <p className="ui-eyebrow">{language === "pt" ? "Acumulado" : "Saved"}</p>
+                <p className="mt-2 text-xl font-semibold text-[var(--text-1)]">{formatCurrency(summary.totalCurrent)}</p>
+                <p className="mt-0.5 text-xs text-[var(--text-3)]">{summary.progress}%</p>
+              </div>
+              <div className="ui-card-inner p-4">
+                <p className="ui-eyebrow">{language === "pt" ? "Falta conquistar" : "Still to fund"}</p>
+                <p className="mt-2 text-xl font-semibold text-[var(--text-1)]">{formatCurrency(summary.totalRemaining)}</p>
+                <p className="mt-0.5 text-xs text-[var(--text-3)]">{goalInsights.length} {language === "pt" ? "metas" : "goals"}</p>
+              </div>
+              <div className="ui-card-inner p-4">
+                <p className="ui-eyebrow">{language === "pt" ? "Saldo em contas" : "Cash in accounts"}</p>
+                <p className="mt-2 text-xl font-semibold text-[var(--text-1)]">{formatCurrency(accountBalanceTotal)}</p>
+                <p className="mt-0.5 text-xs text-[var(--text-3)]">{language === "pt" ? "Base liquida" : "Liquid base"}</p>
+              </div>
+              <div className="ui-card-inner p-4">
+                <p className="ui-eyebrow">{language === "pt" ? "Sobra do mes" : "Monthly surplus"}</p>
+                <p className={`mt-2 text-xl font-semibold ${monthlyNet >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                  {formatCurrency(monthlyNet)}
+                </p>
+                <p className="mt-0.5 text-xs text-[var(--text-3)]">
+                  {summary.onTrackCount} / {goalInsights.length} {language === "pt" ? "no ritmo" : "on track"}
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="glass-dark-inner rounded-[22px] p-4">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
-                {language === "pt" ? "Acumulado nas metas" : "Saved in goals"}
-              </p>
-              <p className="mt-2 text-2xl font-semibold text-white">{formatCurrency(summary.totalCurrent)}</p>
-              <p className="mt-1 text-xs text-[#8B94A6]">{summary.progress}%</p>
-            </div>
-            <div className="glass-dark-inner rounded-[22px] p-4">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
-                {language === "pt" ? "Falta conquistar" : "Still to fund"}
-              </p>
-              <p className="mt-2 text-2xl font-semibold text-white">{formatCurrency(summary.totalRemaining)}</p>
-              <p className="mt-1 text-xs text-[#8B94A6]">{goalInsights.length}</p>
-            </div>
-            <div className="glass-dark-inner rounded-[22px] p-4">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
-                {language === "pt" ? "Saldo em contas" : "Cash in accounts"}
-              </p>
-              <p className="mt-2 text-2xl font-semibold text-white">{formatCurrency(accountBalanceTotal)}</p>
-              <p className="mt-1 text-xs text-[#8B94A6]">
-                {language === "pt" ? "Base liquida" : "Liquid base"}
-              </p>
-            </div>
-            <div className="glass-dark-inner rounded-[22px] p-4">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">
-                {language === "pt" ? "Sobra do mes" : "Monthly surplus"}
-              </p>
-              <p className={`mt-2 text-2xl font-semibold ${monthlyNet >= 0 ? "text-[#8DE2D0]" : "text-[#FF9A9A]"}`}>
-                {formatCurrency(monthlyNet)}
-              </p>
-              <p className="mt-1 text-xs text-[#8B94A6]">
-                {summary.onTrackCount} / {goalInsights.length}
-              </p>
+          {/* Connected reading panel */}
+          <div className="ui-card p-5">
+            <p className="text-sm font-semibold text-[var(--text-1)]">
+              {language === "pt" ? "Leitura do app" : "Connected reading"}
+            </p>
+            <div className="mt-4 flex flex-col gap-3">
+              <div className="ui-card-inner p-4">
+                <p className="ui-eyebrow">{language === "pt" ? "Fluxo do mes" : "Monthly flow"}</p>
+                <p className="mt-2 text-sm text-[var(--text-2)]">
+                  {language === "pt"
+                    ? `Receitas: ${formatCurrency(monthlyIncome)} · Despesas: ${formatCurrency(monthlyExpenses)}`
+                    : `Income: ${formatCurrency(monthlyIncome)} · Expenses: ${formatCurrency(monthlyExpenses)}`}
+                </p>
+              </div>
+              <div className="ui-card-inner p-4">
+                <p className="ui-eyebrow">{language === "pt" ? "Investimentos" : "Investments"}</p>
+                <p className="mt-2 text-sm text-[var(--text-2)]">
+                  {formatCurrency(investmentBalanceTotal)}
+                </p>
+              </div>
+              <div className="ui-card-inner p-4">
+                <p className="ui-eyebrow">{language === "pt" ? "Maior categoria" : "Top category"}</p>
+                <p className="mt-2 text-sm text-[var(--text-2)]">
+                  {topExpenseCategory
+                    ? `${topExpenseCategory[0]} — ${formatCurrency(topExpenseCategory[1])}`
+                    : language === "pt"
+                      ? "Sem dados suficientes"
+                      : "Not enough data"}
+                </p>
+              </div>
             </div>
           </div>
-        </section>
+        </div>
 
-        <section className="glass-dark glass-dark-card p-5">
-          <p className="text-sm font-semibold text-[#E7ECF2]">
-            {language === "pt" ? "Leitura do resto do app" : "Connected reading"}
-          </p>
-          <div className="mt-4 space-y-3 text-sm text-[#DCE6F5]">
-            <div className="glass-dark-inner rounded-[22px] p-4">
-              {language === "pt"
-                ? `Receitas do mes: ${formatCurrency(monthlyIncome)}. Despesas: ${formatCurrency(monthlyExpenses)}.`
-                : `Monthly income: ${formatCurrency(monthlyIncome)}. Expenses: ${formatCurrency(monthlyExpenses)}.`}
-            </div>
-            <div className="glass-dark-inner rounded-[22px] p-4">
-              {language === "pt"
-                ? `Investimentos registrados: ${formatCurrency(investmentBalanceTotal)}.`
-                : `Registered investments: ${formatCurrency(investmentBalanceTotal)}.`}
-            </div>
-            <div className="glass-dark-inner rounded-[22px] p-4">
-              {topExpenseCategory
-                ? language === "pt"
-                  ? `Maior categoria do mes: ${topExpenseCategory[0]} com ${formatCurrency(topExpenseCategory[1])}.`
-                  : `Top category this month: ${topExpenseCategory[0]} with ${formatCurrency(topExpenseCategory[1])}.`
-                : language === "pt"
-                  ? "Ainda nao ha despesas suficientes neste mes."
-                  : "There are not enough expenses this month yet."}
-            </div>
+        {/* Goals list */}
+        {goalInsights.length === 0 ? (
+          <div className="ui-card p-5 text-sm text-[var(--text-3)]">
+            {language === "pt"
+              ? "Ainda nao ha metas registadas. Crie uma meta e use o contexto do app para acompanhar o ritmo."
+              : "There are no goals yet. Create one and use the rest of the app context to track the pace."}
           </div>
-        </section>
+        ) : (
+          <div className="grid gap-4 xl:grid-cols-2">
+            <AnimatePresence>
+              {goalInsights.map((item) => (
+                <motion.div
+                  key={item.goal.id}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  className="ui-card p-5"
+                >
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-base font-semibold text-[var(--text-1)]">{item.goal.name}</p>
+                          <span className={`ui-badge ${getStatusClasses(item.status)}`}>
+                            {getStatusLabel(item.status)}
+                          </span>
+                        </div>
+                        <p className="mt-1.5 text-xs text-[var(--text-3)]">
+                          {language === "pt" ? "Prazo" : "Deadline"}: {formatDeadline(item.goal.deadline, language)}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2 sm:justify-end">
+                        <button type="button" onClick={() => openEdit(item.goal)} className="ui-btn ui-btn-secondary ui-btn-sm">
+                          {language === "pt" ? "Editar" : "Edit"}
+                        </button>
+                        <button type="button" onClick={() => handleDelete(item.goal)} className="ui-btn ui-btn-ghost ui-btn-sm text-[var(--text-3)] hover:text-[var(--red)]">
+                          {language === "pt" ? "Apagar" : "Delete"}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="ui-card-inner p-4">
+                        <p className="ui-eyebrow">{language === "pt" ? "Meta" : "Target"}</p>
+                        <p className="mt-2 text-lg font-semibold text-[var(--text-1)]">{formatCurrency(item.target)}</p>
+                        <p className="mt-0.5 text-xs text-[var(--text-3)]">{language === "pt" ? "Atual" : "Current"}: {formatCurrency(item.current)}</p>
+                      </div>
+                      <div className="ui-card-inner p-4">
+                        <p className="ui-eyebrow">{language === "pt" ? "Falta" : "Remaining"}</p>
+                        <p className="mt-2 text-lg font-semibold text-[var(--text-1)]">{formatCurrency(item.remaining)}</p>
+                        <p className="mt-0.5 text-xs text-[var(--text-3)]">{item.percent}%</p>
+                      </div>
+                    </div>
+
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface-3)]">
+                      <div
+                        className={`h-full rounded-full transition-all ${getProgressColor(item.status)}`}
+                        style={{ width: `${item.percent}%` }}
+                      />
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="ui-card-inner p-3">
+                        <p className="ui-eyebrow">{language === "pt" ? "Ritmo sugerido" : "Suggested pace"}</p>
+                        <p className="mt-2 text-sm font-semibold text-[var(--text-1)]">
+                          {item.monthlyContributionNeeded != null ? formatCurrency(item.monthlyContributionNeeded) : language === "pt" ? "Livre" : "Flexible"}
+                        </p>
+                      </div>
+                      <div className="ui-card-inner p-3">
+                        <p className="ui-eyebrow">{language === "pt" ? "Meses restantes" : "Months left"}</p>
+                        <p className="mt-2 text-sm font-semibold text-[var(--text-1)]">
+                          {item.monthsRemaining != null ? `${item.monthsRemaining}` : "--"}
+                        </p>
+                      </div>
+                      <div className="ui-card-inner p-3">
+                        <p className="ui-eyebrow">{language === "pt" ? "Cobertura" : "Coverage"}</p>
+                        <p className="mt-2 text-sm font-semibold text-[var(--text-1)]">
+                          {accountBalanceTotal > 0 ? `${Math.min(Math.round((item.remaining / accountBalanceTotal) * 100), 999)}%` : "--"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
       </div>
 
-      {goalInsights.length === 0 ? (
-        <div className="glass-dark glass-dark-card mt-1 p-5 text-sm text-[#8B94A6]">
-          {language === "pt"
-            ? "Ainda nao ha metas registadas. Crie uma meta e use o contexto do app para acompanhar o ritmo."
-            : "There are no goals yet. Create one and use the rest of the app context to track the pace."}
-        </div>
-      ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
-          <AnimatePresence>
-            {goalInsights.map((item) => (
-              <motion.div
-                key={item.goal.id}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                className="glass-dark glass-dark-card p-5"
-              >
-                <div className="flex flex-col gap-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-lg font-semibold text-[#F7FBFF]">{item.goal.name}</p>
-                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusClasses(item.status)}`}>
-                          {getStatusLabel(item.status)}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-sm text-[#A9B5C7]">
-                        {language === "pt" ? "Prazo" : "Deadline"} {formatDeadline(item.goal.deadline, language)}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2 sm:justify-end">
-                      <button onClick={() => openEdit(item.goal)} className="glass-dark-pill px-3 py-1.5 text-[11px] text-[#D6E1F0]">
-                        {language === "pt" ? "Editar" : "Edit"}
-                      </button>
-                      <button onClick={() => handleDelete(item.goal)} className="glass-dark-pill px-3 py-1.5 text-[11px] text-[#FFADB6]">
-                        {language === "pt" ? "Apagar" : "Delete"}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="glass-dark-inner rounded-[20px] p-4">
-                      <p className="text-[11px] uppercase tracking-[0.16em] text-[#7F8AA0]">{language === "pt" ? "Meta" : "Target"}</p>
-                      <p className="mt-2 text-xl font-semibold text-white">{formatCurrency(item.target)}</p>
-                      <p className="mt-1 text-xs text-[#8B94A6]">{language === "pt" ? "Atual" : "Current"} {formatCurrency(item.current)}</p>
-                    </div>
-                    <div className="glass-dark-inner rounded-[20px] p-4">
-                      <p className="text-[11px] uppercase tracking-[0.16em] text-[#7F8AA0]">{language === "pt" ? "Falta" : "Remaining"}</p>
-                      <p className="mt-2 text-xl font-semibold text-white">{formatCurrency(item.remaining)}</p>
-                      <p className="mt-1 text-xs text-[#8B94A6]">{item.percent}%</p>
-                    </div>
-                  </div>
-
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-white/8">
-                    <div
-                      className={`h-full rounded-full ${item.status === "complete" ? "bg-[linear-gradient(90deg,#43c39e,#76dfc1)]" : item.status === "attention" || item.status === "overdue" ? "bg-[linear-gradient(90deg,#f59e0b,#fb7185)]" : "bg-[linear-gradient(90deg,#6aa3ff,#93c8ff)]"}`}
-                      style={{ width: `${item.percent}%` }}
-                    />
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <div className="glass-dark-inner rounded-[18px] p-3">
-                      <p className="text-[10px] uppercase tracking-[0.16em] text-[#7F8AA0]">{language === "pt" ? "Ritmo sugerido" : "Suggested pace"}</p>
-                      <p className="mt-2 text-sm font-semibold text-[#EAF1FF]">
-                        {item.monthlyContributionNeeded != null ? formatCurrency(item.monthlyContributionNeeded) : language === "pt" ? "Livre" : "Flexible"}
-                      </p>
-                    </div>
-                    <div className="glass-dark-inner rounded-[18px] p-3">
-                      <p className="text-[10px] uppercase tracking-[0.16em] text-[#7F8AA0]">{language === "pt" ? "Prazo restante" : "Time left"}</p>
-                      <p className="mt-2 text-sm font-semibold text-[#EAF1FF]">
-                        {item.monthsRemaining != null ? `${item.monthsRemaining}` : "--"}
-                      </p>
-                    </div>
-                    <div className="glass-dark-inner rounded-[18px] p-3">
-                      <p className="text-[10px] uppercase tracking-[0.16em] text-[#7F8AA0]">{language === "pt" ? "Cobertura do saldo" : "Cash coverage"}</p>
-                      <p className="mt-2 text-sm font-semibold text-[#EAF1FF]">
-                        {accountBalanceTotal > 0 ? `${Math.min(Math.round((item.remaining / accountBalanceTotal) * 100), 999)}%` : "--"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
-      )}
-
-      {creating || editingGoal ? (
-        <div className="app-modal-backdrop fixed inset-0 z-40 flex items-center justify-center px-4 py-6">
+      {/* Create / Edit modal */}
+      {isModalOpen ? (
+        <div
+          className="ui-modal-backdrop fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+          onClick={closeModal}
+        >
           <div
-            className="glass-dark glass-dark-card max-h-[min(90vh,720px)] w-full max-w-xl overflow-y-auto p-5"
-            onClick={(event) => event.stopPropagation()}
+            className="ui-card-2 ui-slide-up max-h-[min(90vh,720px)] w-full max-w-xl overflow-y-auto rounded-t-2xl p-5 sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-[#F7FBFF]">
-                {creating ? (language === "pt" ? "Nova meta" : "New goal") : language === "pt" ? "Editar meta" : "Edit goal"}
-              </h2>
-              <button type="button" onClick={closeModal} className="text-xs text-[#8B94A6]">
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-[var(--text-1)]">
+                  {creating ? (language === "pt" ? "Nova meta" : "New goal") : language === "pt" ? "Editar meta" : "Edit goal"}
+                </p>
+                <p className="mt-0.5 text-xs text-[var(--text-3)]">
+                  {language === "pt" ? "Preencha os dados abaixo." : "Fill in the details below."}
+                </p>
+              </div>
+              <button type="button" onClick={closeModal} className="ui-btn ui-btn-ghost ui-btn-sm">
                 {language === "pt" ? "Fechar" : "Close"}
               </button>
             </div>
 
+            {/* Quick-fill shortcuts */}
             <div className="mb-4 grid gap-3 sm:grid-cols-3">
-              <button type="button" onClick={() => applyQuickCurrentAmount(accountBalanceTotal)} className="glass-dark-inner rounded-[18px] p-3 text-left">
-                <p className="text-[10px] uppercase tracking-[0.16em] text-[#7F8AA0]">{language === "pt" ? "Contas" : "Accounts"}</p>
-                <p className="mt-2 text-sm font-semibold text-[#EAF1FF]">{formatCurrency(accountBalanceTotal)}</p>
+              <button type="button" onClick={() => applyQuickCurrentAmount(accountBalanceTotal)} className="ui-card-inner p-3 text-left transition-colors hover:bg-[var(--surface-3)]">
+                <p className="ui-eyebrow">{language === "pt" ? "Contas" : "Accounts"}</p>
+                <p className="mt-2 text-sm font-semibold text-[var(--text-1)]">{formatCurrency(accountBalanceTotal)}</p>
               </button>
-              <button type="button" onClick={() => applyQuickCurrentAmount(investmentBalanceTotal)} className="glass-dark-inner rounded-[18px] p-3 text-left">
-                <p className="text-[10px] uppercase tracking-[0.16em] text-[#7F8AA0]">{language === "pt" ? "Investimentos" : "Investments"}</p>
-                <p className="mt-2 text-sm font-semibold text-[#EAF1FF]">{formatCurrency(investmentBalanceTotal)}</p>
+              <button type="button" onClick={() => applyQuickCurrentAmount(investmentBalanceTotal)} className="ui-card-inner p-3 text-left transition-colors hover:bg-[var(--surface-3)]">
+                <p className="ui-eyebrow">{language === "pt" ? "Investimentos" : "Investments"}</p>
+                <p className="mt-2 text-sm font-semibold text-[var(--text-1)]">{formatCurrency(investmentBalanceTotal)}</p>
               </button>
-              <button type="button" onClick={() => applyQuickCurrentAmount(monthlyCapacity)} className="glass-dark-inner rounded-[18px] p-3 text-left">
-                <p className="text-[10px] uppercase tracking-[0.16em] text-[#7F8AA0]">{language === "pt" ? "Sobra do mes" : "Monthly surplus"}</p>
-                <p className="mt-2 text-sm font-semibold text-[#EAF1FF]">{formatCurrency(monthlyCapacity)}</p>
+              <button type="button" onClick={() => applyQuickCurrentAmount(monthlyCapacity)} className="ui-card-inner p-3 text-left transition-colors hover:bg-[var(--surface-3)]">
+                <p className="ui-eyebrow">{language === "pt" ? "Sobra do mes" : "Monthly surplus"}</p>
+                <p className="mt-2 text-sm font-semibold text-[var(--text-1)]">{formatCurrency(monthlyCapacity)}</p>
               </button>
             </div>
 
-            <form className="space-y-4" onSubmit={handleSubmit}>
-              <div className="space-y-1 text-sm">
-                <label className="text-xs text-[#8B94A6]">{language === "pt" ? "Nome da meta" : "Goal name"}</label>
+            <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+              <div className="flex flex-col gap-1.5">
+                <label className="ui-label">{language === "pt" ? "Nome da meta" : "Goal name"}</label>
                 <input
                   type="text"
                   value={form.name}
-                  onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-                  className="app-input px-4 py-3 text-sm"
+                  onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
+                  className="ui-input"
                   placeholder={language === "pt" ? "Ex: Reserva de emergencia" : "Ex: Emergency fund"}
                 />
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1 text-sm">
-                  <label className="text-xs text-[#8B94A6]">{language === "pt" ? `Valor alvo (${currency})` : `Target amount (${currency})`}</label>
+                <div className="flex flex-col gap-1.5">
+                  <label className="ui-label">{language === "pt" ? `Valor alvo (${currency})` : `Target amount (${currency})`}</label>
                   <input
                     type="text"
                     value={form.targetAmount}
-                    onChange={(event) => setForm((current) => ({ ...current, targetAmount: formatCentsInput(event.target.value, currency) }))}
-                    className="app-input px-4 py-3 text-sm"
+                    onChange={(e) => setForm((s) => ({ ...s, targetAmount: formatCentsInput(e.target.value, currency) }))}
+                    className="ui-input"
                     inputMode="numeric"
                     pattern="[0-9]*"
                     placeholder={emptyMoneyValue}
                   />
                 </div>
-                <div className="space-y-1 text-sm">
-                  <label className="text-xs text-[#8B94A6]">{language === "pt" ? `Valor atual (${currency})` : `Current amount (${currency})`}</label>
+                <div className="flex flex-col gap-1.5">
+                  <label className="ui-label">{language === "pt" ? `Valor atual (${currency})` : `Current amount (${currency})`}</label>
                   <input
                     type="text"
                     value={form.currentAmount}
-                    onChange={(event) => setForm((current) => ({ ...current, currentAmount: formatCentsInput(event.target.value, currency) }))}
-                    className="app-input px-4 py-3 text-sm"
+                    onChange={(e) => setForm((s) => ({ ...s, currentAmount: formatCentsInput(e.target.value, currency) }))}
+                    className="ui-input"
                     inputMode="numeric"
                     pattern="[0-9]*"
                     placeholder={emptyMoneyValue}
@@ -616,27 +631,36 @@ export function GoalsPageClient({
                 </div>
               </div>
 
-              <div className="space-y-1 text-sm">
-                <label className="text-xs text-[#8B94A6]">{language === "pt" ? "Prazo (opcional)" : "Deadline (optional)"}</label>
+              <div className="flex flex-col gap-1.5">
+                <label className="ui-label">{language === "pt" ? "Prazo (opcional)" : "Deadline (optional)"}</label>
                 <input
                   type="date"
                   value={form.deadline}
-                  onChange={(event) => setForm((current) => ({ ...current, deadline: event.target.value }))}
-                  className="app-input px-4 py-3 text-sm"
+                  onChange={(e) => setForm((s) => ({ ...s, deadline: e.target.value }))}
+                  className="ui-input"
                 />
               </div>
 
-              <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3 text-xs text-[#8B94A6]">
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-3)] px-3 py-2.5 text-xs text-[var(--text-3)]">
                 {language === "pt"
-                  ? `Contexto conectado: contas ${formatCurrency(accountBalanceTotal)}, investimentos ${formatCurrency(investmentBalanceTotal)} e sobra do mes ${formatCurrency(monthlyCapacity)}.`
-                  : `Connected context: accounts ${formatCurrency(accountBalanceTotal)}, investments ${formatCurrency(investmentBalanceTotal)}, and monthly surplus ${formatCurrency(monthlyCapacity)}.`}
+                  ? `Contas: ${formatCurrency(accountBalanceTotal)} · Investimentos: ${formatCurrency(investmentBalanceTotal)} · Sobra: ${formatCurrency(monthlyCapacity)}`
+                  : `Accounts: ${formatCurrency(accountBalanceTotal)} · Investments: ${formatCurrency(investmentBalanceTotal)} · Surplus: ${formatCurrency(monthlyCapacity)}`}
               </div>
 
-              {errorMsg ? <p className="text-xs text-red-400">{errorMsg}</p> : null}
+              {errorMsg ? <p className="text-xs text-[var(--red)]">{errorMsg}</p> : null}
 
-              <button type="submit" disabled={saving} className="inline-flex w-full items-center justify-center rounded-full border border-[#2D6AE3]/50 bg-[#1C4EA8] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#245DC3] disabled:opacity-60">
-                {saving ? (language === "pt" ? "A guardar..." : "Saving...") : creating ? (language === "pt" ? "Criar meta" : "Create goal") : language === "pt" ? "Guardar alteracoes" : "Save changes"}
-              </button>
+              <div className="flex gap-2 sm:justify-end">
+                <button type="button" onClick={closeModal} className="ui-btn ui-btn-secondary flex-1 sm:flex-none">
+                  {language === "pt" ? "Cancelar" : "Cancel"}
+                </button>
+                <button type="submit" disabled={saving} className="ui-btn ui-btn-primary flex-1 sm:flex-none">
+                  {saving
+                    ? (language === "pt" ? "A guardar..." : "Saving...")
+                    : creating
+                      ? (language === "pt" ? "Criar meta" : "Create goal")
+                      : (language === "pt" ? "Guardar" : "Save")}
+                </button>
+              </div>
             </form>
           </div>
         </div>

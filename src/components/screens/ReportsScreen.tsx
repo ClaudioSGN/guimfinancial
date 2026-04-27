@@ -360,21 +360,21 @@ export function ReportsScreen() {
       current: income,
       previous: previousIncome,
       change: getMonthChange(income, previousIncome),
-      tone: "text-[#5DD6C7]",
+      tone: "text-[var(--green)]",
     },
     {
       label: copy.expenses,
       current: expenses,
       previous: previousExpenses,
       change: getMonthChange(expenses, previousExpenses),
-      tone: "text-[#F59E8B]",
+      tone: "text-[var(--red)]",
     },
     {
       label: copy.net,
       current: net,
       previous: previousIncome - previousExpenses,
       change: getMonthChange(net, previousIncome - previousExpenses),
-      tone: net >= 0 ? "text-[#5DD6C7]" : "text-[#F59E8B]",
+      tone: net >= 0 ? "text-[var(--green)]" : "text-[var(--red)]",
     },
   ];
 
@@ -435,11 +435,17 @@ export function ReportsScreen() {
       .slice(0, 5);
   }, [monthTransactions]);
 
+  const comparisonRowTone = (row: typeof comparisonRows[0]) => {
+    if (row.label === copy.income) return "text-[var(--green)]";
+    if (row.label === copy.expenses) return "text-[var(--red)]";
+    return row.current >= 0 ? "text-[var(--green)]" : "text-[var(--red)]";
+  };
+
   const categoryTooltip = ({ active, payload }: TooltipContentProps<number, string>) => {
     if (!active || !payload?.length) return null;
     const item = payload[0].payload as { name: string; value: number; share: number };
     return (
-      <div className="rounded-xl border border-[#1C2332] bg-[#0F141E] p-3 text-xs text-[#E4E7EC] shadow-lg">
+      <div className="chart-tooltip">
         <p className="font-semibold">{item.name}</p>
         <p>{formatCurrency(item.value, language, currency)}</p>
         <p>{formatPercent(item.share, language)}%</p>
@@ -450,34 +456,24 @@ export function ReportsScreen() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="space-y-1">
-          <p className="text-[11px] uppercase tracking-[0.2em] text-[#7F8694]">{copy.eyebrow}</p>
-          <p className="text-2xl font-semibold text-[#E5E8EF]">{copy.title}</p>
-          <p className="text-sm text-[#8A93A3]">{copy.subtitle}</p>
+        <div>
+          <p className="ui-eyebrow">{copy.eyebrow}</p>
+          <p className="mt-1 text-xl font-semibold text-[var(--text-1)]">{copy.title}</p>
+          <p className="mt-0.5 text-sm text-[var(--text-3)]">{copy.subtitle}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setMonthOpen((value) => !value)}
-          className="flex items-center gap-2 rounded-full border border-[#2A3140] bg-[#141A25] px-4 py-2 text-sm font-semibold text-[#C7CEDA]"
-        >
+        <button type="button" onClick={() => setMonthOpen((v) => !v)} className="ui-btn ui-btn-secondary gap-1.5">
           <span>{monthLabel}</span>
-          <AppIcon name="chevron-down" size={16} />
+          <AppIcon name="chevron-down" size={14} />
         </button>
       </div>
 
       {monthOpen ? (
-        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-2">
+        <div className="ui-card p-2">
           <div className="grid gap-1 sm:grid-cols-3">
             {monthOptions.map((option) => (
-              <button
-                key={option.label}
-                type="button"
-                onClick={() => {
-                  setSelectedMonth(option.value);
-                  setMonthOpen(false);
-                }}
-                className="rounded-xl px-3 py-2 text-left text-sm text-[#C7CEDA] hover:bg-[#151A27]"
-              >
+              <button key={option.label} type="button"
+                onClick={() => { setSelectedMonth(option.value); setMonthOpen(false); }}
+                className="rounded-xl px-3 py-2 text-left text-sm text-[var(--text-1)] hover:bg-[var(--surface-3)]">
                 {option.label}
               </button>
             ))}
@@ -485,68 +481,56 @@ export function ReportsScreen() {
         </div>
       ) : null}
 
-      {errorMsg ? <p className="text-sm text-red-400">{errorMsg}</p> : null}
+      {errorMsg ? <p className="text-sm text-[var(--red)]">{errorMsg}</p> : null}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5">
-          <p className="text-xs uppercase tracking-[0.18em] text-[#7F8AA0]">{copy.income}</p>
-          <p className="mt-3 text-3xl font-semibold text-[#5DD6C7]">
-            {loading ? "..." : formatCurrency(income, language, currency)}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5">
-          <p className="text-xs uppercase tracking-[0.18em] text-[#7F8AA0]">{copy.expenses}</p>
-          <p className="mt-3 text-3xl font-semibold text-[#F59E8B]">
-            {loading ? "..." : formatCurrency(expenses, language, currency)}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5">
-          <p className="text-xs uppercase tracking-[0.18em] text-[#7F8AA0]">{copy.net}</p>
-          <p className={`mt-3 text-3xl font-semibold ${net >= 0 ? "text-[#5DD6C7]" : "text-[#F59E8B]"}`}>
-            {loading ? "..." : formatCurrency(net, language, currency)}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5">
-          <p className="text-xs uppercase tracking-[0.18em] text-[#7F8AA0]">{copy.savingsRate}</p>
-          <p className="mt-3 text-3xl font-semibold text-[#E4E7EC]">
-            {loading ? "..." : savingsRate == null ? "--" : `${formatPercent(savingsRate, language)}%`}
-          </p>
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: copy.income, value: income, color: "text-[var(--green)]" },
+          { label: copy.expenses, value: expenses, color: "text-[var(--red)]" },
+          { label: copy.net, value: net, color: net >= 0 ? "text-[var(--green)]" : "text-[var(--red)]" },
+          { label: copy.savingsRate, value: null, color: "text-[var(--text-1)]", special: savingsRate == null ? "--" : `${formatPercent(savingsRate, language)}%` },
+        ].map((stat) => (
+          <div key={stat.label} className="ui-card p-5">
+            <p className="ui-eyebrow">{stat.label}</p>
+            <p className={`mt-3 ui-stat-value ${stat.color}`}>
+              {loading ? "—" : stat.special ?? formatCurrency(stat.value ?? 0, language, currency)}
+            </p>
+          </div>
+        ))}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
-        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5">
+        {/* Category breakdown */}
+        <div className="ui-card p-5">
           <div className="mb-4">
-            <p className="text-sm font-semibold text-[#C7CEDA]">{copy.categoryBreakdown}</p>
-            <p className="text-xs text-[#8B94A6]">{copy.categorySubtitle}</p>
+            <p className="text-sm font-semibold text-[var(--text-1)]">{copy.categoryBreakdown}</p>
+            <p className="text-xs text-[var(--text-3)]">{copy.categorySubtitle}</p>
           </div>
           {categoryData.length === 0 ? (
-            <p className="text-sm text-[#8B94A6]">{copy.categoryEmpty}</p>
+            <p className="text-sm text-[var(--text-3)]">{copy.categoryEmpty}</p>
           ) : (
             <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={categoryData} dataKey="value" nameKey="name" innerRadius={62} outerRadius={100} paddingAngle={1.8}>
-                      {categoryData.map((entry) => (
-                        <Cell key={entry.name} fill={entry.color} />
-                      ))}
+                      {categoryData.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
                     </Pie>
                     <Tooltip content={categoryTooltip} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="space-y-3">
+              <div className="flex flex-col gap-2">
                 {categoryData.map((category) => (
-                  <div key={category.name} className="rounded-xl border border-[#1C2332] bg-[#0F141E] p-3">
+                  <div key={category.name} className="ui-card-inner p-3">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
-                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: category.color }} />
-                        <span className="text-sm font-semibold text-[#E4E7EC]">{category.name}</span>
+                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: category.color }} />
+                        <span className="text-sm font-semibold text-[var(--text-1)]">{category.name}</span>
                       </div>
-                      <span className="text-xs text-[#8B94A6]">{formatPercent(category.share, language)}%</span>
+                      <span className="text-xs text-[var(--text-3)]">{formatPercent(category.share, language)}%</span>
                     </div>
-                    <p className="mt-2 text-sm text-[#C7CEDA]">{formatCurrency(category.value, language, currency)}</p>
+                    <p className="mt-1.5 text-sm text-[var(--text-2)]">{formatCurrency(category.value, language, currency)}</p>
                   </div>
                 ))}
               </div>
@@ -554,25 +538,22 @@ export function ReportsScreen() {
           )}
         </div>
 
-        <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5">
+        {/* Monthly comparison */}
+        <div className="ui-card p-5">
           <div className="mb-4">
-            <p className="text-sm font-semibold text-[#C7CEDA]">{copy.comparison}</p>
-            <p className="text-xs text-[#8B94A6]">{copy.comparisonSubtitle}</p>
+            <p className="text-sm font-semibold text-[var(--text-1)]">{copy.comparison}</p>
+            <p className="text-xs text-[var(--text-3)]">{copy.comparisonSubtitle}</p>
           </div>
-          <div className="space-y-3">
+          <div className="flex flex-col gap-3">
             {comparisonRows.map((row) => (
-              <div key={row.label} className="rounded-xl border border-[#1C2332] bg-[#0F141E] p-4">
+              <div key={row.label} className="ui-card-inner p-4">
                 <div className="flex items-center justify-between gap-4">
-                  <span className="text-sm font-semibold text-[#E4E7EC]">{row.label}</span>
-                  <span className={`text-sm font-semibold ${row.tone}`}>{formatCurrency(row.current, language, currency)}</span>
+                  <span className="text-sm font-semibold text-[var(--text-1)]">{row.label}</span>
+                  <span className={`text-sm font-semibold ${comparisonRowTone(row)}`}>{formatCurrency(row.current, language, currency)}</span>
                 </div>
-                <div className="mt-2 flex items-center justify-between gap-4 text-xs text-[#8B94A6]">
+                <div className="mt-2 flex items-center justify-between gap-4 text-xs text-[var(--text-3)]">
                   <span>{copy.previousMonth}</span>
-                  <span>
-                    {row.change == null
-                      ? "--"
-                      : `${row.change >= 0 ? "+" : ""}${formatPercent(row.change, language)}%`}
-                  </span>
+                  <span>{row.change == null ? "--" : `${row.change >= 0 ? "+" : ""}${formatPercent(row.change, language)}%`}</span>
                 </div>
               </div>
             ))}
@@ -580,35 +561,26 @@ export function ReportsScreen() {
         </div>
       </div>
 
+      {/* Split charts */}
       <div className="grid gap-4 xl:grid-cols-2">
-        {[{
-          title: copy.paymentSplit,
-          subtitle: copy.paymentSplitSubtitle,
-          data: paymentSplit,
-        }, {
-          title: copy.fixedSplit,
-          subtitle: copy.fixedSplitSubtitle,
-          data: fixedSplit,
-        }].map((section) => (
-          <div key={section.title} className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5">
+        {[
+          { title: copy.paymentSplit, subtitle: copy.paymentSplitSubtitle, data: paymentSplit },
+          { title: copy.fixedSplit, subtitle: copy.fixedSplitSubtitle, data: fixedSplit },
+        ].map((section) => (
+          <div key={section.title} className="ui-card p-5">
             <div className="mb-4">
-              <p className="text-sm font-semibold text-[#C7CEDA]">{section.title}</p>
-              <p className="text-xs text-[#8B94A6]">{section.subtitle}</p>
+              <p className="text-sm font-semibold text-[var(--text-1)]">{section.title}</p>
+              <p className="text-xs text-[var(--text-3)]">{section.subtitle}</p>
             </div>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={section.data} margin={{ left: -20, right: 10, top: 10, bottom: 0 }}>
-                  <CartesianGrid stroke="#1C2332" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fill: "#8B94A6", fontSize: 12 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "#8B94A6", fontSize: 12 }} axisLine={false} tickLine={false} width={80} tickFormatter={(value) => formatCurrency(Number(value), language, currency)} />
-                  <Tooltip
-                    formatter={(value) => formatCurrency(Number(value ?? 0), language, currency)}
-                    contentStyle={{ backgroundColor: "#0F141E", borderColor: "#1C2332", borderRadius: 12, color: "#E4E7EC" }}
-                  />
-                  <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                    {section.data.map((entry) => (
-                      <Cell key={entry.name} fill={entry.color} />
-                    ))}
+                  <CartesianGrid stroke="rgba(255,255,255,0.055)" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fill: "#4a6278", fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#4a6278", fontSize: 12 }} axisLine={false} tickLine={false} width={80} tickFormatter={(v) => formatCurrency(Number(v), language, currency)} />
+                  <Tooltip formatter={(v) => formatCurrency(Number(v ?? 0), language, currency)} contentStyle={{ backgroundColor: "#131e30", borderColor: "rgba(255,255,255,0.10)", borderRadius: 10, color: "#edf3fc" }} />
+                  <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                    {section.data.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -617,26 +589,27 @@ export function ReportsScreen() {
         ))}
       </div>
 
-      <div className="rounded-2xl border border-[#1B2230] bg-[#111723] p-5">
+      {/* Top expenses */}
+      <div className="ui-card p-5">
         <div className="mb-4">
-          <p className="text-sm font-semibold text-[#C7CEDA]">{copy.topExpenses}</p>
-          <p className="text-xs text-[#8B94A6]">{copy.topExpensesSubtitle}</p>
+          <p className="text-sm font-semibold text-[var(--text-1)]">{copy.topExpenses}</p>
+          <p className="text-xs text-[var(--text-3)]">{copy.topExpensesSubtitle}</p>
         </div>
         {topExpenses.length === 0 ? (
-          <p className="text-sm text-[#8B94A6]">{copy.noData}</p>
+          <p className="text-sm text-[var(--text-3)]">{copy.noData}</p>
         ) : (
-          <div className="space-y-3">
+          <div className="flex flex-col gap-2">
             {topExpenses.map((tx, index) => (
-              <div key={tx.displayId} className="flex items-center justify-between gap-4 rounded-xl border border-[#1C2332] bg-[#0F141E] p-4">
+              <div key={tx.displayId} className="ui-card-inner flex items-center justify-between gap-4 p-4">
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-[#E4E7EC]">
+                  <p className="text-sm font-semibold text-[var(--text-1)]">
                     {index + 1}. {tx.description || tx.category || "--"}
                   </p>
-                  <p className="text-xs text-[#8B94A6]">
+                  <p className="text-xs text-[var(--text-3)]">
                     {tx.category || (language === "pt" ? "Sem categoria" : "No category")}
                   </p>
                 </div>
-                <span className="shrink-0 text-sm font-semibold text-[#F59E8B]">
+                <span className="ui-amount shrink-0 text-sm text-[var(--red)]">
                   {formatCurrency(tx.displayAmount, language, currency)}
                 </span>
               </div>
