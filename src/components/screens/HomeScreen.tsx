@@ -56,6 +56,7 @@ type Transaction = {
   card_id: string | null;
   description: string | null;
   category: string | null;
+  is_fixed: boolean | null;
   is_installment: boolean | null;
   installment_total: number | null;
   installments_paid: number | null;
@@ -327,6 +328,20 @@ function parseLocalDate(value: string) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed;
+}
+
+function addMonthsClamped(date: Date, monthsToAdd: number) {
+  const targetMonthStart = new Date(date.getFullYear(), date.getMonth() + monthsToAdd, 1);
+  const lastDay = new Date(
+    targetMonthStart.getFullYear(),
+    targetMonthStart.getMonth() + 1,
+    0,
+  ).getDate();
+  return new Date(
+    targetMonthStart.getFullYear(),
+    targetMonthStart.getMonth(),
+    Math.min(date.getDate(), lastDay),
+  );
 }
 
 function getSpeechRecognitionConstructor() {
@@ -635,13 +650,17 @@ function buildMonthTransactions(
     const amount = Number(tx.amount) || 0;
     const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
     const isInstallment = totalInstallments > 0;
+    const isFixedExpense =
+      !!tx.is_fixed && (tx.type === "expense" || tx.type === "card_expense");
+    const monthOffset =
+      (monthStart.getFullYear() - txDate.getFullYear()) * 12 +
+      (monthStart.getMonth() - txDate.getMonth());
 
-    if (isInstallment && totalInstallments > 0) {
+    if (isInstallment) {
       const perInstallment = amount / totalInstallments;
       const entries: DisplayTransaction[] = [];
       for (let i = 0; i < totalInstallments; i += 1) {
-        const installmentDate = new Date(txDate);
-        installmentDate.setMonth(txDate.getMonth() + i);
+        const installmentDate = addMonthsClamped(txDate, i);
         if (installmentDate < monthStart || installmentDate > monthEnd) continue;
         entries.push({
           ...tx,
@@ -652,6 +671,21 @@ function buildMonthTransactions(
         });
       }
       return entries;
+    }
+
+    if (isFixedExpense) {
+      if (monthOffset < 0) return [];
+      const recurringDate = addMonthsClamped(txDate, monthOffset);
+      if (recurringDate < monthStart || recurringDate > monthEnd) return [];
+      return [
+        {
+          ...tx,
+          displayId: `${tx.id}-f${monthOffset}`,
+          displayDate: toDateString(recurringDate),
+          effectiveDate: toDateString(recurringDate),
+          displayAmount: amount,
+        },
+      ];
     }
 
     if (isSalaryCarryoverCandidate(tx, txDate)) {
@@ -887,7 +921,7 @@ export function HomeScreen() {
     async function loadTransactionsForDashboard() {
       const transactionsResult = await supabase
         .from("transactions")
-        .select("id,type,amount,value,date,account_id,card_id,description,category,is_installment,installment_total,installments_paid,is_paid")
+        .select("id,type,amount,value,date,account_id,card_id,description,category,is_fixed,is_installment,installment_total,installments_paid,is_paid")
         .eq("user_id", userId)
         .lte("date", queryEnd)
         .order("date", { ascending: false });
@@ -904,8 +938,8 @@ export function HomeScreen() {
       }
 
       const fallbackSelect = hasMissingColumnError(transactionsResult.error, ["value"])
-        ? "id,type,amount,date,account_id,card_id,description,category,is_installment,installment_total,installments_paid,is_paid"
-        : "id,type,value,date,account_id,card_id,description,category,is_installment,installment_total,installments_paid,is_paid";
+        ? "id,type,amount,date,account_id,card_id,description,category,is_fixed,is_installment,installment_total,installments_paid,is_paid"
+        : "id,type,value,date,account_id,card_id,description,category,is_fixed,is_installment,installment_total,installments_paid,is_paid";
 
       const legacyTransactionsResult = await supabase
         .from("transactions")
@@ -927,7 +961,7 @@ export function HomeScreen() {
     async function loadCardTransactionsForDashboard() {
       const cardTransactionsResult = await supabase
         .from("transactions")
-        .select("id,type,amount,value,date,account_id,card_id,description,category,is_installment,installment_total,installments_paid,is_paid")
+        .select("id,type,amount,value,date,account_id,card_id,description,category,is_fixed,is_installment,installment_total,installments_paid,is_paid")
         .eq("user_id", userId)
         .not("card_id", "is", null)
         .order("date", { ascending: false });
@@ -944,8 +978,8 @@ export function HomeScreen() {
       }
 
       const fallbackSelect = hasMissingColumnError(cardTransactionsResult.error, ["value"])
-        ? "id,type,amount,date,account_id,card_id,description,category,is_installment,installment_total,installments_paid,is_paid"
-        : "id,type,value,date,account_id,card_id,description,category,is_installment,installment_total,installments_paid,is_paid";
+        ? "id,type,amount,date,account_id,card_id,description,category,is_fixed,is_installment,installment_total,installments_paid,is_paid"
+        : "id,type,value,date,account_id,card_id,description,category,is_fixed,is_installment,installment_total,installments_paid,is_paid";
 
       const legacyCardTransactionsResult = await supabase
         .from("transactions")
