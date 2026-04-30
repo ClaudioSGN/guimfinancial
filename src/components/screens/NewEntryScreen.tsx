@@ -7,6 +7,8 @@ import { useLanguage } from "@/lib/language";
 import { useCurrency } from "@/lib/currency";
 import { useAuth } from "@/lib/auth";
 import { AppIcon } from "@/components/AppIcon";
+import { BankBrandBadge, BankBrandPicker } from "@/components/BankBrandBadge";
+import { DEFAULT_BANK_BRAND_CODE, type BankBrandCode } from "@/lib/bankBrands";
 import { hasMissingColumnError } from "@/lib/errorUtils";
 import { formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
 
@@ -23,6 +25,7 @@ type Card = {
   name: string;
   owner_type: CardOwnerType;
   friend_name: string | null;
+  bank_code?: string | null;
 };
 
 type LegacyCard = Omit<Card, "owner_type" | "friend_name">;
@@ -90,6 +93,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
   const [newCardLimitAmount, setNewCardLimitAmount] = useState(emptyMoneyValue);
   const [newCardOwnerType, setNewCardOwnerType] = useState<CardOwnerType>("self");
   const [newCardFriendName, setNewCardFriendName] = useState("");
+  const [newCardBankCode, setNewCardBankCode] = useState<BankBrandCode>(DEFAULT_BANK_BRAND_CODE);
   const [newCardClosingDay, setNewCardClosingDay] = useState("");
   const [newCardDueDay, setNewCardDueDay] = useState("");
   const [createCardSaving, setCreateCardSaving] = useState(false);
@@ -110,7 +114,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
       const loadCards = async () => {
         const cardsResult = await supabase
           .from("credit_cards")
-          .select("id,name,owner_type,friend_name")
+          .select("id,name,owner_type,friend_name,bank_code")
           .eq("user_id", user.id)
           .order("owner_type", { ascending: true })
           .order("name", { ascending: true });
@@ -283,6 +287,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
 
   function resetCreateCardForm() {
     setNewCardName("");
+    setNewCardBankCode(DEFAULT_BANK_BRAND_CODE);
     setNewCardLimitAmount(emptyMoneyValue);
     setNewCardOwnerType("self");
     setNewCardFriendName("");
@@ -340,6 +345,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
         {
           user_id: user.id,
           name: newCardName.trim(),
+          bank_code: newCardBankCode,
           limit_amount: parsedLimit,
           owner_type: newCardOwnerType,
           friend_name: newCardOwnerType === "friend" ? trimmedFriendName : null,
@@ -347,11 +353,11 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
           due_day: parsedDue,
         },
       ])
-      .select("id,name,owner_type,friend_name")
+      .select("id,name,owner_type,friend_name,bank_code")
       .single();
 
-    if (error && isCardOwnershipColumnMissing(error)) {
-      if (newCardOwnerType === "friend") {
+    if (error && (isCardOwnershipColumnMissing(error) || hasMissingColumnError(error, ["bank_code"]))) {
+      if (newCardOwnerType === "friend" && isCardOwnershipColumnMissing(error)) {
         setCreateCardError(t("cards.schemaUpdateRequired"));
         setCreateCardSaving(false);
         return;
@@ -364,18 +370,22 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
             user_id: user.id,
             name: newCardName.trim(),
             limit_amount: parsedLimit,
+            ...(isCardOwnershipColumnMissing(error)
+              ? {}
+              : { owner_type: newCardOwnerType, friend_name: newCardOwnerType === "friend" ? trimmedFriendName : null }),
             closing_day: parsedClosing,
             due_day: parsedDue,
           },
         ])
-        .select("id,name")
+        .select("id,name,owner_type,friend_name")
         .single();
 
       data = legacyResult.data
         ? {
-            ...(legacyResult.data as LegacyCard),
-            owner_type: "self",
-            friend_name: null,
+            ...(legacyResult.data as LegacyCard & { owner_type?: CardOwnerType; friend_name?: string | null }),
+            owner_type: (legacyResult.data as { owner_type?: CardOwnerType }).owner_type ?? "self",
+            friend_name: (legacyResult.data as { friend_name?: string | null }).friend_name ?? null,
+            bank_code: null,
           }
         : null;
       error = legacyResult.error;
@@ -451,7 +461,8 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
                 <span className="text-xs text-[var(--text-3)]">{language === "pt" ? "Nenhum cartão cadastrado." : "No cards registered."}</span>
               ) : cards.map((card) => (
                 <button key={card.id} type="button" onClick={() => setCardId(card.id)}
-                  className={`ui-btn ui-btn-sm ${cardId === card.id ? "ui-btn-primary" : "ui-btn-secondary"}`}>
+                  className={`ui-btn ui-btn-sm gap-2 ${cardId === card.id ? "ui-btn-primary" : "ui-btn-secondary"}`}>
+                  <BankBrandBadge bankCode={card.bank_code} size="sm" />
                   {card.owner_type === "friend" && card.friend_name ? `${card.name} · ${card.friend_name}` : card.name}
                 </button>
               ))}
@@ -550,6 +561,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
                   ))}
                 </div>
               </div>
+              <BankBrandPicker selected={newCardBankCode} onSelect={setNewCardBankCode} />
               <input value={newCardName} onChange={(e) => setNewCardName(e.target.value)} placeholder={t("cards.namePlaceholder")} className="ui-input" />
               {newCardOwnerType === "friend" ? (
                 <input value={newCardFriendName} onChange={(e) => setNewCardFriendName(e.target.value)} placeholder={t("cards.friendNamePlaceholder")} className="ui-input" />

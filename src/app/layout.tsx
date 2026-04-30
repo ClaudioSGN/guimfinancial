@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { ReactNode } from "react";
 import { Manrope, Sora } from "next/font/google";
 import "./globals.css";
@@ -22,6 +22,12 @@ const displayFont = Sora({
 export const metadata: Metadata = {
   title: "Guim Financas",
   description: "Painel financeiro pessoal com visual leve e foco no dia a dia.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

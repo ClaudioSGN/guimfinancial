@@ -75,7 +75,7 @@ export function AppShell({ activeTab, children }: Props) {
   return (
     <div className="min-h-screen">
       {/* ── Desktop sidebar ─────────────────────────────────────────────── */}
-      <aside className="fixed left-0 top-0 z-40 hidden h-full w-[60px] flex-col items-center border-r border-[var(--border)] bg-[var(--surface)] py-4 lg:flex">
+      <aside className="fixed left-0 top-0 z-40 hidden h-full w-[60px] flex-col items-center border-r border-[var(--border)] bg-[var(--surface)] py-4 md:flex">
         <div className="flex flex-1 flex-col items-center gap-1 pt-2">
           {navItems.map((item) => {
             const isActive = activeTab === item.key;
@@ -113,27 +113,27 @@ export function AppShell({ activeTab, children }: Props) {
       </aside>
 
       {/* ── Page content ────────────────────────────────────────────────── */}
-      <div className="min-h-screen pb-24 lg:pb-6 lg:pl-[60px]">
-        <div className="px-3 pt-4 sm:px-4 lg:px-6 lg:pt-6">
+      <div className="min-h-screen pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-6 md:pl-[60px]">
+        <div className="px-3 pt-4 sm:px-4 md:px-6 md:pt-6">
           {children}
         </div>
       </div>
 
       {/* ── Mobile bottom bar ───────────────────────────────────────────── */}
-      <nav className="nav-bar fixed bottom-0 left-0 right-0 z-40 lg:hidden">
-        <div className="mx-auto flex max-w-[480px] items-center justify-around px-2 pb-[calc(0.6rem+env(safe-area-inset-bottom))] pt-2">
+      <nav className="nav-bar fixed bottom-0 left-0 right-0 z-40 md:hidden">
+        <div className="flex w-full items-center justify-around px-1 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 xs:px-2">
           {navItems.slice(0, 2).map((item) => {
             const isActive = activeTab === item.key;
             return (
               <Link
                 key={item.key}
                 href={item.href}
-                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 text-[10px] font-medium transition-colors ${
+                className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 py-1.5 text-[10px] font-medium transition-colors ${
                   isActive ? "text-[var(--accent)]" : "text-[var(--text-3)]"
                 }`}
               >
                 <AppIcon name={item.icon} size={22} />
-                <span>{item.label}</span>
+                <span className="truncate">{item.label}</span>
               </Link>
             );
           })}
@@ -142,7 +142,7 @@ export function AppShell({ activeTab, children }: Props) {
           <button
             type="button"
             onClick={() => setMenuOpen((v) => !v)}
-            className="mx-2 flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] shadow-[0_6px_20px_rgba(79,142,255,0.4)] transition-transform active:scale-95"
+            className="mx-1 flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] shadow-[0_6px_20px_rgba(79,142,255,0.4)] transition-transform active:scale-95"
           >
             <div className={`transition-transform duration-200 ${menuOpen ? "rotate-45" : "rotate-0"}`}>
               <AppIcon name="plus" size={22} color="#fff" />
@@ -155,12 +155,12 @@ export function AppShell({ activeTab, children }: Props) {
               <Link
                 key={item.key}
                 href={item.href}
-                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 text-[10px] font-medium transition-colors ${
+                className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 py-1.5 text-[10px] font-medium transition-colors ${
                   isActive ? "text-[var(--accent)]" : "text-[var(--text-3)]"
                 }`}
               >
                 <AppIcon name={item.icon} size={22} />
-                <span>{item.label}</span>
+                <span className="truncate">{item.label}</span>
               </Link>
             );
           })}
@@ -175,7 +175,10 @@ export function AppShell({ activeTab, children }: Props) {
         >
           <div
             className="ui-card-2 ui-slide-up w-full max-w-lg overflow-y-auto rounded-t-2xl p-5 sm:rounded-2xl"
-            style={{ maxHeight: "min(92vh, 760px)" }}
+            style={{
+              maxHeight: "min(92dvh, 760px)",
+              paddingBottom: "max(1.25rem, calc(env(safe-area-inset-bottom) + 1.25rem))",
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
@@ -203,7 +206,7 @@ export function AppShell({ activeTab, children }: Props) {
         >
           {/* Desktop: dropdown panel next to FAB */}
           <div
-            className="absolute bottom-16 left-[72px] hidden lg:block"
+            className="absolute bottom-16 left-[72px] hidden md:block"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="ui-card-2 ui-slide-up flex flex-col gap-1 overflow-hidden p-2">
@@ -231,7 +234,8 @@ export function AppShell({ activeTab, children }: Props) {
 
           {/* Mobile: radial menu above FAB */}
           <div
-            className="absolute bottom-[100px] left-1/2 -translate-x-1/2 lg:hidden"
+            className="absolute left-1/2 -translate-x-1/2 md:hidden"
+            style={{ bottom: "calc(100px + env(safe-area-inset-bottom))" }}
             ref={menuRef}
             onClick={(e) => e.stopPropagation()}
           >

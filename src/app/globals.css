@@ -313,8 +313,10 @@ a {
 /* ─── Navigation ────────────────────────────────────────────────────────────── */
 
 .nav-bar {
-  background: var(--surface);
+  background: rgba(13, 21, 37, 0.92);
   border-top: 1px solid var(--border-bright);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
 }
 
 /* ─── Skeleton loading ──────────────────────────────────────────────────────── */
