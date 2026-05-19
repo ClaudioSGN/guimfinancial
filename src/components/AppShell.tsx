@@ -32,22 +32,31 @@ export function AppShell({ activeTab, children }: Props) {
 
   const menuItems = useMemo(
     () => [
-      { key: "transfer",    label: t("newEntry.transfer"),           icon: "transfer",     color: "#A78BFA" },
-      { key: "income",      label: t("newEntry.income"),             icon: "arrow-up",     color: "#34D399" },
-      { key: "investment",  label: t("investments.newInvestment"),   icon: "wallet",       color: "#60A5FA" },
-      { key: "card_expense",label: t("newEntry.cardExpense"),        icon: "credit-card",  color: "#FBBF24" },
-      { key: "expense",     label: t("newEntry.expense"),            icon: "arrow-down",   color: "#F87171" },
+      { key: "transfer", label: t("newEntry.transfer"), icon: "transfer", color: "#A78BFA" },
+      { key: "income", label: t("newEntry.income"), icon: "arrow-up", color: "#34D399" },
+      { key: "investment", label: t("investments.newInvestment"), icon: "wallet", color: "#60A5FA" },
+      { key: "card_expense", label: t("newEntry.cardExpense"), icon: "credit-card", color: "#FBBF24" },
+      { key: "expense", label: t("newEntry.expense"), icon: "arrow-down", color: "#F87171" },
     ] as const,
     [t],
   );
 
-  const navItems = [
-    { href: "/",             key: "home",         icon: "house",    label: t("tabs.home") },
-    { href: "/transactions", key: "transactions", icon: "list",     label: t("tabs.transactions") },
-    { href: "/investments",  key: "investments",  icon: "calendar", label: t("tabs.investments") },
-    { href: "/goals",        key: "goals",        icon: "target",   label: goalsLabel },
-    { href: "/more",         key: "more",         icon: "more",     label: t("tabs.more") },
+  const desktopNavItems = [
+    { href: "/", key: "home", icon: "house", label: t("tabs.home") },
+    { href: "/transactions", key: "transactions", icon: "list", label: t("tabs.transactions") },
+    { href: "/investments", key: "investments", icon: "calendar", label: t("tabs.investments") },
+    { href: "/goals", key: "goals", icon: "target", label: goalsLabel },
+    { href: "/more", key: "more", icon: "more", label: t("tabs.more") },
   ] as const;
+
+  const mobileNavItems = [
+    { href: "/", key: "home", icon: "house", label: t("tabs.home") },
+    { href: "/transactions", key: "transactions", icon: "list", label: t("tabs.transactions") },
+    { href: "/investments", key: "investments", icon: "calendar", label: t("tabs.investments") },
+    { href: "/more", key: "more", icon: "more", label: t("tabs.more") },
+  ] as const;
+
+  const mobileActiveTab: TabKey = activeTab === "goals" ? "more" : activeTab;
 
   useEffect(() => {
     let timeoutId: number | undefined;
@@ -61,6 +70,34 @@ export function AppShell({ activeTab, children }: Props) {
     };
   }, [menuOpen, menuVisible]);
 
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    const root = document.documentElement;
+    const body = document.body;
+
+    const applyViewportLock = () => {
+      if (media.matches) {
+        root.style.height = "100%";
+        body.style.height = "100%";
+        body.style.overflow = "hidden";
+      } else {
+        root.style.height = "";
+        body.style.height = "";
+        body.style.overflow = "";
+      }
+    };
+
+    applyViewportLock();
+    media.addEventListener("change", applyViewportLock);
+
+    return () => {
+      media.removeEventListener("change", applyViewportLock);
+      root.style.height = "";
+      body.style.height = "";
+      body.style.overflow = "";
+    };
+  }, []);
+
   function openNewEntry(type: string) {
     if (type === "investment") {
       investmentEntryCounter.current += 1;
@@ -73,11 +110,10 @@ export function AppShell({ activeTab, children }: Props) {
   }
 
   return (
-    <div className="min-h-screen">
-      {/* ── Desktop sidebar ─────────────────────────────────────────────── */}
+    <div className="h-[100dvh] overflow-hidden md:min-h-screen md:h-auto md:overflow-visible">
       <aside className="fixed left-0 top-0 z-40 hidden h-full w-[60px] flex-col items-center border-r border-[var(--border)] bg-[var(--surface)] py-4 md:flex">
         <div className="flex flex-1 flex-col items-center gap-1 pt-2">
-          {navItems.map((item) => {
+          {desktopNavItems.map((item) => {
             const isActive = activeTab === item.key;
             return (
               <Link
@@ -99,11 +135,10 @@ export function AppShell({ activeTab, children }: Props) {
           })}
         </div>
 
-        {/* FAB ── */}
         <button
           type="button"
           title={t("newEntry.title")}
-          onClick={() => setMenuOpen((v) => !v)}
+          onClick={() => setMenuOpen((value) => !value)}
           className="mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--accent)] text-white shadow-[0_4px_16px_rgba(79,142,255,0.35)] transition-transform hover:scale-105 active:scale-95"
         >
           <div className={`transition-transform duration-200 ${menuOpen ? "rotate-45" : "rotate-0"}`}>
@@ -112,36 +147,44 @@ export function AppShell({ activeTab, children }: Props) {
         </button>
       </aside>
 
-      {/* ── Page content ────────────────────────────────────────────────── */}
-      <div className="min-h-screen pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-6 md:pl-[60px]">
-        <div className="px-3 pt-4 sm:px-4 md:px-6 md:pt-6">
+      <div className="h-full md:min-h-screen md:h-auto md:pl-[60px]">
+        <div
+          className="h-[calc(100dvh-6rem-env(safe-area-inset-bottom))] overflow-y-auto overscroll-y-none px-3 pb-4 pt-4 sm:px-4 md:h-auto md:min-h-screen md:overflow-visible md:px-6 md:pb-6 md:pt-6"
+          style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}
+        >
           {children}
         </div>
       </div>
 
-      {/* ── Mobile bottom bar ───────────────────────────────────────────── */}
       <nav className="nav-bar fixed bottom-0 left-0 right-0 z-40 md:hidden">
-        <div className="flex w-full items-center justify-around px-1 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 xs:px-2">
-          {navItems.slice(0, 2).map((item) => {
-            const isActive = activeTab === item.key;
+        <div className="flex w-full items-center justify-around gap-1 px-1 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 xs:px-2">
+          {mobileNavItems.slice(0, 2).map((item) => {
+            const isActive = mobileActiveTab === item.key;
             return (
               <Link
                 key={item.key}
                 href={item.href}
-                className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 py-1.5 text-[10px] font-medium transition-colors ${
-                  isActive ? "text-[var(--accent)]" : "text-[var(--text-3)]"
+                aria-current={isActive ? "page" : undefined}
+                className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-2xl px-1 py-2 text-[10px] font-semibold transition-all ${
+                  isActive
+                    ? "bg-[linear-gradient(180deg,rgba(79,142,255,0.18),rgba(79,142,255,0.08))] text-[var(--text-1)] shadow-[0_10px_24px_rgba(8,14,24,0.22)]"
+                    : "text-[var(--text-3)]"
                 }`}
               >
-                <AppIcon name={item.icon} size={22} />
+                <span className={`absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 rounded-full transition-opacity ${isActive ? "bg-[var(--accent)] opacity-100" : "opacity-0"}`} />
+                <span className={`flex h-9 w-9 items-center justify-center rounded-2xl transition-colors ${
+                  isActive ? "bg-[var(--accent-dim)] text-[var(--accent)]" : "text-current"
+                }`}>
+                  <AppIcon name={item.icon} size={20} />
+                </span>
                 <span className="truncate">{item.label}</span>
               </Link>
             );
           })}
 
-          {/* Center FAB */}
           <button
             type="button"
-            onClick={() => setMenuOpen((v) => !v)}
+            onClick={() => setMenuOpen((value) => !value)}
             className="mx-1 flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] shadow-[0_6px_20px_rgba(79,142,255,0.4)] transition-transform active:scale-95"
           >
             <div className={`transition-transform duration-200 ${menuOpen ? "rotate-45" : "rotate-0"}`}>
@@ -149,17 +192,25 @@ export function AppShell({ activeTab, children }: Props) {
             </div>
           </button>
 
-          {navItems.slice(2).map((item) => {
-            const isActive = activeTab === item.key;
+          {mobileNavItems.slice(2).map((item) => {
+            const isActive = mobileActiveTab === item.key;
             return (
               <Link
                 key={item.key}
                 href={item.href}
-                className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 py-1.5 text-[10px] font-medium transition-colors ${
-                  isActive ? "text-[var(--accent)]" : "text-[var(--text-3)]"
+                aria-current={isActive ? "page" : undefined}
+                className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-2xl px-1 py-2 text-[10px] font-semibold transition-all ${
+                  isActive
+                    ? "bg-[linear-gradient(180deg,rgba(79,142,255,0.18),rgba(79,142,255,0.08))] text-[var(--text-1)] shadow-[0_10px_24px_rgba(8,14,24,0.22)]"
+                    : "text-[var(--text-3)]"
                 }`}
               >
-                <AppIcon name={item.icon} size={22} />
+                <span className={`absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 rounded-full transition-opacity ${isActive ? "bg-[var(--accent)] opacity-100" : "opacity-0"}`} />
+                <span className={`flex h-9 w-9 items-center justify-center rounded-2xl transition-colors ${
+                  isActive ? "bg-[var(--accent-dim)] text-[var(--accent)]" : "text-current"
+                }`}>
+                  <AppIcon name={item.icon} size={20} />
+                </span>
                 <span className="truncate">{item.label}</span>
               </Link>
             );
@@ -167,7 +218,6 @@ export function AppShell({ activeTab, children }: Props) {
         </div>
       </nav>
 
-      {/* ── New entry modal ─────────────────────────────────────────────── */}
       {activeModalType ? (
         <div
           className="ui-modal-backdrop fixed inset-0 z-50 flex items-end justify-center sm:items-center"
@@ -179,7 +229,7 @@ export function AppShell({ activeTab, children }: Props) {
               maxHeight: "min(92dvh, 760px)",
               paddingBottom: "max(1.25rem, calc(env(safe-area-inset-bottom) + 1.25rem))",
             }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
               <p className="text-sm font-semibold text-[var(--text-1)]" />
@@ -196,26 +246,24 @@ export function AppShell({ activeTab, children }: Props) {
         </div>
       ) : null}
 
-      {/* ── Action menu overlay ──────────────────────────────────────────── */}
-      {menuVisible && (
+      {menuVisible ? (
         <div
           className={`ui-modal-backdrop fixed inset-0 z-50 transition-opacity duration-200 ${
             menuOpen ? "opacity-100" : "pointer-events-none opacity-0"
           }`}
           onClick={() => setMenuOpen(false)}
         >
-          {/* Desktop: dropdown panel next to FAB */}
           <div
             className="absolute bottom-16 left-[72px] hidden md:block"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
           >
             <div className="ui-card-2 ui-slide-up flex flex-col gap-1 overflow-hidden p-2">
               {menuItems.map((item) => (
                 <button
                   key={item.key}
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
+                  onClick={(event) => {
+                    event.stopPropagation();
                     openNewEntry(item.key);
                   }}
                   className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[var(--text-1)] transition-colors hover:bg-[var(--surface-3)]"
@@ -232,12 +280,11 @@ export function AppShell({ activeTab, children }: Props) {
             </div>
           </div>
 
-          {/* Mobile: radial menu above FAB */}
           <div
             className="absolute left-1/2 -translate-x-1/2 md:hidden"
             style={{ bottom: "calc(100px + env(safe-area-inset-bottom))" }}
             ref={menuRef}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
           >
             <div className="relative h-[200px] w-[200px]">
               {menuItems.map((item, index) => {
@@ -247,12 +294,13 @@ export function AppShell({ activeTab, children }: Props) {
                 const rad = (angle * Math.PI) / 180;
                 const x = Math.cos(rad) * radius;
                 const y = Math.sin(rad) * radius;
+
                 return (
                   <button
                     key={item.key}
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
+                    onClick={(event) => {
+                      event.stopPropagation();
                       openNewEntry(item.key);
                     }}
                     className={`absolute left-1/2 top-1/2 flex flex-col items-center gap-1.5 transition-all duration-200 ${
@@ -280,7 +328,7 @@ export function AppShell({ activeTab, children }: Props) {
             </div>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -457,6 +457,12 @@ export function MoreScreen() {
       <div className="flex flex-col gap-3">
         <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-3)]">{t("more.moreOptions")}</p>
         <div className="flex flex-col gap-2">
+          <Link href="/goals" className="ui-card block p-4 transition-colors hover:border-[var(--border-bright)] hover:bg-[var(--surface-2)] md:hidden">
+            <p className="text-sm font-semibold text-[var(--text-1)]">{language === "pt" ? "Metas" : "Goals"}</p>
+            <p className="mt-0.5 text-xs text-[var(--text-3)]">
+              {language === "pt" ? "Planejamento de objetivos e acompanhamento de progresso." : "Goal planning and progress tracking."}
+            </p>
+          </Link>
           {([
             { href: "/reports", label: language === "pt" ? "Relatórios" : "Reports", hint: language === "pt" ? "Resumo mensal, categorias e comparações." : "Monthly summary, categories, and comparisons." },
             { href: "/accounts", label: t("more.accounts"), hint: t("more.accountsHint") },
