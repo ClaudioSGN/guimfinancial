@@ -60,6 +60,16 @@ type Quote = {
   vacancyPct?: number | null;
 };
 
+type StoredInvestmentType =
+  | InvestmentType
+  | "stock"
+  | "fii"
+  | "etf"
+  | "bdr"
+  | "fixed"
+  | "other"
+  | string;
+
 type PricePoint = {
   time: number;
   price: number;
@@ -125,7 +135,6 @@ type FixedIncomeSnapshot = {
   estimatedDailyProfit: number;
 };
 
-const BRAPI_KEY = process.env.NEXT_PUBLIC_BRAPI_KEY;
 const B3_SUFFIX = ".SA";
 const FEATURED_CRYPTO_IDS = [
   "bitcoin",
@@ -151,27 +160,81 @@ const DEFAULT_INVESTMENT_FILTER: InvestmentFilterSettings = {
     vacancyPct: "10",
   },
 };
-const BRAPI_DEFAULT_HEADERS = {
-  Accept: "application/json,text/plain,*/*",
-};
-const BRAPI_BACKOFF_MS = 30 * 1000;
-const BRAPI_PERMANENT_SYMBOL_CODES = new Set([
-  "INVALID_STOCK",
-  "INVALID_SYMBOL",
-  "SYMBOL_NOT_FOUND",
-  "QUOTE_NOT_FOUND",
-  "NO_RESULTS",
-  "NOT_FOUND",
-]);
-let brapiBlockedUntil = 0;
-const badB3Symbols = new Set<string>();
-let brapiUseToken = Boolean(BRAPI_KEY);
-let brapiHistoryRange = "1y";
 const INVESTIDOR10_PROXY_PREFIXES = [
   "https://api.codetabs.com/v1/proxy/?quest=",
   "https://api.allorigins.win/raw?url=",
 ];
 const investidor10FundamentalsCache = new Map<string, Partial<Quote> | null>();
+
+function normalizeStoredInvestmentType(
+  value: StoredInvestmentType | null | undefined,
+  symbol?: string | null,
+  name?: string | null,
+): InvestmentType {
+  const normalizedValue = typeof value === "string"
+    ? value
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim()
+    : "";
+
+  if (value === "b3" || value === "crypto" || value === "fixed_income") return value;
+  if (
+    normalizedValue === "fixed" ||
+    normalizedValue === "fixed-income" ||
+    normalizedValue === "fixed income" ||
+    normalizedValue === "fixed_income" ||
+    normalizedValue === "renda fixa" ||
+    normalizedValue === "renda_fixa"
+  ) {
+    return "fixed_income";
+  }
+  if (
+    normalizedValue === "stock" ||
+    normalizedValue === "stocks" ||
+    normalizedValue === "acao" ||
+    normalizedValue === "acoes" ||
+    normalizedValue === "fii" ||
+    normalizedValue === "fiis" ||
+    normalizedValue === "fundo imobiliario" ||
+    normalizedValue === "fundos imobiliarios" ||
+    normalizedValue === "etf" ||
+    normalizedValue === "etfs" ||
+    normalizedValue === "bdr" ||
+    normalizedValue === "bdrs" ||
+    normalizedValue === "other"
+  ) {
+    return "b3";
+  }
+  if (
+    normalizedValue === "crypto" ||
+    normalizedValue === "cripto" ||
+    normalizedValue === "cryptos" ||
+    normalizedValue === "criptos"
+  ) {
+    return "crypto";
+  }
+
+  const normalizedSymbol = typeof symbol === "string" ? symbol.trim().toUpperCase() : "";
+  const normalizedName = typeof name === "string"
+    ? name
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+    : "";
+
+  if (normalizedName.includes("cripto") || normalizedName.includes("crypto")) {
+    return "crypto";
+  }
+  if (normalizedName.includes("cdi") || normalizedName.includes("renda fixa")) {
+    return "fixed_income";
+  }
+  if (/^[A-Z0-9]{4,8}$/.test(normalizedSymbol)) {
+    return "b3";
+  }
+  return "b3";
+}
 
 function toPoints(entries: Array<{ time: number; price: number }> | PricePoint[]) {
   return entries
@@ -189,57 +252,6 @@ function isLikelyB3Symbol(value: string) {
 
 function isLikelyCryptoId(value: string) {
   return /^[a-z0-9-]{2,64}$/.test(value);
-}
-
-function isBrapiBlocked() {
-  return Date.now() < brapiBlockedUntil;
-}
-
-function pickSupportedBrapiRange(message?: string) {
-  if (!message) return null;
-  const fromMessage = message.match(/Ranges permitidos:\s*([^\n]+)/i)?.[1];
-  if (!fromMessage) return null;
-  const available = fromMessage
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-  const preferredOrder = ["1y", "3mo", "1mo", "5d", "1d"];
-  return preferredOrder.find((range) => available.includes(range)) ?? null;
-}
-
-function extractBrapiErrorDetails(payload: any) {
-  const codeCandidates = [
-    payload?.code,
-    payload?.errorCode,
-    payload?.error?.code,
-    payload?.errors?.[0]?.code,
-  ];
-  const messageCandidates = [
-    payload?.message,
-    payload?.error_description,
-    payload?.error?.message,
-    typeof payload?.error === "string" ? payload.error : undefined,
-    payload?.errors?.[0]?.message,
-  ];
-  const code = codeCandidates.find((value) => typeof value === "string");
-  const message = messageCandidates.find((value) => typeof value === "string");
-  return {
-    code: code ? String(code) : undefined,
-    message: message ? String(message) : undefined,
-  };
-}
-
-function isPermanentB3SymbolError(code?: string, message?: string) {
-  if (code && BRAPI_PERMANENT_SYMBOL_CODES.has(code.toUpperCase())) {
-    return true;
-  }
-  if (!message) return false;
-  const lower = message.toLowerCase();
-  return (
-    (lower.includes("symbol") && lower.includes("invalid")) ||
-    lower.includes("symbol not found") ||
-    lower.includes("nao encontrado")
-  );
 }
 
 function parseNumberish(value: unknown) {
@@ -399,261 +411,99 @@ function shouldUseFiiFallback(normalized: string, longName: unknown) {
   );
 }
 
-function handleBrapiFailure(
-  status: number,
-  normalizedSymbol?: string,
-  usedToken?: boolean,
-  code?: string,
-  message?: string,
-) {
-  if (status === 400 && code?.toUpperCase() === "INVALID_RANGE") {
-    const nextRange = pickSupportedBrapiRange(message);
-    if (nextRange) {
-      brapiHistoryRange = nextRange;
-    } else if (brapiHistoryRange === "1y") {
-      brapiHistoryRange = "3mo";
-    }
-    return;
-  }
-  if (
-    (status === 400 || status === 404) &&
-    normalizedSymbol &&
-    isPermanentB3SymbolError(code, message)
-  ) {
-    badB3Symbols.add(normalizedSymbol);
-    return;
-  }
-  if ((status === 401 || status === 403) && usedToken) {
-    brapiUseToken = false;
-    return;
-  }
-  if (status === 429 || status >= 500 || status === 0) {
-    brapiBlockedUntil = Date.now() + BRAPI_BACKOFF_MS;
-  }
-}
-
 async function fetchSingleB3Quote(
   normalized: string,
-  options: { includeFundamentalsFallback?: boolean } = {},
+  options: { includeFundamentalsFallback?: boolean; name?: string | null } = {},
 ): Promise<Quote | null> {
-  if (isBrapiBlocked()) return null;
-  if (!isLikelyB3Symbol(normalized) || badB3Symbols.has(normalized)) return null;
-  const { includeFundamentalsFallback = true } = options;
+  if (!isLikelyB3Symbol(normalized)) return null;
 
-  const requestQuote = async (useToken: boolean): Promise<Quote | null> => {
-    const tokenParam = useToken && BRAPI_KEY ? `?token=${encodeURIComponent(BRAPI_KEY)}` : "";
-    const res = await fetch(
-      `https://brapi.dev/api/quote/${encodeURIComponent(normalized)}${tokenParam}`,
-      { cache: "no-store", headers: BRAPI_DEFAULT_HEADERS },
-    );
-    if (!res.ok) {
-      let errorCode: string | undefined;
-      let errorMessage: string | undefined;
-      try {
-        const json = await res.json();
-        const details = extractBrapiErrorDetails(json);
-        errorCode = details.code;
-        errorMessage = details.message;
-      } catch {
-        // ignore json parse for error body
-      }
-      handleBrapiFailure(res.status, normalized, useToken, errorCode, errorMessage);
-      return null;
-    }
-    const json = await res.json();
-    const item = (json?.results ?? []).find(
-      (result: any) =>
-        result?.symbol &&
-        normalizeB3Symbol(String(result.symbol)) === normalized,
-    );
-    if (item?.regularMarketPrice == null) return null;
-    const rawDy =
-      item?.dividendYield ??
-      item?.dividend_yield ??
-      item?.regularMarketDividendYield ??
-      item?.trailingAnnualDividendYield;
-    const rawPvp =
-      item?.priceToBook ??
-      item?.priceToBookRatio ??
-      item?.pvp;
-    const rawSharesOutstanding =
-      item?.sharesOutstanding ??
-      item?.totalShares ??
-      item?.shares;
-    const rawBookValue =
-      item?.bookValue ??
-      item?.netWorth ??
-      item?.patrimonialValue;
-    const rawVacancy =
-      item?.vacancy ??
-      item?.vacancia ??
-      item?.vacancyRate;
+  try {
+    const response = await fetch("/api/investments/b3-snapshots", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        assets: [
+          {
+            symbol: normalized,
+            name: options.name ?? null,
+          },
+        ],
+      }),
+    });
+    if (!response.ok) return null;
+    const json = await response.json();
+    const snapshot = json?.snapshots?.[normalized];
+    if (!snapshot || snapshot.price == null) return null;
+
     const quote: Quote = {
-      price: Number(item.regularMarketPrice) || 0,
-      changePct:
-        item.regularMarketChangePercent != null
-          ? Number(item.regularMarketChangePercent)
-          : null,
+      price: Number(snapshot.price) || 0,
+      changePct: snapshot.changePct != null ? Number(snapshot.changePct) : null,
       logoUrl:
-        typeof item?.logourl === "string"
-          ? item.logourl
-          : typeof item?.logoUrl === "string"
-            ? item.logoUrl
-            : typeof item?.logo === "string"
-              ? item.logo
-              : null,
+        typeof snapshot.logoUrl === "string" ? snapshot.logoUrl : null,
       assetName:
-        typeof item?.longName === "string"
-          ? item.longName
-          : typeof item?.shortName === "string"
-            ? item.shortName
-            : null,
-      dyPct: normalizePercentValue(rawDy),
-      pVp: parseNumberish(rawPvp),
-      sharesOutstanding: parseNumberish(rawSharesOutstanding),
-      bookValue: parseNumberish(rawBookValue),
-      vacancyPct: normalizePercentValue(rawVacancy),
+        typeof snapshot.assetName === "string" ? snapshot.assetName : null,
+      dyPct: normalizePercentValue(snapshot.dyPct),
+      pVp: parseNumberish(snapshot.pVp),
+      sharesOutstanding: parseNumberish(snapshot.sharesOutstanding),
+      bookValue: parseNumberish(snapshot.bookValue),
+      vacancyPct: normalizePercentValue(snapshot.vacancyPct),
     };
 
-    const hasMissingFundamentals =
-      quote.dyPct == null ||
-      quote.pVp == null ||
-      quote.sharesOutstanding == null ||
-      quote.bookValue == null ||
-      quote.vacancyPct == null;
-
     if (
-      includeFundamentalsFallback &&
-      hasMissingFundamentals &&
-      shouldUseFiiFallback(normalized, item?.longName)
+      options.includeFundamentalsFallback !== false &&
+      shouldUseFiiFallback(normalized, quote.assetName)
     ) {
-      const fallback = await fetchFiiFundamentalsFallback(normalized);
-      if (fallback) {
-        quote.dyPct = quote.dyPct ?? fallback.dyPct ?? null;
-        quote.pVp = quote.pVp ?? fallback.pVp ?? null;
-        quote.sharesOutstanding =
-          quote.sharesOutstanding ?? fallback.sharesOutstanding ?? null;
-        quote.bookValue = quote.bookValue ?? fallback.bookValue ?? null;
-        quote.vacancyPct = quote.vacancyPct ?? fallback.vacancyPct ?? null;
+      const hasMissingFundamentals =
+        quote.dyPct == null ||
+        quote.pVp == null ||
+        quote.sharesOutstanding == null ||
+        quote.bookValue == null ||
+        quote.vacancyPct == null;
+      if (hasMissingFundamentals) {
+        const fallback = await fetchFiiFundamentalsFallback(normalized);
+        if (fallback) {
+          quote.dyPct = quote.dyPct ?? fallback.dyPct ?? null;
+          quote.pVp = quote.pVp ?? fallback.pVp ?? null;
+          quote.sharesOutstanding =
+            quote.sharesOutstanding ?? fallback.sharesOutstanding ?? null;
+          quote.bookValue = quote.bookValue ?? fallback.bookValue ?? null;
+          quote.vacancyPct = quote.vacancyPct ?? fallback.vacancyPct ?? null;
+        }
       }
     }
 
     return quote;
-  };
-
-  try {
-    const useToken = brapiUseToken && Boolean(BRAPI_KEY);
-    const withPreferredMode = await requestQuote(useToken);
-    if (withPreferredMode) {
-      return withPreferredMode;
-    }
-    if (useToken && !isBrapiBlocked()) {
-      return await requestQuote(false);
-    }
-    return null;
   } catch {
-    handleBrapiFailure(0, normalized, brapiUseToken && Boolean(BRAPI_KEY));
     return null;
   }
 }
 
-async function fetchB3History(symbol: string): Promise<PricePoint[]> {
+async function fetchB3History(
+  symbol: string,
+  name?: string | null,
+): Promise<PricePoint[]> {
   const normalized = normalizeB3Symbol(symbol);
-  if (isBrapiBlocked()) return [];
-  if (!isLikelyB3Symbol(normalized) || badB3Symbols.has(normalized)) return [];
-
-  const requestHistory = async (
-    useToken: boolean,
-    range: string,
-  ): Promise<{ points: PricePoint[]; invalidRange: boolean }> => {
-    const query = new URLSearchParams({
-      range,
-      interval: "1d",
-    });
-    if (useToken && BRAPI_KEY) {
-      query.set("token", BRAPI_KEY);
-    }
-    const res = await fetch(
-      `https://brapi.dev/api/quote/${encodeURIComponent(
-        normalized,
-      )}?${query.toString()}`,
-      { cache: "no-store", headers: BRAPI_DEFAULT_HEADERS },
-    );
-    if (!res.ok) {
-      let errorCode: string | undefined;
-      let errorMessage: string | undefined;
-      try {
-        const json = await res.json();
-        const details = extractBrapiErrorDetails(json);
-        errorCode = details.code;
-        errorMessage = details.message;
-      } catch {
-        // ignore json parse for error body
-      }
-      handleBrapiFailure(res.status, normalized, useToken, errorCode, errorMessage);
-      return {
-        points: [],
-        invalidRange: res.status === 400 && errorCode?.toUpperCase() === "INVALID_RANGE",
-      };
-    }
-    const json = await res.json();
-    const item = (json?.results ?? []).find(
-      (result: any) =>
-        result?.symbol &&
-        normalizeB3Symbol(String(result.symbol)) === normalized,
-    );
-    const history =
-      item?.historicalDataPrice ?? item?.historicalData ?? item?.prices ?? [];
-    const points = history
-      .map((entry: any) => {
-        const rawDate =
-          entry?.date ?? entry?.timestamp ?? entry?.time ?? entry?.datetime;
-        let time = 0;
-        if (typeof rawDate === "number") {
-          time = rawDate > 1e12 ? rawDate : rawDate * 1000;
-        } else if (typeof rawDate === "string") {
-          const parsed = Date.parse(rawDate);
-          if (!Number.isNaN(parsed)) {
-            time = parsed;
-          }
-        }
-        const price = Number(
-          entry?.close ??
-            entry?.adjustedClose ??
-            entry?.price ??
-            entry?.value ??
-            0,
-        );
-        if (!time || !price) return null;
-        return { time, price };
-      })
-      .filter(Boolean) as PricePoint[];
-    return { points: points.length ? toPoints(points) : [], invalidRange: false };
-  };
+  if (!isLikelyB3Symbol(normalized)) return [];
 
   try {
-    const useToken = brapiUseToken && Boolean(BRAPI_KEY);
-    let historyRange = brapiHistoryRange;
-    let withPreferredMode = await requestHistory(useToken, historyRange);
-    if (!withPreferredMode.points.length && withPreferredMode.invalidRange && !isBrapiBlocked()) {
-      historyRange = brapiHistoryRange;
-      withPreferredMode = await requestHistory(useToken, historyRange);
-    }
-    if (withPreferredMode.points.length) {
-      return withPreferredMode.points;
-    }
-    if (useToken && !isBrapiBlocked()) {
-      let withoutToken = await requestHistory(false, historyRange);
-      if (!withoutToken.points.length && withoutToken.invalidRange && !isBrapiBlocked()) {
-        historyRange = brapiHistoryRange;
-        withoutToken = await requestHistory(false, historyRange);
-      }
-      if (withoutToken.points.length) return withoutToken.points;
-    }
+    const response = await fetch("/api/investments/b3-history", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        symbol: normalized,
+        name: name ?? null,
+      }),
+    });
+    if (!response.ok) return [];
+    const json = await response.json();
+    return toPoints(Array.isArray(json?.history) ? json.history : []);
   } catch {
-    handleBrapiFailure(0, normalized, brapiUseToken && Boolean(BRAPI_KEY));
+    return [];
   }
-  return [];
 }
 
 async function fetchCryptoHistory(
@@ -1262,7 +1112,11 @@ export function InvestmentsScreen() {
 
       const normalizedFallback = (fallback.data ?? []).map((asset: any) => ({
         ...asset,
-        currency: normalizeInvestmentCurrency(appCurrency, asset.type),
+        type: normalizeStoredInvestmentType(asset.type, asset.symbol, asset.name),
+        currency: normalizeInvestmentCurrency(
+          appCurrency,
+          normalizeStoredInvestmentType(asset.type, asset.symbol, asset.name),
+        ),
         cdi_rate_pct: null,
         cdi_multiplier_pct: null,
         fixed_started_at: null,
@@ -1275,7 +1129,11 @@ export function InvestmentsScreen() {
       ((data ?? []) as Array<Omit<Investment, "currency"> & { currency?: string | null }>).map(
         (asset) => ({
           ...asset,
-          currency: normalizeInvestmentCurrency(asset.currency, asset.type),
+          type: normalizeStoredInvestmentType(asset.type, asset.symbol, asset.name),
+          currency: normalizeInvestmentCurrency(
+            asset.currency,
+            normalizeStoredInvestmentType(asset.type, asset.symbol, asset.name),
+          ),
         }),
       ),
     );
@@ -1284,7 +1142,7 @@ export function InvestmentsScreen() {
   const fetchHistoryForAsset = useCallback(
     async (asset: Investment) => {
       try {
-        if (asset.type === "b3") return await fetchB3History(asset.symbol);
+        if (asset.type === "b3") return await fetchB3History(asset.symbol, asset.name);
         if (asset.type === "crypto") {
           return await fetchCryptoHistory(asset.symbol, getAssetCurrency(asset));
         }
@@ -1405,10 +1263,14 @@ export function InvestmentsScreen() {
     }
     setQuoteError(null);
 
-    const b3Symbols = Array.from(new Set(assets
-      .filter((asset) => asset.type === "b3")
-      .map((asset) => normalizeB3Symbol(asset.symbol))
-      .filter((symbol) => isLikelyB3Symbol(symbol) && !badB3Symbols.has(symbol))));
+    const b3Assets = assets.filter((asset) => asset.type === "b3");
+    const b3Symbols = Array.from(
+      new Set(
+        b3Assets
+          .map((asset) => normalizeB3Symbol(asset.symbol))
+          .filter((symbol) => isLikelyB3Symbol(symbol)),
+      ),
+    );
     const cryptoIdsByCurrency = assets.reduce(
       (map, asset) => {
         if (asset.type !== "crypto") return map;
@@ -1428,30 +1290,22 @@ export function InvestmentsScreen() {
     let hadFailures = false;
 
     if (b3Symbols.length) {
-      if (isBrapiBlocked()) {
-        hadFailures = true;
-      } else {
-        const [firstSymbol, ...restSymbols] = b3Symbols;
-        const firstQuote = await fetchSingleB3Quote(firstSymbol);
-        if (firstQuote) {
-          nextQuotes[firstSymbol] = firstQuote;
-        }
-        if (!isBrapiBlocked() && restSymbols.length) {
-          const responses = await Promise.all(
-            restSymbols.map(async (normalized) => {
-              const quote = await fetchSingleB3Quote(normalized);
-              return { normalized, quote };
-            }),
-          );
-          responses.forEach(({ normalized, quote }) => {
-            if (!quote) return;
-            nextQuotes[normalized] = quote;
+      const responses = await Promise.all(
+        b3Assets.map(async (asset) => {
+          const normalized = normalizeB3Symbol(asset.symbol);
+          const quote = await fetchSingleB3Quote(normalized, {
+            name: asset.name,
           });
-        }
-        const hasAtLeastOneB3Quote = b3Symbols.some((symbol) => nextQuotes[symbol]);
-        if (!hasAtLeastOneB3Quote) {
-          hadFailures = true;
-        }
+          return { normalized, quote };
+        }),
+      );
+      responses.forEach(({ normalized, quote }) => {
+        if (!quote) return;
+        nextQuotes[normalized] = quote;
+      });
+      const hasAtLeastOneB3Quote = b3Symbols.some((symbol) => nextQuotes[symbol]);
+      if (!hasAtLeastOneB3Quote) {
+        hadFailures = true;
       }
     }
 
@@ -1507,10 +1361,6 @@ export function InvestmentsScreen() {
       historyFetchRef.current = requestId;
       const entries: Array<readonly [string, PricePoint[]]> = [];
       for (const asset of assets) {
-        if (asset.type === "b3" && isBrapiBlocked()) {
-          entries.push([asset.id, []]);
-          continue;
-        }
         const history = await fetchHistoryForAsset(asset);
         entries.push([asset.id, history]);
       }
@@ -1762,6 +1612,7 @@ export function InvestmentsScreen() {
           const sym = normalizeB3Symbol(trimmedSymbol);
           const quote = await fetchSingleB3Quote(sym, {
             includeFundamentalsFallback: false,
+            name: name.trim() || null,
           });
           if (previewRequestRef.current !== requestId) return;
           setPreviewQuote(quote);
@@ -2551,6 +2402,8 @@ export function InvestmentsScreen() {
             : current != null ? current * asset.quantity : null;
           const categoryLabel = categoryLabelByKey[getInvestmentCategory(asset)];
           const summary = buildChartSummary(history);
+          const displayCurrent = summary.current ?? quote?.price ?? null;
+          const displayChangePct = summary.changePct ?? quote?.changePct ?? null;
           const exceededMetrics = exceededMetricsByAssetId[asset.id] ?? [];
           const hasExceededMetrics = investmentFilter.enabled && exceededMetrics.length > 0;
           const exceededLabelText = exceededMetrics.map((metricKey) => metricLabelByKey[metricKey]).join(", ");
@@ -2586,11 +2439,11 @@ export function InvestmentsScreen() {
                 ) : null}
                 <div className="flex items-baseline gap-2">
                   <span className="text-xl font-semibold text-[var(--text-1)]">
-                    {summary.current != null ? formatCurrency(summary.current, language, assetCurrency) : "--"}
+                    {displayCurrent != null ? formatCurrency(displayCurrent, language, assetCurrency) : "--"}
                   </span>
-                  {summary.changePct != null ? (
-                    <span className={`text-xs font-semibold ${summary.changePct >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
-                      {formatPercent(summary.changePct, language)}{" "}
+                  {displayChangePct != null ? (
+                    <span className={`text-xs font-semibold ${displayChangePct >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                      {formatPercent(displayChangePct, language)}{" "}
                       {asset.type === "fixed_income" ? (language === "pt" ? "(desde o inicio)" : "(since start)") : (language === "pt" ? "(1 ano)" : "(1 year)")}
                     </span>
                   ) : null}
