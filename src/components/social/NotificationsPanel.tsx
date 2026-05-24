@@ -68,11 +68,11 @@ export function NotificationsPanel({ userId }: Props) {
       setRequests(nextRequests);
       setProfilesById(Object.fromEntries(profiles.map((profile) => [profile.user_id, profile])));
     } catch (error) {
-      setErrorMsg(getSocialErrorMessage(error));
+      setErrorMsg(getSocialErrorMessage(error, language));
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [language, userId]);
 
   useEffect(() => {
     loadData();
@@ -169,7 +169,7 @@ export function NotificationsPanel({ userId }: Props) {
       window.dispatchEvent(new Event("social-refresh"));
       await loadData();
     } catch (error) {
-      setErrorMsg(getSocialErrorMessage(error));
+      setErrorMsg(getSocialErrorMessage(error, language));
     } finally {
       setActingId(null);
     }
@@ -201,7 +201,7 @@ export function NotificationsPanel({ userId }: Props) {
       window.dispatchEvent(new Event("social-refresh"));
       await loadData();
     } catch (error) {
-      setErrorMsg(getSocialErrorMessage(error));
+      setErrorMsg(getSocialErrorMessage(error, language));
     } finally {
       setActingId(null);
     }

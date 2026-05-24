@@ -13,6 +13,7 @@ import { hasMissingColumnError, hasMissingTableError } from "@/lib/errorUtils";
 import { formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
 import {
   createSharedTransactionRequest,
+  getSocialErrorMessage,
   getProfileLabel,
   loadAcceptedFriends,
   type FriendProfile,
@@ -315,11 +316,9 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
                   : null,
           });
           window.dispatchEvent(new Event("social-refresh"));
-        } catch {
+        } catch (error) {
           setShareWarning(
-            language === "pt"
-              ? "Nao foi possivel enviar a atribuicao ao amigo."
-              : "The attribution could not be sent to your friend.",
+            getSocialErrorMessage(error, language),
           );
           setSaving(false);
           return;

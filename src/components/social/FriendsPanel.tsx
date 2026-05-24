@@ -54,11 +54,11 @@ export function FriendsPanel({ userId }: Props) {
       setProfilesById(profileMap);
       setMyProfile(ownProfiles[0] ?? null);
     } catch (error) {
-      setErrorMsg(getSocialErrorMessage(error));
+      setErrorMsg(getSocialErrorMessage(error, language));
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [language, userId]);
 
   useEffect(() => {
     loadData();
@@ -112,7 +112,7 @@ export function FriendsPanel({ userId }: Props) {
       await loadData();
       window.dispatchEvent(new Event("social-refresh"));
     } catch (error) {
-      setErrorMsg(getSocialErrorMessage(error));
+      setErrorMsg(getSocialErrorMessage(error, language));
     } finally {
       setAdding(false);
     }

@@ -1,5 +1,9 @@
 import { supabase } from "@/lib/supabaseClient";
-import { getErrorMessage } from "@/lib/errorUtils";
+import {
+  getErrorMessage,
+  hasMissingColumnError,
+  hasMissingTableError,
+} from "@/lib/errorUtils";
 
 export type FriendProfile = {
   user_id: string;
@@ -196,23 +200,59 @@ export async function createSharedTransactionRequest(params: {
   senderTransactionId?: string | null;
   note?: string | null;
 }) {
-  const insertResult = await supabase.from("shared_transaction_requests").insert([
-    {
-      requester_user_id: params.requesterUserId,
-      recipient_user_id: params.recipientUserId,
-      transaction_type: params.transactionType,
-      amount: params.amount,
-      description: params.description ?? null,
-      category: params.category ?? null,
-      date: params.date,
-      is_fixed: params.isFixed ?? null,
-      is_installment: params.isInstallment ?? null,
-      installment_total: params.installmentTotal ?? null,
-      sender_transaction_id: params.senderTransactionId ?? null,
-      note: params.note ?? null,
-    },
-  ]);
-  if (insertResult.error) throw insertResult.error;
+  const basePayload = {
+    requester_user_id: params.requesterUserId,
+    recipient_user_id: params.recipientUserId,
+    transaction_type: params.transactionType,
+    amount: params.amount,
+    description: params.description ?? null,
+    category: params.category ?? null,
+    date: params.date,
+  };
+
+  const fullPayload = {
+    ...basePayload,
+    is_fixed: params.isFixed ?? null,
+    is_installment: params.isInstallment ?? null,
+    installment_total: params.installmentTotal ?? null,
+    sender_transaction_id: params.senderTransactionId ?? null,
+    note: params.note ?? null,
+  };
+
+  const insertResult = await supabase
+    .from("shared_transaction_requests")
+    .insert([fullPayload]);
+
+  if (!insertResult.error) return;
+
+  if (
+    hasMissingColumnError(insertResult.error, [
+      "is_fixed",
+      "is_installment",
+      "installment_total",
+      "note",
+      "sender_transaction_id",
+    ])
+  ) {
+    const missingNote = hasMissingColumnError(insertResult.error, ["note"]);
+    const missingSenderTransactionId = hasMissingColumnError(insertResult.error, [
+      "sender_transaction_id",
+    ]);
+    const legacyPayload = {
+      ...basePayload,
+      ...(missingSenderTransactionId
+        ? {}
+        : { sender_transaction_id: params.senderTransactionId ?? null }),
+      ...(missingNote ? {} : { note: params.note ?? null }),
+    };
+    const legacyInsertResult = await supabase
+      .from("shared_transaction_requests")
+      .insert([legacyPayload]);
+    if (!legacyInsertResult.error) return;
+    throw legacyInsertResult.error;
+  }
+
+  throw insertResult.error;
 }
 
 export async function loadIncomingSharedRequests(userId: string) {
@@ -349,6 +389,54 @@ export async function declineSharedRequest(
   if (updateResult.error) throw updateResult.error;
 }
 
-export function getSocialErrorMessage(error: unknown) {
-  return getErrorMessage(error);
+export function getSocialErrorMessage(
+  error: unknown,
+  language: "pt" | "en" = "en",
+) {
+  const rawMessage = getErrorMessage(error);
+  const normalized = rawMessage.toLowerCase();
+
+  if (hasMissingTableError(error, ["shared_transaction_requests"])) {
+    return language === "pt"
+      ? "A tabela de atribuicoes compartilhadas nao existe no Supabase. Aplique o arquivo supabase/schema.sql mais recente."
+      : "The shared transaction requests table is missing in Supabase. Apply the latest supabase/schema.sql file.";
+  }
+
+  if (
+    hasMissingColumnError(error, [
+      "is_fixed",
+      "is_installment",
+      "installment_total",
+      "email",
+      "friend_code",
+      "avatar_url",
+      "decline_reason",
+      "note",
+    ])
+  ) {
+    return language === "pt"
+      ? "Seu banco esta desatualizado para a area social. Aplique o arquivo supabase/schema.sql mais recente."
+      : "Your database is outdated for the social features. Apply the latest supabase/schema.sql file.";
+  }
+
+  if (
+    normalized.includes("shared_transaction_requests_transaction_type_check") ||
+    normalized.includes("card_expense")
+  ) {
+    return language === "pt"
+      ? "Seu banco ainda nao aceita despesa de cartao nas atribuicoes. Aplique o arquivo supabase/schema.sql mais recente."
+      : "Your database does not yet allow card expenses in shared attributions. Apply the latest supabase/schema.sql file.";
+  }
+
+  if (
+    normalized.includes("row-level security") ||
+    normalized.includes("permission denied") ||
+    normalized.includes("violates row-level security policy")
+  ) {
+    return language === "pt"
+      ? "Nao foi possivel compartilhar essa atribuicao. Confirme que a amizade foi aceita pelos dois lados e que o Supabase esta com o schema atualizado."
+      : "This attribution could not be shared. Confirm the friendship is accepted and that Supabase is using the latest schema.";
+  }
+
+  return rawMessage;
 }
