@@ -37,13 +37,19 @@ export function AppShell({ activeTab, children }: Props) {
 
   const menuItems = useMemo(
     () => [
+      {
+        key: "share_with_friend",
+        label: language === "en" ? "Assign to friends" : "Atribuir a amigos",
+        icon: "arrow-right",
+        color: "#F472B6",
+      },
       { key: "transfer", label: t("newEntry.transfer"), icon: "transfer", color: "#A78BFA" },
       { key: "income", label: t("newEntry.income"), icon: "arrow-up", color: "#34D399" },
       { key: "investment", label: t("investments.newInvestment"), icon: "wallet", color: "#60A5FA" },
       { key: "card_expense", label: t("newEntry.cardExpense"), icon: "credit-card", color: "#FBBF24" },
       { key: "expense", label: t("newEntry.expense"), icon: "arrow-down", color: "#F87171" },
     ] as const,
-    [t],
+    [language, t],
   );
 
   const desktopNavItems = [
@@ -244,23 +250,20 @@ export function AppShell({ activeTab, children }: Props) {
           onClick={() => setActiveModalType(null)}
         >
           <div
-            className="ui-card-2 ui-slide-up w-full max-w-lg overflow-y-auto rounded-t-2xl p-5 sm:rounded-2xl"
+            className="ui-card-2 ui-slide-up relative mx-2 w-[min(100%,42rem)] overflow-y-auto rounded-t-2xl px-4 pb-4 pt-3 sm:mx-4 sm:rounded-2xl sm:px-5 sm:pb-5 sm:pt-4"
             style={{
-              maxHeight: "min(92dvh, 760px)",
-              paddingBottom: "max(1.25rem, calc(env(safe-area-inset-bottom) + 1.25rem))",
+              maxHeight: "min(92dvh, 820px)",
+              paddingBottom: "max(1rem, calc(env(safe-area-inset-bottom) + 1rem))",
             }}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm font-semibold text-[var(--text-1)]" />
-              <button
-                type="button"
-                onClick={() => setActiveModalType(null)}
-                className="ui-btn ui-btn-ghost ui-btn-sm"
-              >
-                {language === "pt" ? "Fechar" : "Close"}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setActiveModalType(null)}
+              className="absolute right-3 top-3 z-10 rounded-lg px-2.5 py-1.5 text-sm font-medium text-[var(--text-2)] transition-colors hover:bg-[var(--surface-3)] hover:text-[var(--text-1)] sm:right-4 sm:top-4"
+            >
+              {language === "pt" ? "Fechar" : "Close"}
+            </button>
             <NewEntryScreen entryType={activeModalType} onClose={() => setActiveModalType(null)} />
           </div>
         </div>
@@ -348,7 +351,7 @@ export function AppShell({ activeTab, children }: Props) {
           >
             <div className="relative h-[200px] w-[200px]">
               {menuItems.map((item, index) => {
-                const angles = [210, 150, 270, 30, 330];
+                const angles = [225, 180, 135, 45, 0, 315];
                 const angle = angles[index] ?? 0;
                 const radius = 88;
                 const rad = (angle * Math.PI) / 180;

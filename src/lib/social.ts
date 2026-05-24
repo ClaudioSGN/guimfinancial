@@ -10,7 +10,7 @@ export type FriendProfile = {
 };
 
 export type SharedRequestStatus = "pending" | "accepted" | "declined";
-export type SharedRequestType = "income" | "expense";
+export type SharedRequestType = "income" | "expense" | "card_expense";
 
 export type SharedTransactionRequest = {
   id: string;
@@ -21,6 +21,9 @@ export type SharedTransactionRequest = {
   description: string | null;
   category: string | null;
   date: string;
+  is_fixed: boolean | null;
+  is_installment: boolean | null;
+  installment_total: number | null;
   status: SharedRequestStatus;
   sender_transaction_id: string | null;
   recipient_transaction_id: string | null;
@@ -187,6 +190,9 @@ export async function createSharedTransactionRequest(params: {
   description?: string | null;
   category?: string | null;
   date: string;
+  isFixed?: boolean | null;
+  isInstallment?: boolean | null;
+  installmentTotal?: number | null;
   senderTransactionId?: string | null;
   note?: string | null;
 }) {
@@ -199,6 +205,9 @@ export async function createSharedTransactionRequest(params: {
       description: params.description ?? null,
       category: params.category ?? null,
       date: params.date,
+      is_fixed: params.isFixed ?? null,
+      is_installment: params.isInstallment ?? null,
+      installment_total: params.installmentTotal ?? null,
       sender_transaction_id: params.senderTransactionId ?? null,
       note: params.note ?? null,
     },
@@ -240,29 +249,74 @@ export async function loadProfilesByIds(userIds: string[]) {
 export async function acceptSharedRequest(
   request: SharedTransactionRequest,
   recipientUserId: string,
+  options: {
+    accountId?: string | null;
+    cardId?: string | null;
+  } = {},
 ) {
+  const amount = Number(request.amount) || 0;
+
+  if (request.transaction_type === "card_expense" && !options.cardId) {
+    throw new Error("Card selection is required.");
+  }
+  if (request.transaction_type !== "card_expense" && !options.accountId) {
+    throw new Error("Account selection is required.");
+  }
+
   const txInsert = await supabase
     .from("transactions")
     .insert([
       {
         user_id: recipientUserId,
         type: request.transaction_type,
-        account_id: null,
-        card_id: null,
-        amount: Number(request.amount) || 0,
+        account_id: request.transaction_type === "card_expense" ? null : options.accountId ?? null,
+        card_id: request.transaction_type === "card_expense" ? options.cardId ?? null : null,
+        amount,
         description: request.description,
         category: request.category,
         date: request.date,
-        is_fixed: null,
-        is_installment: null,
-        installment_total: null,
-        installments_paid: null,
-        is_paid: null,
+        is_fixed: request.is_fixed,
+        is_installment: request.transaction_type === "card_expense" ? request.is_installment : null,
+        installment_total:
+          request.transaction_type === "card_expense" && request.is_installment
+            ? request.installment_total
+            : null,
+        installments_paid:
+          request.transaction_type === "card_expense" && request.is_installment
+            ? 0
+            : null,
+        is_paid:
+          request.transaction_type === "card_expense" && request.is_installment
+            ? false
+            : null,
       },
     ])
     .select("id")
     .single();
   if (txInsert.error) throw txInsert.error;
+
+  if (request.transaction_type !== "card_expense" && options.accountId) {
+    const accountResult = await supabase
+      .from("accounts")
+      .select("balance")
+      .eq("id", options.accountId)
+      .eq("user_id", recipientUserId)
+      .single();
+    if (accountResult.error) throw accountResult.error;
+
+    const currentBalance = Number(accountResult.data.balance) || 0;
+    const nextBalance =
+      request.transaction_type === "income"
+        ? currentBalance + amount
+        : currentBalance - amount;
+
+    const updateAccountResult = await supabase
+      .from("accounts")
+      .update({ balance: nextBalance })
+      .eq("id", options.accountId)
+      .eq("user_id", recipientUserId);
+    if (updateAccountResult.error) throw updateAccountResult.error;
+  }
 
   const updateResult = await supabase
     .from("shared_transaction_requests")

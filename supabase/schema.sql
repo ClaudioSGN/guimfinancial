@@ -294,11 +294,14 @@ create table if not exists shared_transaction_requests (
   id uuid primary key default gen_random_uuid(),
   requester_user_id uuid not null references auth.users (id) on delete cascade,
   recipient_user_id uuid not null references auth.users (id) on delete cascade,
-  transaction_type text not null check (transaction_type in ('income', 'expense')),
+  transaction_type text not null check (transaction_type in ('income', 'expense', 'card_expense')),
   amount numeric not null check (amount > 0),
   description text,
   category text,
   date date not null,
+  is_fixed boolean,
+  is_installment boolean,
+  installment_total int,
   status text not null default 'pending' check (status in ('pending', 'accepted', 'declined')),
   sender_transaction_id uuid references transactions (id) on delete set null,
   recipient_transaction_id uuid references transactions (id) on delete set null,
@@ -309,6 +312,13 @@ create table if not exists shared_transaction_requests (
   updated_at timestamptz not null default now(),
   check (requester_user_id <> recipient_user_id)
 );
+
+alter table shared_transaction_requests add column if not exists is_fixed boolean;
+alter table shared_transaction_requests add column if not exists is_installment boolean;
+alter table shared_transaction_requests add column if not exists installment_total int;
+alter table shared_transaction_requests drop constraint if exists shared_transaction_requests_transaction_type_check;
+alter table shared_transaction_requests add constraint shared_transaction_requests_transaction_type_check
+  check (transaction_type in ('income', 'expense', 'card_expense'));
 
 create index if not exists gamification_friendships_user_idx on gamification_friendships (user_id);
 create index if not exists gamification_friendships_friend_idx on gamification_friendships (friend_user_id);

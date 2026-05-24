@@ -41,6 +41,9 @@ type Props = {
   onClose?: () => void;
 };
 
+type BaseEntryType = "income" | "expense" | "card_expense" | "transfer";
+type ShareEntryChoice = "income" | "expense" | "card_expense";
+
 function toDateString(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -49,6 +52,9 @@ function toDateString(date: Date) {
 }
 
 function labelForType(type: string, t: (key: string) => string) {
+  if (type === "share_with_friend") {
+    return "share_with_friend";
+  }
   if (type === "transfer") return t("newEntry.transfer");
   if (type === "income") return t("newEntry.income");
   if (type === "card_expense") return t("newEntry.cardExpense");
@@ -72,12 +78,20 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
   const { currency } = useCurrency();
   const { user } = useAuth();
   const router = useRouter();
-  const isTransfer = entryType === "transfer";
-  const isCardExpense = entryType === "card_expense";
-  const needsAccount = entryType === "income" || entryType === "expense";
-  const isExpenseEntry = entryType === "expense" || entryType === "card_expense";
-  const canBeFixedEntry = entryType === "income" || isExpenseEntry;
-  const canShareWithFriend = entryType === "income" || entryType === "expense" || isCardExpense;
+  const isShareEntry = entryType === "share_with_friend";
+  const [shareEntryType, setShareEntryType] = useState<ShareEntryChoice>("expense");
+  const effectiveEntryType: BaseEntryType = isShareEntry
+    ? shareEntryType
+    : (entryType as BaseEntryType);
+  const isTransfer = effectiveEntryType === "transfer";
+  const isCardExpense = effectiveEntryType === "card_expense";
+  const needsAccount = effectiveEntryType === "income" || effectiveEntryType === "expense";
+  const senderNeedsAccount = !isShareEntry && needsAccount;
+  const senderNeedsCard = !isShareEntry && isCardExpense;
+  const isExpenseEntry =
+    effectiveEntryType === "expense" || effectiveEntryType === "card_expense";
+  const canBeFixedEntry = effectiveEntryType === "income" || isExpenseEntry;
+  const shouldSendToFriend = isShareEntry;
 
   const emptyMoneyValue = formatCentsInput("", currency);
   const [amount, setAmount] = useState(emptyMoneyValue);
@@ -106,7 +120,6 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
   const [createCardSaving, setCreateCardSaving] = useState(false);
   const [createCardError, setCreateCardError] = useState<string | null>(null);
   const [friends, setFriends] = useState<FriendProfile[]>([]);
-  const [shareWithFriend, setShareWithFriend] = useState(false);
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const [shareWarning, setShareWarning] = useState<string | null>(null);
 
@@ -171,7 +184,6 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
       }
       setFriends(friendsResult);
       if (!friendsResult.length) {
-        setShareWithFriend(false);
         setSelectedFriendId(null);
       } else {
         setSelectedFriendId((current) =>
@@ -184,7 +196,6 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
 
     loadRefs().catch(() => {
       setFriends([]);
-      setShareWithFriend(false);
       setSelectedFriendId(null);
     });
   }, [user]);
@@ -221,15 +232,24 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
       return;
     }
 
+    if (shouldSendToFriend && !effectiveSelectedFriendId) {
+      setErrorMsg(
+        language === "pt"
+          ? "Selecione um amigo para receber a atribuicao."
+          : "Select a friend to receive the attribution.",
+      );
+      return;
+    }
+
     if (isTransfer) {
       if (!accountId || !toAccountId) {
         setErrorMsg(t("newEntry.selectAccountsError"));
         return;
       }
-    } else if (needsAccount && !accountId) {
+    } else if (senderNeedsAccount && !accountId) {
       setErrorMsg(t("newEntry.selectAccountError"));
       return;
-    } else if (isCardExpense && !cardId) {
+    } else if (senderNeedsCard && !cardId) {
       setErrorMsg(t("newEntry.selectCardError"));
       return;
     }
@@ -262,77 +282,86 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
         const n = Number(installmentTotal);
         if (!n || !Number.isInteger(n) || n < 1 || n > 120) {
           setErrorMsg(language === "pt" ? "Numero de parcelas invalido." : "Invalid installment count.");
+          setSaving(false);
           return;
         }
         totalInstallments = n;
       }
 
-      const normalizedSharedType = entryType === "income" ? "income" : "expense";
-
-      const { data: createdTransaction, error } = await supabase.from("transactions").insert([
-        {
-          user_id: user.id,
-          type: entryType,
-          account_id: needsAccount ? accountId : null,
-          card_id: isCardExpense ? cardId : null,
-          amount: parsedAmount,
-          description: description || null,
-          category: category || null,
-          date,
-          is_fixed: canBeFixedEntry ? isFixed : null,
-          is_installment: isCardExpense ? isInstallment || null : null,
-          installment_total: isCardExpense ? totalInstallments : null,
-          installments_paid: isCardExpense && isInstallment ? 0 : null,
-          is_paid: isCardExpense && isInstallment ? false : null,
-        },
-      ]).select("id").single();
-
-      if (error) {
-        const rawError = `${error.code ?? ""} ${error.message ?? ""}`.toLowerCase();
-        const missingFixedColumn =
-          rawError.includes("is_fixed") &&
-          (error.code === "42703" || rawError.includes("column"));
-        setErrorMsg(
-          missingFixedColumn
-            ? language === "pt"
-              ? "Atualize o banco com supabase/schema.sql para usar a opcao de transacao fixa."
-              : "Update your database with supabase/schema.sql to use the fixed transaction option."
-            : t("newEntry.saveError"),
-        );
-        setSaving(false);
-        return;
-      }
-
-      if (needsAccount) {
-        const delta = entryType === "income" ? parsedAmount : -parsedAmount;
-        await updateAccountBalance(accountId!, delta);
-      }
-
-      if (shareWithFriend && effectiveSelectedFriendId) {
+      if (shouldSendToFriend && effectiveSelectedFriendId) {
         try {
           await createSharedTransactionRequest({
             requesterUserId: user.id,
             recipientUserId: effectiveSelectedFriendId,
-            transactionType: normalizedSharedType,
+            transactionType:
+              effectiveEntryType === "income" ||
+              effectiveEntryType === "expense" ||
+              effectiveEntryType === "card_expense"
+                ? effectiveEntryType
+                : "expense",
             amount: parsedAmount,
             description: description || null,
             category: category || null,
             date,
-            senderTransactionId: createdTransaction?.id ?? null,
+            isFixed: canBeFixedEntry ? isFixed : null,
+            isInstallment: isCardExpense ? isInstallment || null : null,
+            installmentTotal: isCardExpense ? totalInstallments : null,
+            senderTransactionId: null,
             note:
               isCardExpense && language === "pt"
                 ? "Criado a partir de despesa no cartao."
                 : isCardExpense
                   ? "Created from a card expense."
-              : null,
+                  : null,
           });
           window.dispatchEvent(new Event("social-refresh"));
         } catch {
           setShareWarning(
             language === "pt"
-              ? "A transacao foi salva, mas nao foi possivel enviar a atribuicao ao amigo."
-              : "The transaction was saved, but the attribution could not be sent to your friend.",
+              ? "Nao foi possivel enviar a atribuicao ao amigo."
+              : "The attribution could not be sent to your friend.",
           );
+          setSaving(false);
+          return;
+        }
+      } else {
+        const { error } = await supabase.from("transactions").insert([
+          {
+            user_id: user.id,
+            type: effectiveEntryType,
+            account_id: senderNeedsAccount ? accountId : null,
+            card_id: senderNeedsCard ? cardId : null,
+            amount: parsedAmount,
+            description: description || null,
+            category: category || null,
+            date,
+            is_fixed: canBeFixedEntry ? isFixed : null,
+            is_installment: isCardExpense ? isInstallment || null : null,
+            installment_total: isCardExpense ? totalInstallments : null,
+            installments_paid: isCardExpense && isInstallment ? 0 : null,
+            is_paid: isCardExpense && isInstallment ? false : null,
+          },
+        ]);
+
+        if (error) {
+          const rawError = `${error.code ?? ""} ${error.message ?? ""}`.toLowerCase();
+          const missingFixedColumn =
+            rawError.includes("is_fixed") &&
+            (error.code === "42703" || rawError.includes("column"));
+          setErrorMsg(
+            missingFixedColumn
+              ? language === "pt"
+                ? "Atualize o banco com supabase/schema.sql para usar a opcao de transacao fixa."
+                : "Update your database with supabase/schema.sql to use the fixed transaction option."
+              : t("newEntry.saveError"),
+          );
+          setSaving(false);
+          return;
+        }
+
+        if (senderNeedsAccount) {
+          const delta = effectiveEntryType === "income" ? parsedAmount : -parsedAmount;
+          await updateAccountBalance(accountId!, delta);
         }
       }
     }
@@ -487,10 +516,40 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
 
       <div>
         <p className="ui-eyebrow">{t("newEntry.title")}</p>
-        <p className="mt-1 text-xl font-semibold text-[var(--text-1)]">{labelForType(entryType, t)}</p>
+        <p className="mt-1 text-xl font-semibold text-[var(--text-1)]">
+          {isShareEntry
+            ? language === "pt"
+              ? "Atribuir a amigos"
+              : "Assign to friends"
+            : labelForType(effectiveEntryType, t)}
+        </p>
       </div>
 
       <div className="flex flex-col gap-4">
+        {isShareEntry ? (
+          <div className="flex flex-col gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-3)] px-4 py-4">
+            <label className="ui-label">
+              {language === "pt" ? "Tipo da atribuicao" : "Attribution type"}
+            </label>
+            <div className="grid grid-cols-1 gap-2 min-[460px]:grid-cols-3">
+              {([
+                { key: "expense", label: language === "pt" ? "Despesa" : "Expense" },
+                { key: "card_expense", label: language === "pt" ? "Despesa cartao" : "Card expense" },
+                { key: "income", label: language === "pt" ? "Receita" : "Income" },
+              ] as const).map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => setShareEntryType(option.key)}
+                  className={`ui-btn ui-btn-sm w-full justify-center ${shareEntryType === option.key ? "ui-btn-primary" : "ui-btn-secondary"}`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <div className="flex flex-col gap-1.5">
           <label className="ui-label">{t("newEntry.amount")}</label>
           <input value={amount} onChange={(e) => setAmount(formatCentsInput(e.target.value, currency))} placeholder={emptyMoneyValue} inputMode="numeric" pattern="[0-9]*" className="ui-input text-lg font-semibold" />
@@ -514,7 +573,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
           <p className="text-xs text-[var(--text-3)]">{displayDate}</p>
         </div>
 
-        {isCardExpense ? (
+        {senderNeedsCard ? (
           <div className="flex flex-col gap-1.5">
             <label className="ui-label">{t("newEntry.card")}</label>
             <div className="flex flex-wrap gap-2">
@@ -537,7 +596,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
         {canBeFixedEntry ? (
           <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface-3)] px-4 py-3">
             <span className="text-sm text-[var(--text-2)]">
-              {entryType === "income" ? t("newEntry.fixedIncome") : t("newEntry.fixedExpense")}
+              {effectiveEntryType === "income" ? t("newEntry.fixedIncome") : t("newEntry.fixedExpense")}
             </span>
             <button type="button" onClick={() => setIsFixed((v) => !v)}
               className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isFixed ? "bg-[var(--accent)]" : "bg-[var(--surface-3)] border border-[var(--border-bright)]"}`}>
@@ -561,7 +620,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
           </div>
         ) : null}
 
-        {needsAccount || isTransfer ? (
+        {senderNeedsAccount || isTransfer ? (
           <div className="flex flex-col gap-1.5">
             <label className="ui-label">{isTransfer ? t("newEntry.fromAccount") : t("newEntry.account")}</label>
             <div className="flex flex-wrap gap-2">
@@ -593,29 +652,19 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
           </div>
         ) : null}
 
-        {canShareWithFriend ? (
+        {isShareEntry ? (
           <div className="flex flex-col gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-3)] px-4 py-4">
-            <div className="flex items-center justify-between gap-3">
+            <div>
               <div>
                 <p className="text-sm font-semibold text-[var(--text-1)]">
-                  {language === "pt" ? "Atribuir a um amigo" : "Assign to a friend"}
+                  {language === "pt" ? "Enviar para um amigo" : "Send to a friend"}
                 </p>
                 <p className="text-xs text-[var(--text-3)]">
                   {language === "pt"
-                    ? "Envia esta receita ou despesa para a caixa de notificacoes do amigo."
-                    : "Send this income or expense to your friend's notifications inbox."}
+                    ? "Envie apenas os dados da atribuicao. O amigo escolhe a conta ou cartao ao aceitar."
+                    : "Send only the attribution details. Your friend will choose the account or card when accepting."}
                 </p>
               </div>
-              <button
-                type="button"
-                disabled={!friends.length}
-                onClick={() => setShareWithFriend((value) => !value)}
-                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:opacity-50 ${
-                  shareWithFriend ? "bg-[var(--accent)]" : "bg-[var(--surface-3)] border border-[var(--border-bright)]"
-                }`}
-              >
-                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${shareWithFriend ? "translate-x-4" : "translate-x-0.5"}`} />
-              </button>
             </div>
 
             {!friends.length ? (
@@ -624,18 +673,18 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
                   ? "Adicione amigos na aba Mais para usar atribuicoes compartilhadas."
                   : "Add friends in the More tab to use shared attributions."}
               </p>
-            ) : shareWithFriend ? (
+            ) : (
               <div className="flex flex-col gap-2">
                 <label className="ui-label">
                   {language === "pt" ? "Recebera a atribuicao" : "Will receive the attribution"}
                 </label>
-                <div className="flex flex-wrap gap-2">
+                <div className="grid grid-cols-1 gap-2 min-[520px]:grid-cols-2">
                   {friends.map((friend) => (
                     <button
                       key={friend.user_id}
                       type="button"
                       onClick={() => setSelectedFriendId(friend.user_id)}
-                      className={`ui-btn ui-btn-sm ${effectiveSelectedFriendId === friend.user_id ? "ui-btn-primary" : "ui-btn-secondary"}`}
+                      className={`ui-btn ui-btn-sm w-full justify-start ${effectiveSelectedFriendId === friend.user_id ? "ui-btn-primary" : "ui-btn-secondary"}`}
                     >
                       {getProfileLabel(friend)}
                     </button>
@@ -647,7 +696,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
                     : "Your friend will be able to accept or decline it in Notifications."}
                 </p>
               </div>
-            ) : null}
+            )}
           </div>
         ) : null}
       </div>

@@ -261,9 +261,13 @@ export function FriendsPanel({ userId }: Props) {
                           ? language === "pt"
                             ? "Receita enviada"
                             : "Sent income"
-                          : language === "pt"
-                            ? "Despesa enviada"
-                            : "Sent expense"}
+                          : request.transaction_type === "card_expense"
+                            ? language === "pt"
+                              ? "Despesa no cartao enviada"
+                              : "Sent card expense"
+                            : language === "pt"
+                              ? "Despesa enviada"
+                              : "Sent expense"}
                       </p>
                       <p className="mt-1 text-xs text-[var(--text-3)]">
                         {language === "pt" ? "Para" : "To"} {friend ? getProfileLabel(friend) : "—"}
