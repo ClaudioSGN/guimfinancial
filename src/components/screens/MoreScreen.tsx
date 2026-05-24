@@ -8,6 +8,8 @@ import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { supabase } from "@/lib/supabaseClient";
 import { getErrorMessage } from "@/lib/errorUtils";
+import { FriendsPanel } from "@/components/social/FriendsPanel";
+import { NotificationsPanel } from "@/components/social/NotificationsPanel";
 
 const STORAGE_KEYS = {
   enabled: "dailyReminderEnabled",
@@ -49,6 +51,7 @@ export function MoreScreen() {
   const [totpSetup, setTotpSetup] = useState<TotpSetupState | null>(null);
   const [totpCode, setTotpCode] = useState("");
   const [disableTotpCode, setDisableTotpCode] = useState("");
+  const [activeSection, setActiveSection] = useState<"settings" | "friends" | "notifications">("settings");
 
   useEffect(() => {
     const storedEnabled = window.localStorage.getItem(STORAGE_KEYS.enabled);
@@ -185,6 +188,22 @@ export function MoreScreen() {
       if (!error) continue;
       if (error.code === "42P01") continue;
       errors.push(`${table}: ${error.message}`);
+    }
+
+    const [sharedOutgoingResult, sharedIncomingResult] = await Promise.all([
+      supabase
+        .from("shared_transaction_requests")
+        .delete()
+        .eq("requester_user_id", user.id),
+      supabase
+        .from("shared_transaction_requests")
+        .delete()
+        .eq("recipient_user_id", user.id),
+    ]);
+    for (const result of [sharedOutgoingResult, sharedIncomingResult]) {
+      if (!result.error) continue;
+      if (result.error.code === "42P01") continue;
+      errors.push(`shared_transaction_requests: ${result.error.message}`);
     }
 
     setResettingData(false);
@@ -340,6 +359,49 @@ export function MoreScreen() {
         <p className="mt-0.5 text-sm text-[var(--text-3)]">{t("more.subtitle")}</p>
       </div>
 
+      <div className="grid grid-cols-3 gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-1 md:grid-cols-2">
+        {([
+          { key: "settings", label: language === "pt" ? "Configuracoes" : "Settings", className: "" },
+          { key: "friends", label: language === "pt" ? "Amigos" : "Friends", className: "" },
+          { key: "notifications", label: language === "pt" ? "Notificacoes" : "Notifications", className: "md:hidden" },
+        ] as const).map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveSection(tab.key)}
+            className={`${tab.className} rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${
+              activeSection === tab.key
+                ? "bg-[var(--accent)] text-white shadow-[0_10px_24px_rgba(79,142,255,0.25)]"
+                : "text-[var(--text-3)]"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeSection === "friends" ? (
+        user ? (
+          <FriendsPanel userId={user.id} />
+        ) : (
+          <div className="ui-card p-5 text-sm text-[var(--text-3)]">
+            {language === "pt"
+              ? "Entre na sua conta para gerenciar amigos."
+              : "Sign in to manage friends."}
+          </div>
+        )
+      ) : activeSection === "notifications" ? (
+        user ? (
+          <NotificationsPanel userId={user.id} />
+        ) : (
+          <div className="ui-card p-5 text-sm text-[var(--text-3)]">
+            {language === "pt"
+              ? "Entre na sua conta para ver notificacoes."
+              : "Sign in to view notifications."}
+          </div>
+        )
+      ) : (
+        <>
       {/* Daily reminder */}
       <div className="flex flex-col gap-3">
         <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-3)]">{t("more.dailyReminder")}</p>
@@ -526,6 +588,8 @@ export function MoreScreen() {
           ))}
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

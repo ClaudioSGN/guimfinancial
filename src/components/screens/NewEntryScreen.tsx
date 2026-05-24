@@ -9,8 +9,14 @@ import { useAuth } from "@/lib/auth";
 import { AppIcon } from "@/components/AppIcon";
 import { BankBrandBadge, BankBrandPicker } from "@/components/BankBrandBadge";
 import { DEFAULT_BANK_BRAND_CODE, type BankBrandCode } from "@/lib/bankBrands";
-import { hasMissingColumnError } from "@/lib/errorUtils";
+import { hasMissingColumnError, hasMissingTableError } from "@/lib/errorUtils";
 import { formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
+import {
+  createSharedTransactionRequest,
+  getProfileLabel,
+  loadAcceptedFriends,
+  type FriendProfile,
+} from "@/lib/social";
 
 type CardOwnerType = "self" | "friend";
 
@@ -71,6 +77,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
   const needsAccount = entryType === "income" || entryType === "expense";
   const isExpenseEntry = entryType === "expense" || entryType === "card_expense";
   const canBeFixedEntry = entryType === "income" || isExpenseEntry;
+  const canShareWithFriend = entryType === "income" || entryType === "expense" || isCardExpense;
 
   const emptyMoneyValue = formatCentsInput("", currency);
   const [amount, setAmount] = useState(emptyMoneyValue);
@@ -98,15 +105,10 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
   const [newCardDueDay, setNewCardDueDay] = useState("");
   const [createCardSaving, setCreateCardSaving] = useState(false);
   const [createCardError, setCreateCardError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (parseCentsInput(amount) === 0) {
-      setAmount(emptyMoneyValue);
-    }
-    if (parseCentsInput(newCardLimitAmount) === 0) {
-      setNewCardLimitAmount(emptyMoneyValue);
-    }
-  }, [amount, emptyMoneyValue, newCardLimitAmount]);
+  const [friends, setFriends] = useState<FriendProfile[]>([]);
+  const [shareWithFriend, setShareWithFriend] = useState(false);
+  const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
+  const [shareWarning, setShareWarning] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadRefs() {
@@ -146,13 +148,19 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
         };
       };
 
-      const [accountsResult, cardsResult] = await Promise.all([
+      const [accountsResult, cardsResult, friendsResult] = await Promise.all([
         supabase
           .from("accounts")
           .select("id,name,balance")
           .eq("user_id", user.id)
           .order("name", { ascending: true }),
         loadCards(),
+        loadAcceptedFriends(user.id).catch((error) => {
+          if (hasMissingTableError(error, ["gamification_friendships", "gamification_profiles"])) {
+            return [] as FriendProfile[];
+          }
+          throw error;
+        }),
       ]);
 
       if (!accountsResult.error) {
@@ -161,12 +169,34 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
       if (!cardsResult.error) {
         setCards((cardsResult.data ?? []) as Card[]);
       }
+      setFriends(friendsResult);
+      if (!friendsResult.length) {
+        setShareWithFriend(false);
+        setSelectedFriendId(null);
+      } else {
+        setSelectedFriendId((current) =>
+          current && friendsResult.some((friend) => friend.user_id === current)
+            ? current
+            : friendsResult[0]?.user_id ?? null,
+        );
+      }
     }
 
-    loadRefs();
+    loadRefs().catch(() => {
+      setFriends([]);
+      setShareWithFriend(false);
+      setSelectedFriendId(null);
+    });
   }, [user]);
 
   const parsedAmount = useMemo(() => parseCentsInput(amount), [amount]);
+  const effectiveSelectedFriendId = useMemo(
+    () =>
+      selectedFriendId && friends.some((friend) => friend.user_id === selectedFriendId)
+        ? selectedFriendId
+        : friends[0]?.user_id ?? null,
+    [friends, selectedFriendId],
+  );
 
   async function updateAccountBalance(id: string, delta: number) {
     if (!user) return;
@@ -184,6 +214,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
     if (!user) return;
     setErrorMsg(null);
     setSaved(false);
+    setShareWarning(null);
 
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       setErrorMsg(t("newEntry.amountError"));
@@ -236,7 +267,9 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
         totalInstallments = n;
       }
 
-      const { error } = await supabase.from("transactions").insert([
+      const normalizedSharedType = entryType === "income" ? "income" : "expense";
+
+      const { data: createdTransaction, error } = await supabase.from("transactions").insert([
         {
           user_id: user.id,
           type: entryType,
@@ -252,7 +285,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
           installments_paid: isCardExpense && isInstallment ? 0 : null,
           is_paid: isCardExpense && isInstallment ? false : null,
         },
-      ]);
+      ]).select("id").single();
 
       if (error) {
         const rawError = `${error.code ?? ""} ${error.message ?? ""}`.toLowerCase();
@@ -273,6 +306,34 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
       if (needsAccount) {
         const delta = entryType === "income" ? parsedAmount : -parsedAmount;
         await updateAccountBalance(accountId!, delta);
+      }
+
+      if (shareWithFriend && effectiveSelectedFriendId) {
+        try {
+          await createSharedTransactionRequest({
+            requesterUserId: user.id,
+            recipientUserId: effectiveSelectedFriendId,
+            transactionType: normalizedSharedType,
+            amount: parsedAmount,
+            description: description || null,
+            category: category || null,
+            date,
+            senderTransactionId: createdTransaction?.id ?? null,
+            note:
+              isCardExpense && language === "pt"
+                ? "Criado a partir de despesa no cartao."
+                : isCardExpense
+                  ? "Created from a card expense."
+              : null,
+          });
+          window.dispatchEvent(new Event("social-refresh"));
+        } catch {
+          setShareWarning(
+            language === "pt"
+              ? "A transacao foi salva, mas nao foi possivel enviar a atribuicao ao amigo."
+              : "The transaction was saved, but the attribution could not be sent to your friend.",
+          );
+        }
       }
     }
 
@@ -531,9 +592,68 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
             </div>
           </div>
         ) : null}
+
+        {canShareWithFriend ? (
+          <div className="flex flex-col gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-3)] px-4 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-[var(--text-1)]">
+                  {language === "pt" ? "Atribuir a um amigo" : "Assign to a friend"}
+                </p>
+                <p className="text-xs text-[var(--text-3)]">
+                  {language === "pt"
+                    ? "Envia esta receita ou despesa para a caixa de notificacoes do amigo."
+                    : "Send this income or expense to your friend's notifications inbox."}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={!friends.length}
+                onClick={() => setShareWithFriend((value) => !value)}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:opacity-50 ${
+                  shareWithFriend ? "bg-[var(--accent)]" : "bg-[var(--surface-3)] border border-[var(--border-bright)]"
+                }`}
+              >
+                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${shareWithFriend ? "translate-x-4" : "translate-x-0.5"}`} />
+              </button>
+            </div>
+
+            {!friends.length ? (
+              <p className="text-xs text-[var(--text-3)]">
+                {language === "pt"
+                  ? "Adicione amigos na aba Mais para usar atribuicoes compartilhadas."
+                  : "Add friends in the More tab to use shared attributions."}
+              </p>
+            ) : shareWithFriend ? (
+              <div className="flex flex-col gap-2">
+                <label className="ui-label">
+                  {language === "pt" ? "Recebera a atribuicao" : "Will receive the attribution"}
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {friends.map((friend) => (
+                    <button
+                      key={friend.user_id}
+                      type="button"
+                      onClick={() => setSelectedFriendId(friend.user_id)}
+                      className={`ui-btn ui-btn-sm ${effectiveSelectedFriendId === friend.user_id ? "ui-btn-primary" : "ui-btn-secondary"}`}
+                    >
+                      {getProfileLabel(friend)}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-[var(--text-3)]">
+                  {language === "pt"
+                    ? "O amigo podera aceitar ou recusar na aba Notificacoes."
+                    : "Your friend will be able to accept or decline it in Notifications."}
+                </p>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {errorMsg ? <p className="text-xs text-[var(--red)]">{errorMsg}</p> : null}
+      {shareWarning ? <p className="text-xs text-[var(--amber)]">{shareWarning}</p> : null}
       {saved ? <p className="text-xs text-[var(--green)]">{t("newEntry.saved")}</p> : null}
 
       <button type="button" onClick={handleSave} disabled={saving} className="ui-btn ui-btn-primary ui-btn-lg w-full">

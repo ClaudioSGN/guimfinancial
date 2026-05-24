@@ -5,8 +5,10 @@ import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useLanguage } from "@/lib/language";
+import { useAuth } from "@/lib/auth";
 import { AppIcon } from "@/components/AppIcon";
 import { NewEntryScreen } from "@/components/screens/NewEntryScreen";
+import { NotificationsPanel } from "@/components/social/NotificationsPanel";
 
 type TabKey =
   | "home"
@@ -22,13 +24,16 @@ type Props = {
 
 export function AppShell({ activeTab, children }: Props) {
   const { language, t } = useLanguage();
+  const { user } = useAuth();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [activeModalType, setActiveModalType] = useState<string | null>(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const investmentEntryCounter = useRef(0);
   const goalsLabel = language === "en" ? "Goals" : "Metas";
+  const notificationsLabel = language === "en" ? "Notifications" : "Notificacoes";
 
   const menuItems = useMemo(
     () => [
@@ -133,6 +138,21 @@ export function AppShell({ activeTab, children }: Props) {
               </Link>
             );
           })}
+          <button
+            type="button"
+            title={notificationsLabel}
+            onClick={() => setNotificationsOpen(true)}
+            className={`group relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors ${
+              notificationsOpen
+                ? "bg-[var(--accent-dim)] text-[var(--accent)]"
+                : "text-[var(--text-3)] hover:bg-[var(--surface-3)] hover:text-[var(--text-2)]"
+            }`}
+          >
+            <AppIcon name="bell" size={20} />
+            <span className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 z-50 -translate-y-1/2 whitespace-nowrap rounded-lg border border-[var(--border-bright)] bg-[var(--surface-2)] px-2.5 py-1.5 text-xs font-semibold text-[var(--text-1)] opacity-0 shadow-[var(--shadow-md)] transition-opacity group-hover:opacity-100">
+              {notificationsLabel}
+            </span>
+          </button>
         </div>
 
         <button
@@ -242,6 +262,46 @@ export function AppShell({ activeTab, children }: Props) {
               </button>
             </div>
             <NewEntryScreen entryType={activeModalType} onClose={() => setActiveModalType(null)} />
+          </div>
+        </div>
+      ) : null}
+
+      {notificationsOpen ? (
+        <div
+          className="ui-modal-backdrop fixed inset-0 z-50 hidden md:block"
+          onClick={() => setNotificationsOpen(false)}
+        >
+          <div
+            className="absolute left-[72px] top-6 w-[min(520px,calc(100vw-104px))]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="ui-card-2 max-h-[calc(100dvh-3rem)] overflow-y-auto rounded-2xl p-4 shadow-[var(--shadow-lg)]">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <p className="ui-eyebrow">{notificationsLabel}</p>
+                  <p className="mt-1 text-sm font-semibold text-[var(--text-1)]">
+                    {language === "pt" ? "Sua caixa de notificacoes" : "Your notifications inbox"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setNotificationsOpen(false)}
+                  className="ui-btn ui-btn-ghost ui-btn-sm"
+                >
+                  {language === "pt" ? "Fechar" : "Close"}
+                </button>
+              </div>
+
+              {user ? (
+                <NotificationsPanel userId={user.id} />
+              ) : (
+                <div className="ui-card p-5 text-sm text-[var(--text-3)]">
+                  {language === "pt"
+                    ? "Entre na sua conta para ver notificacoes."
+                    : "Sign in to view notifications."}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       ) : null}

@@ -290,12 +290,34 @@ create table if not exists gamification_avatar_inventory (
   unique (user_id, item_code)
 );
 
+create table if not exists shared_transaction_requests (
+  id uuid primary key default gen_random_uuid(),
+  requester_user_id uuid not null references auth.users (id) on delete cascade,
+  recipient_user_id uuid not null references auth.users (id) on delete cascade,
+  transaction_type text not null check (transaction_type in ('income', 'expense')),
+  amount numeric not null check (amount > 0),
+  description text,
+  category text,
+  date date not null,
+  status text not null default 'pending' check (status in ('pending', 'accepted', 'declined')),
+  sender_transaction_id uuid references transactions (id) on delete set null,
+  recipient_transaction_id uuid references transactions (id) on delete set null,
+  note text,
+  decline_reason text,
+  responded_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (requester_user_id <> recipient_user_id)
+);
+
 create index if not exists gamification_friendships_user_idx on gamification_friendships (user_id);
 create index if not exists gamification_friendships_friend_idx on gamification_friendships (friend_user_id);
 create index if not exists gamification_user_medals_user_idx on gamification_user_medals (user_id);
 create index if not exists gamification_user_missions_user_week_idx on gamification_user_missions (user_id, week_start);
 create index if not exists gamification_wallet_monthly_user_month_idx on gamification_wallet_monthly (user_id, month_ref);
 create index if not exists gamification_avatar_inventory_user_idx on gamification_avatar_inventory (user_id);
+create index if not exists shared_transaction_requests_requester_idx on shared_transaction_requests (requester_user_id, created_at desc);
+create index if not exists shared_transaction_requests_recipient_idx on shared_transaction_requests (recipient_user_id, created_at desc);
 
 update gamification_profiles
 set friend_code = upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8))
@@ -462,6 +484,7 @@ alter table gamification_weekly_missions enable row level security;
 alter table gamification_user_missions enable row level security;
 alter table gamification_wallet_monthly enable row level security;
 alter table gamification_avatar_inventory enable row level security;
+alter table shared_transaction_requests enable row level security;
 
 drop policy if exists "gamification_profiles_select" on gamification_profiles;
 create policy "gamification_profiles_select" on gamification_profiles for select using (auth.uid() is not null);
@@ -482,7 +505,10 @@ create policy "gamification_friendships_insert" on gamification_friendships for 
 );
 drop policy if exists "gamification_friendships_update" on gamification_friendships;
 create policy "gamification_friendships_update" on gamification_friendships for update using (
-  auth.uid() = user_id
+  auth.uid() = user_id or auth.uid() = friend_user_id
+)
+with check (
+  auth.uid() = user_id or auth.uid() = friend_user_id
 );
 drop policy if exists "gamification_friendships_delete" on gamification_friendships;
 create policy "gamification_friendships_delete" on gamification_friendships for delete using (
@@ -579,6 +605,35 @@ create policy "gamification_avatar_inventory_update" on gamification_avatar_inve
 drop policy if exists "gamification_avatar_inventory_delete" on gamification_avatar_inventory;
 create policy "gamification_avatar_inventory_delete" on gamification_avatar_inventory for delete using (
   auth.uid() = user_id
+);
+
+drop policy if exists "shared_transaction_requests_select" on shared_transaction_requests;
+create policy "shared_transaction_requests_select" on shared_transaction_requests for select using (
+  auth.uid() = requester_user_id or auth.uid() = recipient_user_id
+);
+drop policy if exists "shared_transaction_requests_insert" on shared_transaction_requests;
+create policy "shared_transaction_requests_insert" on shared_transaction_requests for insert with check (
+  auth.uid() = requester_user_id
+  and exists (
+    select 1
+    from gamification_friendships f
+    where f.status = 'accepted'
+      and (
+        (f.user_id = requester_user_id and f.friend_user_id = recipient_user_id)
+        or (f.friend_user_id = requester_user_id and f.user_id = recipient_user_id)
+      )
+  )
+);
+drop policy if exists "shared_transaction_requests_update" on shared_transaction_requests;
+create policy "shared_transaction_requests_update" on shared_transaction_requests for update using (
+  auth.uid() = requester_user_id or auth.uid() = recipient_user_id
+)
+with check (
+  auth.uid() = requester_user_id or auth.uid() = recipient_user_id
+);
+drop policy if exists "shared_transaction_requests_delete" on shared_transaction_requests;
+create policy "shared_transaction_requests_delete" on shared_transaction_requests for delete using (
+  auth.uid() = requester_user_id or auth.uid() = recipient_user_id
 );
 
 drop policy if exists "investments_friends_select" on investments;
