@@ -9,6 +9,7 @@ import { useCurrency } from "@/lib/currency";
 import { formatCentsFromNumber, formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
 import { useAuth } from "@/lib/auth";
 import { AppIcon } from "@/components/AppIcon";
+import { hasMissingColumnError } from "@/lib/errorUtils";
 
 type Transaction = {
   id: string;
@@ -44,19 +45,17 @@ type Account = {
 type CreditCard = {
   id: string;
   name: string;
+  owner_type: "self" | "friend";
+  friend_name: string | null;
 };
+
+type LegacyCreditCard = Omit<CreditCard, "owner_type" | "friend_name">;
 
 function toDateString(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-function getMonthRange(date = new Date()) {
-  const start = new Date(date.getFullYear(), date.getMonth(), 1);
-  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
-  return { start: toDateString(start), end: toDateString(end) };
 }
 
 function getMonthLabel(date: Date, language: "pt" | "en") {
@@ -156,6 +155,18 @@ function formatDate(value: string, language: "pt" | "en") {
   return date.toLocaleDateString(language === "pt" ? "pt-BR" : "en-US");
 }
 
+function isCardOwnershipColumnMissing(error: unknown) {
+  return hasMissingColumnError(error, ["owner_type", "friend_name"]);
+}
+
+function hydrateLegacyCards(cards: LegacyCreditCard[]): CreditCard[] {
+  return cards.map((card) => ({
+    ...card,
+    owner_type: "self",
+    friend_name: null,
+  }));
+}
+
 export function TransactionsScreen() {
   const { language, t } = useLanguage();
   const { currency } = useCurrency();
@@ -197,6 +208,41 @@ export function TransactionsScreen() {
     const txColumnsFallback =
       "id,type,amount,description,category,date,account_id,card_id,is_installment,installment_total,installments_paid,is_paid";
 
+    const loadCards = async () => {
+      const cardsResult = await supabase
+        .from("credit_cards")
+        .select("id,name,owner_type,friend_name")
+        .eq("user_id", user.id)
+        .order("owner_type", { ascending: true })
+        .order("name", { ascending: true });
+
+      if (!cardsResult.error) {
+        return {
+          data: (cardsResult.data ?? []) as CreditCard[],
+          error: null as unknown,
+        };
+      }
+
+      if (!isCardOwnershipColumnMissing(cardsResult.error)) {
+        return { data: [] as CreditCard[], error: cardsResult.error };
+      }
+
+      const legacyCardsResult = await supabase
+        .from("credit_cards")
+        .select("id,name")
+        .eq("user_id", user.id)
+        .order("name", { ascending: true });
+
+      if (legacyCardsResult.error) {
+        return { data: [] as CreditCard[], error: legacyCardsResult.error };
+      }
+
+      return {
+        data: hydrateLegacyCards((legacyCardsResult.data ?? []) as LegacyCreditCard[]),
+        error: null as unknown,
+      };
+    };
+
     const [txResultWithFixed, accountsResult, cardsResult] = await Promise.all([
       supabase
         .from("transactions")
@@ -205,7 +251,7 @@ export function TransactionsScreen() {
         .lte("date", queryEnd)
         .order("date", { ascending: false }),
       supabase.from("accounts").select("id,balance").eq("user_id", user.id),
-      supabase.from("credit_cards").select("id,name").eq("user_id", user.id),
+      loadCards(),
     ]);
 
     let txData = txResultWithFixed.data;
@@ -248,7 +294,11 @@ export function TransactionsScreen() {
   }, [t, selectedMonth, user]);
 
   useEffect(() => {
-    loadTransactions();
+    const timerId = window.setTimeout(() => {
+      void loadTransactions();
+    }, 0);
+
+    return () => window.clearTimeout(timerId);
   }, [loadTransactions]);
 
   useEffect(() => {
@@ -264,8 +314,8 @@ export function TransactionsScreen() {
     () => new Map(baseTransactions.map((tx) => [tx.id, tx])),
     [baseTransactions],
   );
-  const cardNameById = useMemo(
-    () => new Map(cards.map((card) => [card.id, card.name])),
+  const cardById = useMemo(
+    () => new Map(cards.map((card) => [card.id, card])),
     [cards],
   );
 
@@ -658,6 +708,38 @@ export function TransactionsScreen() {
     }, 0);
   }, [monthTransactions]);
 
+  const ownCardMonthExpenses = useMemo(() => {
+    return monthTransactions.reduce((sum, tx) => {
+      if (!tx.card_id || tx.type !== "card_expense") return sum;
+      const card = cardById.get(tx.card_id);
+      if (!card || card.owner_type === "friend") return sum;
+      return sum + tx.displayAmount;
+    }, 0);
+  }, [monthTransactions, cardById]);
+
+  const friendCardMonthExpensesByFriend = useMemo(() => {
+    const totals = new Map<string, number>();
+
+    monthTransactions.forEach((tx) => {
+      if (!tx.card_id || tx.type !== "card_expense") return;
+      const card = cardById.get(tx.card_id);
+      if (!card || card.owner_type !== "friend") return;
+      const friendLabel = card.friend_name?.trim() || card.name;
+      const current = totals.get(friendLabel) ?? 0;
+      totals.set(friendLabel, current + tx.displayAmount);
+    });
+
+    return Array.from(totals.entries())
+      .map(([friendName, amount]) => ({ friendName, amount }))
+      .filter((item) => item.amount > 0)
+      .sort((left, right) => right.amount - left.amount);
+  }, [monthTransactions, cardById]);
+
+  const totalFriendCardMonthExpenses = useMemo(
+    () => friendCardMonthExpensesByFriend.reduce((sum, item) => sum + item.amount, 0),
+    [friendCardMonthExpensesByFriend],
+  );
+
   const monthOptions = useMemo(
     () => getMonthOptions(language),
     [language],
@@ -734,6 +816,60 @@ export function TransactionsScreen() {
         </div>
       </div>
 
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+        <div className="ui-card flex items-center gap-3 p-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent-dim)]">
+            <AppIcon name="credit-card" size={16} color="var(--accent)" />
+          </div>
+          <div>
+            <p className="ui-eyebrow">
+              {language === "pt" ? "Cartoes proprios no mes" : "Own card expenses this month"}
+            </p>
+            <p className="ui-amount text-sm text-[var(--text-1)]">
+              {loading ? "—" : formatCurrency(ownCardMonthExpenses, language, currency)}
+            </p>
+          </div>
+        </div>
+
+        <div className="ui-card p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="ui-eyebrow">
+                {language === "pt" ? "Cartoes de amigos no mes" : "Friend card expenses this month"}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-[var(--text-1)]">
+                {loading ? "—" : formatCurrency(totalFriendCardMonthExpenses, language, currency)}
+              </p>
+            </div>
+            <span className="ui-badge ui-badge-accent">
+              {friendCardMonthExpensesByFriend.length}{" "}
+              {language === "pt" ? "amigos" : "friends"}
+            </span>
+          </div>
+          {friendCardMonthExpensesByFriend.length ? (
+            <div className="mt-3 flex flex-col gap-2">
+              {friendCardMonthExpensesByFriend.map((item) => (
+                <div
+                  key={item.friendName}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-3)] px-3 py-2"
+                >
+                  <span className="truncate text-sm text-[var(--text-2)]">{item.friendName}</span>
+                  <span className="text-sm font-semibold text-[var(--text-1)]">
+                    {formatCurrency(item.amount, language, currency)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-[var(--text-3)]">
+              {language === "pt"
+                ? "Nenhuma despesa em cartoes de amigos neste mes."
+                : "No friend card expenses in this month."}
+            </p>
+          )}
+        </div>
+      </div>
+
       {errorMsg ? <p className="text-xs text-[var(--red)]">{errorMsg}</p> : null}
 
       {/* Transactions list */}
@@ -756,7 +892,9 @@ export function TransactionsScreen() {
             const canUndoInstallment = isInstallment && paidInstallments > 0;
             const title = item.description || (isIncome ? t("newEntry.income") : isCard ? t("newEntry.cardExpense") : t("newEntry.expense"));
             const baseTx = baseTxById.get(item.baseId) ?? null;
-            const cardName = isCard && item.card_id ? cardNameById.get(item.card_id) : null;
+            const card = isCard && item.card_id ? cardById.get(item.card_id) : null;
+            const cardName = card?.name ?? null;
+            const isFriendCard = card?.owner_type === "friend";
             return (
               <div
                 key={item.displayId}
@@ -770,6 +908,13 @@ export function TransactionsScreen() {
                       <span className="text-xs text-[var(--text-3)]">{formatDate(item.displayDate, language)}</span>
                       {item.category ? <span className="ui-badge ui-badge-neutral">{item.category}</span> : null}
                       {cardName ? <span className="ui-badge ui-badge-accent">{cardName}</span> : null}
+                      {isFriendCard ? (
+                        <span className="ui-badge ui-badge-warning">
+                          {language === "pt"
+                            ? `Amigo${card?.friend_name ? ` · ${card.friend_name}` : ""}`
+                            : `Friend${card?.friend_name ? ` · ${card.friend_name}` : ""}`}
+                        </span>
+                      ) : null}
                       {isInstallment ? (
                         <span className={`ui-badge ${paidInstallments >= totalInstallments ? "ui-badge-income" : "ui-badge-warning"}`}>
                           {paidInstallments}/{totalInstallments}x
