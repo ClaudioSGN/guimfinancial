@@ -4,6 +4,7 @@ import {
   hasMissingColumnError,
   hasMissingTableError,
 } from "@/lib/errorUtils";
+import { getRemainingInstallmentIndexes } from "@/lib/installmentResponsibility";
 
 export type FriendProfile = {
   user_id: string;
@@ -246,6 +247,23 @@ export async function createSharedTransactionRequest(params: {
     const missingResponsibilityInstallments = hasMissingColumnError(insertResult.error, [
       "responsibility_installment_indexes",
     ]);
+
+    if (missingResponsibilityInstallments && params.responsibilityInstallmentIndexes?.length) {
+      throw insertResult.error;
+    }
+
+    if (
+      (hasMissingColumnError(insertResult.error, ["is_installment"]) ||
+        hasMissingColumnError(insertResult.error, ["installment_total"])) &&
+      (params.isInstallment || params.installmentTotal)
+    ) {
+      throw insertResult.error;
+    }
+
+    if (hasMissingColumnError(insertResult.error, ["is_fixed"]) && params.isFixed) {
+      throw insertResult.error;
+    }
+
     const legacyPayload = {
       ...basePayload,
       ...(missingResponsibilityInstallments
@@ -306,6 +324,7 @@ export async function acceptSharedRequest(
   options: {
     accountId?: string | null;
     cardId?: string | null;
+    responsibilityInstallmentIndexes?: number[] | null;
   } = {},
 ) {
   const amount = Number(request.amount) || 0;
@@ -315,6 +334,23 @@ export async function acceptSharedRequest(
   }
   if (request.transaction_type !== "card_expense" && !options.accountId) {
     throw new Error("Account selection is required.");
+  }
+
+  const recipientResponsibilityInstallments =
+    request.transaction_type === "card_expense" && request.is_installment
+      ? options.responsibilityInstallmentIndexes ??
+        getRemainingInstallmentIndexes(
+          request.installment_total,
+          request.responsibility_installment_indexes,
+        )
+      : null;
+
+  if (
+    request.transaction_type === "card_expense" &&
+    request.is_installment &&
+    (!recipientResponsibilityInstallments || recipientResponsibilityInstallments.length === 0)
+  ) {
+    throw new Error("No installments are available for the recipient.");
   }
 
   const txInsert = await supabase
@@ -336,8 +372,10 @@ export async function acceptSharedRequest(
             ? request.installment_total
             : null,
         responsibility_installment_indexes:
-          request.transaction_type === "card_expense"
-            ? request.responsibility_installment_indexes
+          request.transaction_type === "card_expense" && request.is_installment
+            ? recipientResponsibilityInstallments
+            : request.transaction_type === "card_expense"
+              ? request.responsibility_installment_indexes
             : null,
         installments_paid:
           request.transaction_type === "card_expense" && request.is_installment

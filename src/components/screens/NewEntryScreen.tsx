@@ -17,6 +17,7 @@ import {
 import { formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
 import {
   buildAlternatingInstallmentIndexes,
+  getRemainingInstallmentIndexes,
   normalizeResponsibilityInstallmentIndexes,
 } from "@/lib/installmentResponsibility";
 import {
@@ -96,8 +97,8 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
   const isTransfer = effectiveEntryType === "transfer";
   const isCardExpense = effectiveEntryType === "card_expense";
   const needsAccount = effectiveEntryType === "income" || effectiveEntryType === "expense";
-  const senderNeedsAccount = !isShareEntry && needsAccount;
-  const senderNeedsCard = !isShareEntry && isCardExpense;
+  const senderNeedsAccount = needsAccount;
+  const senderNeedsCard = isCardExpense;
   const isExpenseEntry =
     effectiveEntryType === "expense" || effectiveEntryType === "card_expense";
   const canBeFixedEntry = effectiveEntryType === "income" || isExpenseEntry;
@@ -289,11 +290,16 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
     const nextPayload: Record<string, unknown> = { ...payload };
 
     while (true) {
-      const result = await supabase.from("transactions").insert([nextPayload]);
+      const result = await supabase
+        .from("transactions")
+        .insert([nextPayload])
+        .select("id")
+        .single();
       if (!result.error) {
         return {
           error: null as unknown,
           missingFeature: null as MissingTransactionFeature,
+          insertedId: result.data.id as string,
         };
       }
 
@@ -302,6 +308,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
         return {
           error: result.error,
           missingFeature: null as MissingTransactionFeature,
+          insertedId: null as string | null,
         };
       }
 
@@ -310,6 +317,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
           return {
             error: result.error,
             missingFeature: "custom_installments" as MissingTransactionFeature,
+            insertedId: null as string | null,
           };
         }
         delete nextPayload.responsibility_installment_indexes;
@@ -326,6 +334,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
           return {
             error: result.error,
             missingFeature: "installments" as MissingTransactionFeature,
+            insertedId: null as string | null,
           };
         }
         delete nextPayload[missingColumn];
@@ -337,6 +346,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
           return {
             error: result.error,
             missingFeature: "fixed" as MissingTransactionFeature,
+            insertedId: null as string | null,
           };
         }
         delete nextPayload.is_fixed;
@@ -346,7 +356,20 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
       return {
         error: result.error,
         missingFeature: null as MissingTransactionFeature,
+        insertedId: null as string | null,
       };
+    }
+  }
+
+  async function rollbackInsertedTransaction(
+    transactionId: string | null,
+    balanceRollback: { accountId: string; delta: number } | null,
+  ) {
+    if (transactionId) {
+      await supabase.from("transactions").delete().eq("id", transactionId).eq("user_id", user?.id ?? "");
+    }
+    if (balanceRollback) {
+      await updateAccountBalance(balanceRollback.accountId, balanceRollback.delta);
     }
   }
 
@@ -446,10 +469,99 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
               totalInstallments,
             ) ?? null;
         }
+
+        if (shouldSendToFriend && totalInstallments > 1) {
+          const senderInstallments = responsibilityIndexes ?? installmentOptions;
+          const remainingInstallments = getRemainingInstallmentIndexes(
+            totalInstallments,
+            senderInstallments,
+          );
+
+          if (!customInstallmentResponsibility) {
+            setErrorMsg(
+              language === "pt"
+                ? "Ao atribuir uma compra parcelada para um amigo, selecione primeiro as parcelas que ficam com voce."
+                : "When assigning an installment purchase to a friend, first select the installments that stay with you.",
+            );
+            setSaving(false);
+            return;
+          }
+
+          if (!remainingInstallments.length) {
+            setErrorMsg(
+              language === "pt"
+                ? "Deixe pelo menos uma parcela disponivel para o amigo."
+                : "Leave at least one installment available for your friend.",
+            );
+            setSaving(false);
+            return;
+          }
+        }
       }
 
       if (shouldSendToFriend && effectiveSelectedFriendId) {
+        let senderTransactionId: string | null = null;
+        let balanceRollback: { accountId: string; delta: number } | null = null;
         try {
+          const senderInsert = await insertTransactionWithCompatibility(
+            {
+              user_id: user.id,
+              type: effectiveEntryType,
+              account_id: senderNeedsAccount ? accountId : null,
+              card_id: senderNeedsCard ? cardId : null,
+              amount: parsedAmount,
+              description: description || null,
+              category: category || null,
+              date,
+              is_fixed: canBeFixedEntry ? isFixed : null,
+              is_installment: isCardExpense ? isInstallment || null : null,
+              installment_total: isCardExpense ? totalInstallments : null,
+              responsibility_installment_indexes:
+                isCardExpense && isInstallment ? responsibilityIndexes : null,
+              installments_paid: isCardExpense && isInstallment ? 0 : null,
+              is_paid: isCardExpense && isInstallment ? false : null,
+            },
+            {
+              requiresFixed: Boolean(canBeFixedEntry && isFixed),
+              requiresInstallments: Boolean(isCardExpense && isInstallment),
+              requiresCustomInstallments: Boolean(
+                isCardExpense &&
+                isInstallment &&
+                responsibilityIndexes &&
+                responsibilityIndexes.length,
+              ),
+            },
+          );
+
+          if (senderInsert.error) {
+            const senderErrorFeature = senderInsert.missingFeature;
+            setErrorMsg(
+              senderErrorFeature === "fixed"
+                ? language === "pt"
+                  ? "Atualize o banco com supabase/schema.sql para usar a opcao de transacao fixa."
+                  : "Update your database with supabase/schema.sql to use the fixed transaction option."
+                : senderErrorFeature === "installments"
+                  ? language === "pt"
+                    ? "Atualize o banco com supabase/schema.sql para usar compras parceladas no cartao."
+                    : "Update your database with supabase/schema.sql to use card installments."
+                  : senderErrorFeature === "custom_installments"
+                    ? language === "pt"
+                      ? "Atualize o banco com supabase/schema.sql para usar parcelas personalizadas."
+                      : "Update your database with supabase/schema.sql to use custom installment responsibility."
+                    : t("newEntry.saveError"),
+            );
+            setSaving(false);
+            return;
+          }
+
+          senderTransactionId = senderInsert.insertedId;
+
+          if (senderNeedsAccount && accountId) {
+            const delta = effectiveEntryType === "income" ? parsedAmount : -parsedAmount;
+            await updateAccountBalance(accountId, delta);
+            balanceRollback = { accountId, delta: -delta };
+          }
+
           await createSharedTransactionRequest({
             requesterUserId: user.id,
             recipientUserId: effectiveSelectedFriendId,
@@ -468,16 +580,17 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
             installmentTotal: isCardExpense ? totalInstallments : null,
             responsibilityInstallmentIndexes:
               isCardExpense && isInstallment ? responsibilityIndexes : null,
-            senderTransactionId: null,
+            senderTransactionId,
             note:
               isCardExpense && language === "pt"
-                ? "Criado a partir de despesa no cartao."
+                ? "Sua parte ja foi criada. O amigo escolhe o cartao e as parcelas restantes ao aceitar."
                 : isCardExpense
-                  ? "Created from a card expense."
+                  ? "Your side has already been created. Your friend will choose their card and remaining installments when accepting."
                   : null,
           });
           window.dispatchEvent(new Event("social-refresh"));
         } catch (error) {
+          await rollbackInsertedTransaction(senderTransactionId, balanceRollback);
           setShareWarning(
             getSocialErrorMessage(error, language),
           );
@@ -920,8 +1033,8 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
                 </p>
                 <p className="text-xs text-[var(--text-3)]">
                   {language === "pt"
-                    ? "Envie apenas os dados da atribuicao. O amigo escolhe a conta ou cartao ao aceitar."
-                    : "Send only the attribution details. Your friend will choose the account or card when accepting."}
+                    ? "Sua transacao sera salva agora. O amigo escolhe a conta ou cartao dele ao aceitar."
+                    : "Your transaction will be saved now. Your friend will choose their own account or card when accepting."}
                 </p>
               </div>
             </div>

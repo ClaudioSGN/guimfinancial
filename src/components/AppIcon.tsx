@@ -4,7 +4,6 @@ type IconName =
   | "house"
   | "list"
   | "calendar"
-  | "target"
   | "bag"
   | "filter"
   | "trophy"
@@ -62,14 +61,6 @@ export function AppIcon({ name, size = 20, color = "currentColor", stroke = 1.8 
         <svg {...common}>
           <rect x="3" y="4" width="18" height="18" rx="3" />
           <path d="M16 2v4M8 2v4M3 10h18" />
-        </svg>
-      );
-    case "target":
-      return (
-        <svg {...common}>
-          <circle cx="12" cy="12" r="8" />
-          <circle cx="12" cy="12" r="4" />
-          <circle cx="12" cy="12" r="1.5" fill={color} stroke="none" />
         </svg>
       );
     case "bag":

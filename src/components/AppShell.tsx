@@ -13,7 +13,6 @@ import { NotificationsPanel } from "@/components/social/NotificationsPanel";
 type TabKey =
   | "home"
   | "transactions"
-  | "goals"
   | "investments"
   | "more";
 
@@ -32,7 +31,6 @@ export function AppShell({ activeTab, children }: Props) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const investmentEntryCounter = useRef(0);
-  const goalsLabel = language === "en" ? "Goals" : "Metas";
   const notificationsLabel = language === "en" ? "Notifications" : "Notificacoes";
 
   const menuItems = useMemo(
@@ -56,7 +54,6 @@ export function AppShell({ activeTab, children }: Props) {
     { href: "/", key: "home", icon: "house", label: t("tabs.home") },
     { href: "/transactions", key: "transactions", icon: "list", label: t("tabs.transactions") },
     { href: "/investments", key: "investments", icon: "calendar", label: t("tabs.investments") },
-    { href: "/goals", key: "goals", icon: "target", label: goalsLabel },
     { href: "/more", key: "more", icon: "more", label: t("tabs.more") },
   ] as const;
 
@@ -67,7 +64,7 @@ export function AppShell({ activeTab, children }: Props) {
     { href: "/more", key: "more", icon: "more", label: t("tabs.more") },
   ] as const;
 
-  const mobileActiveTab: TabKey = activeTab === "goals" ? "more" : activeTab;
+  const mobileActiveTab: TabKey = activeTab;
 
   useEffect(() => {
     let timeoutId: number | undefined;

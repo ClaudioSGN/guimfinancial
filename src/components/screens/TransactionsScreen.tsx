@@ -58,6 +58,14 @@ type CreditCard = {
 };
 
 type LegacyCreditCard = Omit<CreditCard, "owner_type" | "friend_name">;
+type TransactionFilter = "all" | "income" | "expense";
+type TransactionSort =
+  | "date_desc"
+  | "date_asc"
+  | "amount_desc"
+  | "amount_asc"
+  | "alpha_asc"
+  | "alpha_desc";
 
 function toDateString(date: Date) {
   const year = date.getFullYear();
@@ -163,6 +171,37 @@ function formatDate(value: string, language: "pt" | "en") {
   return date.toLocaleDateString(language === "pt" ? "pt-BR" : "en-US");
 }
 
+function getTransactionTitle(
+  tx: Pick<DisplayTransaction, "description" | "type">,
+  t: (key: string) => string,
+) {
+  return tx.description || (tx.type === "income" ? t("newEntry.income") : tx.type === "card_expense" ? t("newEntry.cardExpense") : t("newEntry.expense"));
+}
+
+function getFilterLabel(filter: TransactionFilter, language: "pt" | "en") {
+  if (filter === "income") return language === "pt" ? "Receitas" : "Income";
+  if (filter === "expense") return language === "pt" ? "Despesas" : "Expenses";
+  return language === "pt" ? "Todos" : "All";
+}
+
+function getSortLabel(sort: TransactionSort, language: "pt" | "en") {
+  switch (sort) {
+    case "date_asc":
+      return language === "pt" ? "Data: mais antigas" : "Date: oldest first";
+    case "amount_desc":
+      return language === "pt" ? "Valor: maior primeiro" : "Amount: highest first";
+    case "amount_asc":
+      return language === "pt" ? "Valor: menor primeiro" : "Amount: lowest first";
+    case "alpha_asc":
+      return language === "pt" ? "A a Z" : "A to Z";
+    case "alpha_desc":
+      return language === "pt" ? "Z a A" : "Z to A";
+    case "date_desc":
+    default:
+      return language === "pt" ? "Data: mais recentes" : "Date: newest first";
+  }
+}
+
 function isCardOwnershipColumnMissing(error: unknown) {
   return hasMissingColumnError(error, ["owner_type", "friend_name"]);
 }
@@ -198,7 +237,8 @@ export function TransactionsScreen() {
   const [editError, setEditError] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [monthOpen, setMonthOpen] = useState(false);
-  const [filter, setFilter] = useState<"all" | "income" | "expense">("all");
+  const [filter, setFilter] = useState<TransactionFilter>("all");
+  const [sortOrder, setSortOrder] = useState<TransactionSort>("date_desc");
   const [undoSavingId, setUndoSavingId] = useState<string | null>(null);
 
   const monthLabel = useMemo(
@@ -437,6 +477,45 @@ export function TransactionsScreen() {
       filter === "income" ? tx.type === "income" : tx.type !== "income",
     );
   }, [filter, monthTransactions]);
+
+  const visibleTransactions = useMemo(() => {
+    const next = [...filteredTransactions];
+
+    next.sort((left, right) => {
+      if (sortOrder === "date_desc" || sortOrder === "date_asc") {
+        const leftTime = parseLocalDate(left.effectiveDate)?.getTime() ?? 0;
+        const rightTime = parseLocalDate(right.effectiveDate)?.getTime() ?? 0;
+        if (leftTime !== rightTime) {
+          return sortOrder === "date_desc"
+            ? rightTime - leftTime
+            : leftTime - rightTime;
+        }
+      }
+
+      if (sortOrder === "amount_desc" || sortOrder === "amount_asc") {
+        if (left.displayAmount !== right.displayAmount) {
+          return sortOrder === "amount_desc"
+            ? right.displayAmount - left.displayAmount
+            : left.displayAmount - right.displayAmount;
+        }
+      }
+
+      if (sortOrder === "alpha_asc" || sortOrder === "alpha_desc") {
+        const leftTitle = normalizeSearchText(getTransactionTitle(left, t));
+        const rightTitle = normalizeSearchText(getTransactionTitle(right, t));
+        const comparison = leftTitle.localeCompare(rightTitle);
+        if (comparison !== 0) {
+          return sortOrder === "alpha_asc" ? comparison : -comparison;
+        }
+      }
+
+      const leftFallback = parseLocalDate(left.effectiveDate)?.getTime() ?? 0;
+      const rightFallback = parseLocalDate(right.effectiveDate)?.getTime() ?? 0;
+      return rightFallback - leftFallback;
+    });
+
+    return next;
+  }, [filteredTransactions, sortOrder, t]);
 
   async function handleRemove(tx: Transaction) {
     if (!user) return;
@@ -775,7 +854,9 @@ export function TransactionsScreen() {
           className="ui-btn ui-btn-secondary ui-btn-sm gap-1.5"
         >
           <AppIcon name="list" size={14} />
-          {filter === "income" ? "Receitas" : filter === "expense" ? "Despesas" : "Todos"}
+          {getFilterLabel(filter, language)}
+          <span className="text-[var(--text-3)]">·</span>
+          {getSortLabel(sortOrder, language)}
         </button>
 
         <div className="flex items-center gap-2">
@@ -887,12 +968,12 @@ export function TransactionsScreen() {
 
       {/* Transactions list */}
       <div className="flex flex-col gap-2">
-        {filteredTransactions.length === 0 ? (
+        {visibleTransactions.length === 0 ? (
           <p className="py-8 text-center text-xs text-[var(--text-3)]">
             {loading ? t("common.loading") : t("transactions.empty")}
           </p>
         ) : (
-          filteredTransactions.map((item) => {
+          visibleTransactions.map((item) => {
             const amount = item.displayAmount;
             const isIncome = item.type === "income";
             const isCard = item.type === "card_expense";
@@ -912,7 +993,7 @@ export function TransactionsScreen() {
               installmentOffset === nextInstallmentIndex - 1 &&
               paidInstallments < responsibleInstallments;
             const canUndoInstallment = isInstallment && paidInstallments > 0;
-            const title = item.description || (isIncome ? t("newEntry.income") : isCard ? t("newEntry.cardExpense") : t("newEntry.expense"));
+            const title = getTransactionTitle(item, t);
             const baseTx = baseTxById.get(item.baseId) ?? null;
             const card = isCard && item.card_id ? cardById.get(item.card_id) : null;
             const cardName = card?.name ?? null;
@@ -1051,13 +1132,43 @@ export function TransactionsScreen() {
           <div className="absolute bottom-0 left-0 right-0 ui-card-2 ui-slide-up rounded-t-2xl p-4" onClick={(e) => e.stopPropagation()}>
             <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-[var(--border-bright)]" />
             <div className="flex flex-col gap-2">
-              {(["expense", "income", "all"] as const).map((f) => (
-                <button key={f} type="button"
-                  className={`ui-btn ui-btn-lg w-full ${filter === f ? "ui-btn-primary" : "ui-btn-secondary"}`}
-                  onClick={() => { setFilter(f); setFilterOpen(false); }}>
-                  {f === "expense" ? "Despesas" : f === "income" ? "Receitas" : "Todos"}
-                </button>
-              ))}
+              <div className="flex flex-col gap-2">
+                <p className="ui-eyebrow">{language === "pt" ? "Tipo" : "Type"}</p>
+                {(["expense", "income", "all"] as const).map((f) => (
+                  <button key={f} type="button"
+                    className={`ui-btn ui-btn-lg w-full ${filter === f ? "ui-btn-primary" : "ui-btn-secondary"}`}
+                    onClick={() => setFilter(f)}>
+                    {getFilterLabel(f, language)}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 flex flex-col gap-2">
+                <p className="ui-eyebrow">{language === "pt" ? "Ordenar por" : "Sort by"}</p>
+                {([
+                  "date_desc",
+                  "date_asc",
+                  "amount_desc",
+                  "amount_asc",
+                  "alpha_asc",
+                  "alpha_desc",
+                ] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={`ui-btn ui-btn-lg w-full ${sortOrder === option ? "ui-btn-primary" : "ui-btn-secondary"}`}
+                    onClick={() => setSortOrder(option)}
+                  >
+                    {getSortLabel(option, language)}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="ui-btn ui-btn-primary ui-btn-lg mt-2 w-full"
+                onClick={() => setFilterOpen(false)}
+              >
+                {language === "pt" ? "Aplicar" : "Apply"}
+              </button>
               <button type="button" className="ui-btn ui-btn-ghost ui-btn-lg w-full" onClick={() => setFilterOpen(false)}>
                 {t("common.cancel")}
               </button>

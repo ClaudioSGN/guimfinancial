@@ -36,6 +36,22 @@ function parseRawIndexes(raw: unknown): number[] {
   return [];
 }
 
+export function parseExplicitInstallmentIndexes(
+  raw: unknown,
+  totalInstallments: number | string | null | undefined,
+) {
+  const total = getInstallmentTotal(totalInstallments);
+  if (total <= 0) return [] as number[];
+
+  return Array.from(
+    new Set(
+      parseRawIndexes(raw)
+        .map((value) => Math.trunc(value))
+        .filter((value) => Number.isFinite(value) && value >= 1 && value <= total),
+    ),
+  ).sort((left, right) => left - right);
+}
+
 export function normalizeResponsibilityInstallmentIndexes(
   raw: unknown,
   totalInstallments: number | string | null | undefined,
@@ -43,16 +59,26 @@ export function normalizeResponsibilityInstallmentIndexes(
   const total = getInstallmentTotal(totalInstallments);
   if (total <= 0) return null;
 
-  const normalized = Array.from(
-    new Set(
-      parseRawIndexes(raw)
-        .map((value) => Math.trunc(value))
-        .filter((value) => Number.isFinite(value) && value >= 1 && value <= total),
-    ),
-  ).sort((left, right) => left - right);
+  const normalized = parseExplicitInstallmentIndexes(raw, total);
 
   if (normalized.length === 0 || normalized.length >= total) return null;
   return normalized;
+}
+
+export function getRemainingInstallmentIndexes(
+  totalInstallments: number | string | null | undefined,
+  blockedIndexesRaw: unknown,
+) {
+  const total = getInstallmentTotal(totalInstallments);
+  if (total <= 0) return [] as number[];
+
+  const blocked = new Set(
+    parseExplicitInstallmentIndexes(blockedIndexesRaw, total),
+  );
+
+  return Array.from({ length: total }, (_, index) => index + 1).filter(
+    (value) => !blocked.has(value),
+  );
 }
 
 export function getResponsibleInstallmentIndexes(tx: InstallmentResponsibilityLike) {

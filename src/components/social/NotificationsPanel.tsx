@@ -14,6 +14,11 @@ import {
   type FriendProfile,
   type SharedTransactionRequest,
 } from "@/lib/social";
+import {
+  buildAlternatingInstallmentIndexes,
+  getRemainingInstallmentIndexes,
+  parseExplicitInstallmentIndexes,
+} from "@/lib/installmentResponsibility";
 import { formatCurrencyValue } from "../../../shared/currency";
 
 type Props = {
@@ -56,6 +61,7 @@ export function NotificationsPanel({ userId }: Props) {
   const [acceptTarget, setAcceptTarget] = useState<SharedTransactionRequest | null>(null);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [selectedRecipientInstallmentIndexes, setSelectedRecipientInstallmentIndexes] = useState<number[]>([]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -128,6 +134,48 @@ export function NotificationsPanel({ userId }: Props) {
     return language === "pt" ? "Escolha a conta da despesa" : "Choose the expense account";
   }, [acceptTarget, language]);
 
+  const senderBlockedInstallments = useMemo(
+    () =>
+      acceptTarget
+        ? parseExplicitInstallmentIndexes(
+            acceptTarget.responsibility_installment_indexes,
+            acceptTarget.installment_total,
+          )
+        : [],
+    [acceptTarget],
+  );
+
+  const recipientAvailableInstallments = useMemo(
+    () =>
+      acceptTarget
+        ? getRemainingInstallmentIndexes(
+            acceptTarget.installment_total,
+            acceptTarget.responsibility_installment_indexes,
+          )
+        : [],
+    [acceptTarget],
+  );
+
+  function openAcceptModal(request: SharedTransactionRequest) {
+    setAcceptTarget(request);
+    setSelectedAccountId(accounts[0]?.id ?? null);
+    setSelectedCardId(cards[0]?.id ?? null);
+    setSelectedRecipientInstallmentIndexes(
+      getRemainingInstallmentIndexes(
+        request.installment_total,
+        request.responsibility_installment_indexes,
+      ),
+    );
+    setErrorMsg(null);
+  }
+
+  function closeAcceptModal() {
+    setAcceptTarget(null);
+    setSelectedAccountId(null);
+    setSelectedCardId(null);
+    setSelectedRecipientInstallmentIndexes([]);
+  }
+
   async function handleAcceptSubmit() {
     if (!acceptTarget) return;
 
@@ -149,6 +197,33 @@ export function NotificationsPanel({ userId }: Props) {
       return;
     }
 
+    if (
+      acceptTarget.transaction_type === "card_expense" &&
+      acceptTarget.is_installment &&
+      recipientAvailableInstallments.length === 0
+    ) {
+      setErrorMsg(
+        language === "pt"
+          ? "Essa atribuicao nao deixou parcelas disponiveis para voce. Peça para o remetente ajustar a divisao."
+          : "This attribution did not leave any installments available for you. Ask the sender to adjust the split.",
+      );
+      return;
+    }
+
+    if (
+      acceptTarget.transaction_type === "card_expense" &&
+      acceptTarget.is_installment &&
+      recipientAvailableInstallments.length > 0 &&
+      selectedRecipientInstallmentIndexes.length === 0
+    ) {
+      setErrorMsg(
+        language === "pt"
+          ? "Selecione ao menos uma parcela que ficara com voce."
+          : "Select at least one installment that will stay with you.",
+      );
+      return;
+    }
+
     setActingId(acceptTarget.id);
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -156,15 +231,17 @@ export function NotificationsPanel({ userId }: Props) {
       await acceptSharedRequest(acceptTarget, userId, {
         accountId: acceptTarget.transaction_type === "card_expense" ? null : selectedAccountId,
         cardId: acceptTarget.transaction_type === "card_expense" ? selectedCardId : null,
+        responsibilityInstallmentIndexes:
+          acceptTarget.transaction_type === "card_expense" && acceptTarget.is_installment
+            ? selectedRecipientInstallmentIndexes
+            : null,
       });
       setSuccessMsg(
         language === "pt"
           ? "Atribuicao aceita e adicionada nas suas transacoes."
           : "Attribution accepted and added to your transactions.",
       );
-      setAcceptTarget(null);
-      setSelectedAccountId(null);
-      setSelectedCardId(null);
+      closeAcceptModal();
       window.dispatchEvent(new Event("data-refresh"));
       window.dispatchEvent(new Event("social-refresh"));
       await loadData();
@@ -312,10 +389,7 @@ export function NotificationsPanel({ userId }: Props) {
                       <button
                         type="button"
                         onClick={() => {
-                          setAcceptTarget(request);
-                          setSelectedAccountId(accounts[0]?.id ?? null);
-                          setSelectedCardId(cards[0]?.id ?? null);
-                          setErrorMsg(null);
+                          openAcceptModal(request);
                         }}
                         disabled={actingId === request.id}
                         className="ui-btn ui-btn-primary ui-btn-sm"
@@ -352,12 +426,12 @@ export function NotificationsPanel({ userId }: Props) {
       {acceptTarget ? (
         <div
           className="ui-modal-backdrop fixed inset-0 z-50 flex items-end justify-center sm:items-center"
-          onClick={() => setAcceptTarget(null)}
+          onClick={closeAcceptModal}
         >
           <div
-            className="ui-card-2 ui-slide-up w-full max-w-md rounded-t-2xl p-5 sm:rounded-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
+          className="ui-card-2 ui-slide-up w-full max-w-md rounded-t-2xl p-5 sm:rounded-2xl"
+          onClick={(event) => event.stopPropagation()}
+        >
             <div className="mb-4">
               <p className="text-sm font-semibold text-[var(--text-1)]">{acceptTitle}</p>
               <p className="mt-1 text-xs text-[var(--text-3)]">
@@ -414,11 +488,104 @@ export function NotificationsPanel({ userId }: Props) {
             )}
 
             {acceptTarget.transaction_type === "card_expense" && acceptTarget.is_installment ? (
-              <p className="mt-4 text-xs text-[var(--text-3)]">
-                {language === "pt"
-                  ? `Essa compra parcelada sera criada com ${acceptTarget.installment_total ?? 0} parcelas.`
-                  : `This installment purchase will be created with ${acceptTarget.installment_total ?? 0} installments.`}
-              </p>
+              <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface-3)] px-4 py-4">
+                <p className="text-sm font-semibold text-[var(--text-1)]">
+                  {language === "pt" ? "Parcelas que ficam com voce" : "Installments that stay with you"}
+                </p>
+                <p className="mt-1 text-xs text-[var(--text-3)]">
+                  {language === "pt"
+                    ? `Essa compra parcelada tera ${acceptTarget.installment_total ?? 0} parcelas. As parcelas do remetente ficam bloqueadas.`
+                    : `This purchase will have ${acceptTarget.installment_total ?? 0} installments. The sender's installments are blocked.`}
+                </p>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRecipientInstallmentIndexes(recipientAvailableInstallments)}
+                    className="ui-btn ui-btn-secondary ui-btn-sm"
+                  >
+                    {language === "pt" ? "Todas as minhas" : "All mine"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedRecipientInstallmentIndexes(
+                        recipientAvailableInstallments.filter((value) =>
+                          buildAlternatingInstallmentIndexes(
+                            Number(acceptTarget.installment_total) || 0,
+                            1,
+                          ).includes(value),
+                        ),
+                      )
+                    }
+                    className="ui-btn ui-btn-secondary ui-btn-sm"
+                  >
+                    {language === "pt" ? "1a, 3a, 5a..." : "1st, 3rd, 5th..."}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedRecipientInstallmentIndexes(
+                        recipientAvailableInstallments.filter((value) =>
+                          buildAlternatingInstallmentIndexes(
+                            Number(acceptTarget.installment_total) || 0,
+                            2,
+                          ).includes(value),
+                        ),
+                      )
+                    }
+                    className="ui-btn ui-btn-secondary ui-btn-sm"
+                  >
+                    {language === "pt" ? "2a, 4a, 6a..." : "2nd, 4th, 6th..."}
+                  </button>
+                </div>
+
+                <div className="mt-3 grid grid-cols-3 gap-2 min-[420px]:grid-cols-4">
+                  {Array.from(
+                    { length: Math.max(Number(acceptTarget.installment_total) || 0, 0) },
+                    (_, index) => index + 1,
+                  ).map((installmentIndex) => {
+                    const isBlocked = senderBlockedInstallments.includes(installmentIndex);
+                    const isSelected = selectedRecipientInstallmentIndexes.includes(installmentIndex);
+                    return (
+                      <button
+                        key={installmentIndex}
+                        type="button"
+                        disabled={isBlocked}
+                        onClick={() =>
+                          setSelectedRecipientInstallmentIndexes((current) =>
+                            current.includes(installmentIndex)
+                              ? current.filter((value) => value !== installmentIndex)
+                              : [...current, installmentIndex].sort((left, right) => left - right),
+                          )
+                        }
+                        className={`ui-btn ui-btn-sm w-full justify-center ${
+                          isBlocked
+                            ? "cursor-not-allowed opacity-45"
+                            : isSelected
+                              ? "ui-btn-primary"
+                              : "ui-btn-secondary"
+                        }`}
+                      >
+                        {installmentIndex}x
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-3 flex flex-col gap-1 text-xs text-[var(--text-3)]">
+                  <p>
+                    {language === "pt"
+                      ? "Parcelas apagadas/escurecidas ja pertencem a quem enviou."
+                      : "Dimmed installments already belong to the sender."}
+                  </p>
+                  <p>
+                    {language === "pt"
+                      ? "As destacadas serao criadas na sua transacao."
+                      : "Highlighted installments will be created in your transaction."}
+                  </p>
+                </div>
+              </div>
             ) : null}
 
             {acceptTarget.is_fixed ? (
@@ -432,7 +599,7 @@ export function NotificationsPanel({ userId }: Props) {
             <div className="mt-4 flex gap-2 sm:justify-end">
               <button
                 type="button"
-                onClick={() => setAcceptTarget(null)}
+                onClick={closeAcceptModal}
                 className="ui-btn ui-btn-secondary"
               >
                 {language === "pt" ? "Cancelar" : "Cancel"}
