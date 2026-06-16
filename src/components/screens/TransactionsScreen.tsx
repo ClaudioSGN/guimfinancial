@@ -9,7 +9,11 @@ import { useCurrency } from "@/lib/currency";
 import { formatCentsFromNumber, formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
 import { useAuth } from "@/lib/auth";
 import { AppIcon } from "@/components/AppIcon";
-import { hasMissingColumnError } from "@/lib/errorUtils";
+import {
+  getErrorMessage,
+  hasMissingColumnError,
+  isTransientNetworkError,
+} from "@/lib/errorUtils";
 import {
   getPaidResponsibleInstallmentCount,
   getPendingResponsibleInstallmentIndexes,
@@ -246,6 +250,18 @@ export function TransactionsScreen() {
     [language, selectedMonth],
   );
 
+  const getLoadErrorMessage = useCallback(
+    (error: unknown) =>
+      isTransientNetworkError(error)
+        ? language === "pt"
+          ? "Sem conexão com o Supabase no momento. Tente novamente em instantes."
+          : "Cannot reach Supabase right now. Please try again in a moment."
+        : language === "pt"
+          ? "Falha ao carregar transações."
+          : "Failed to load transactions.",
+    [language],
+  );
+
   const loadTransactions = useCallback(async () => {
     if (!user) return;
     setLoading(true);
@@ -330,13 +346,28 @@ export function TransactionsScreen() {
     }
 
     if (txError) {
-      setErrorMsg(t("transactions.loadError"));
+      if (isTransientNetworkError(txError)) {
+        console.warn("[transactions] load error:", getErrorMessage(txError));
+      }
+      setErrorMsg(getLoadErrorMessage(txError));
+      setLoading(false);
+      return;
+    }
+
+    if (accountsResult.error) {
+      if (isTransientNetworkError(accountsResult.error)) {
+        console.warn("[transactions] accounts load error:", getErrorMessage(accountsResult.error));
+      }
+      setErrorMsg(getLoadErrorMessage(accountsResult.error));
       setLoading(false);
       return;
     }
 
     if (cardsResult.error) {
-      setErrorMsg(t("transactions.loadError"));
+      if (isTransientNetworkError(cardsResult.error)) {
+        console.warn("[transactions] cards load error:", getErrorMessage(cardsResult.error));
+      }
+      setErrorMsg(getLoadErrorMessage(cardsResult.error));
       setLoading(false);
       return;
     }
@@ -345,7 +376,7 @@ export function TransactionsScreen() {
     setAccounts((accountsResult.data ?? []) as Account[]);
     setCards((cardsResult.data ?? []) as CreditCard[]);
     setLoading(false);
-  }, [t, selectedMonth, user]);
+  }, [getLoadErrorMessage, selectedMonth, user]);
 
   useEffect(() => {
     const timerId = window.setTimeout(() => {

@@ -1082,6 +1082,8 @@ export function HomeScreen() {
             : null;
         if (errorCode === "42P01") {
           setErrorMsg(t("home.schemaMissing"));
+        } else if (isTransientNetworkError(error)) {
+          setErrorMsg(t("home.connectionError"));
         } else {
           setErrorMsg(t("home.dataLoadError"));
         }
@@ -1158,7 +1160,11 @@ export function HomeScreen() {
       } else {
         console.error("[home] unexpected load error:", error);
       }
-      setErrorMsg(t("home.dataLoadError"));
+      setErrorMsg(
+        isTransientNetworkError(error)
+          ? t("home.connectionError")
+          : t("home.dataLoadError"),
+      );
       setLoading(false);
     }
   }, [selectedMonth, t, user]);

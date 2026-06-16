@@ -5,6 +5,8 @@ import type { User } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const REMEMBER_LOGIN_KEY = "guimfinancial-remember-login";
+const NETWORK_WARNING_DEDUP_MS = 15_000;
+const recentNetworkWarnings = new Map<string, number>();
 
 if (!supabaseUrl) {
   throw new Error("NEXT_PUBLIC_SUPABASE_URL is missing");
@@ -103,9 +105,22 @@ const safeFetch: typeof fetch = async (input, init) => {
     } catch {
       // ignore malformed URL extraction
     }
+    const connectivityState =
+      typeof navigator !== "undefined" && navigator.onLine === false
+        ? "offline"
+        : "online_or_unknown";
     const detailedMessage = `Cannot reach ${host}: ${message}`;
-    // Keep this visible in dev tools without triggering Next's error overlay.
-    console.warn("[supabase] network request failed:", detailedMessage);
+    const warningKey = `${host}:${message}:${connectivityState}`;
+    const now = Date.now();
+    const lastWarnedAt = recentNetworkWarnings.get(warningKey) ?? 0;
+    if (now - lastWarnedAt >= NETWORK_WARNING_DEDUP_MS) {
+      // Keep this visible in dev tools without triggering Next's error overlay.
+      console.warn(
+        "[supabase] network request failed:",
+        `${detailedMessage} (${connectivityState})`,
+      );
+      recentNetworkWarnings.set(warningKey, now);
+    }
     return new Response(
       JSON.stringify({
         error: "network_error",

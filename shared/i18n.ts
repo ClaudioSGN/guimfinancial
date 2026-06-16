@@ -49,6 +49,7 @@ const STRINGS: Record<Language, Dictionary> = {
       friendCardOwner: 'Amigo',
       total: 'Total',
       dataLoadError: 'Falha ao carregar dados.',
+      connectionError: 'Sem conexão com o Supabase no momento. Verifique sua internet ou tente novamente em instantes.',
       schemaMissing: 'Banco sem tabelas. Rode supabase/schema.sql.',
       cardReminderTitle: 'Lembretes de cartões',
       cardReminderSubtitle: 'Faturas que já fecharam ou venceram',
@@ -68,6 +69,7 @@ const STRINGS: Record<Language, Dictionary> = {
       nextMonthSalary: 'Salário do próximo mês',
       remove: 'Remover',
       loadError: 'Falha ao carregar transações.',
+      connectionError: 'Sem conexão com o Supabase no momento. Tente novamente em instantes.',
     },
     investments: {
       title: 'Investimentos',
@@ -405,6 +407,7 @@ const STRINGS: Record<Language, Dictionary> = {
       friendCardOwner: 'Friend',
       total: 'Total',
       dataLoadError: 'Failed to load data.',
+      connectionError: 'Cannot reach Supabase right now. Check your connection or try again in a moment.',
       schemaMissing: 'Database tables are missing. Run supabase/schema.sql.',
       cardReminderTitle: 'Card reminders',
       cardReminderSubtitle: 'Statements already closed or overdue',
@@ -424,6 +427,7 @@ const STRINGS: Record<Language, Dictionary> = {
       nextMonthSalary: 'Next month salary',
       remove: 'Remove',
       loadError: 'Failed to load transactions.',
+      connectionError: 'Cannot reach Supabase right now. Please try again in a moment.',
     },
     investments: {
       title: 'Investments',
