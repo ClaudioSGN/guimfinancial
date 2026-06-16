@@ -22,6 +22,7 @@ import { getMonthShortName } from "../../../shared/i18n";
 import { formatCurrencyValue } from "../../../shared/currency";
 import { hasMissingColumnError } from "@/lib/errorUtils";
 import { AppIcon } from "@/components/AppIcon";
+import { isResponsibleForInstallment } from "@/lib/installmentResponsibility";
 
 type Transaction = {
   id: string;
@@ -35,6 +36,7 @@ type Transaction = {
   is_fixed: boolean | null;
   is_installment: boolean | null;
   installment_total: number | null;
+  responsibility_installment_indexes: number[] | null;
 };
 
 type RawTransaction = Omit<Transaction, "amount"> & {
@@ -149,6 +151,7 @@ function buildMonthTransactions(transactions: Transaction[], month: Date): Displ
       const perInstallment = amount / totalInstallments;
       const entries: DisplayTransaction[] = [];
       for (let index = 0; index < totalInstallments; index += 1) {
+        if (!isResponsibleForInstallment(tx, index + 1)) continue;
         const installmentDate = addMonthsClamped(txDate, index);
         if (installmentDate < monthStart || installmentDate > monthEnd) continue;
         entries.push({
@@ -285,7 +288,7 @@ export function ReportsScreen() {
       const queryEnd = getTransactionsQueryEnd(selectedMonth);
       const result = await supabase
         .from("transactions")
-        .select("id,type,amount,value,description,category,date,account_id,card_id,is_fixed,is_installment,installment_total")
+        .select("id,type,amount,value,description,category,date,account_id,card_id,is_fixed,is_installment,installment_total,responsibility_installment_indexes")
         .eq("user_id", user.id)
         .lte("date", queryEnd)
         .order("date", { ascending: false });
@@ -296,7 +299,7 @@ export function ReportsScreen() {
         return;
       }
 
-      if (!hasMissingColumnError(result.error, ["value", "amount"])) {
+      if (!hasMissingColumnError(result.error, ["value", "amount", "responsibility_installment_indexes"])) {
         throw result.error;
       }
 

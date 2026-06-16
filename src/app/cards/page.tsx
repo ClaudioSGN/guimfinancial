@@ -13,6 +13,11 @@ import {
   getCardChargeTiming,
   getCardExpenseSettlementUpdate,
 } from "@/lib/cardStatements";
+import {
+  getPaidResponsibleInstallmentCount,
+  getPendingResponsibleInstallmentIndexes,
+  getResponsibleInstallmentCount,
+} from "@/lib/installmentResponsibility";
 
 type CardOwnerType = "self" | "friend";
 type Card = {
@@ -35,6 +40,7 @@ type Transaction = {
   card_id: string | null;
   installment_total: number | null;
   installments_paid: number | null;
+  responsibility_installment_indexes: number[] | null;
   is_paid: boolean | null;
 };
 type RawTransaction = Omit<Transaction, "amount"> & { amount?: number | string | null; value?: number | string | null };
@@ -167,11 +173,15 @@ export default function CardsPage() {
   async function loadCardTransactions() {
     const result = await supabase
       .from("transactions")
-      .select("id,type,amount,value,date,account_id,card_id,installment_total,installments_paid,is_paid")
+      .select(
+        "id,type,amount,value,date,account_id,card_id,installment_total,installments_paid,responsibility_installment_indexes,is_paid",
+      )
       .in("type", ["expense", "card_expense"])
       .not("card_id", "is", null);
     if (!result.error) return normalizeTransactionAmounts((result.data ?? []) as RawTransaction[]);
-    if (!hasMissingColumnError(result.error, ["value", "amount"])) throw result.error;
+    if (!hasMissingColumnError(result.error, ["value", "amount", "responsibility_installment_indexes"])) {
+      throw result.error;
+    }
     const fallback = await supabase
       .from("transactions")
       .select(
@@ -182,7 +192,13 @@ export default function CardsPage() {
       .in("type", ["expense", "card_expense"])
       .not("card_id", "is", null);
     if (fallback.error) throw fallback.error;
-    return normalizeTransactionAmounts((fallback.data ?? []) as RawTransaction[]);
+    return normalizeTransactionAmounts((fallback.data ?? []) as RawTransaction[]).map((item) => ({
+      ...item,
+      responsibility_installment_indexes:
+        "responsibility_installment_indexes" in item
+          ? item.responsibility_installment_indexes ?? null
+          : null,
+    }));
   }
 
   async function loadData() {
@@ -262,14 +278,19 @@ export default function CardsPage() {
         const amount = Number(tx.amount) || 0;
         if (amount <= 0) return;
         const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
-        const paidInstallments = Math.min(Math.max(Number(tx.installments_paid) || 0, 0), totalInstallments);
         if (totalInstallments > 0) {
           const perInstallment = amount / totalInstallments;
-          usedTotal += perInstallment * (totalInstallments - paidInstallments);
+          const paidInstallments = getPaidResponsibleInstallmentCount(tx);
+          const responsibleInstallments = getResponsibleInstallmentCount(tx);
+          usedTotal += perInstallment * Math.max(responsibleInstallments - paidInstallments, 0);
           const txDate = parseLocalDate(tx.date);
           if (!txDate) return;
-          for (let index = paidInstallments; index < totalInstallments; index += 1) {
-            const installmentDate = new Date(txDate.getFullYear(), txDate.getMonth() + index, txDate.getDate());
+          for (const installmentNumber of getPendingResponsibleInstallmentIndexes(tx)) {
+            const installmentDate = new Date(
+              txDate.getFullYear(),
+              txDate.getMonth() + installmentNumber - 1,
+              txDate.getDate(),
+            );
             const timing = getCardChargeTiming({ date: toDateString(installmentDate) }, card, currentDate);
             if (timing === "overdue") overdueAmount += perInstallment;
             if (timing === "current") currentStatement += perInstallment;

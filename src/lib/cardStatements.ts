@@ -1,3 +1,9 @@
+import {
+  getPaidResponsibleInstallmentCount,
+  getPendingResponsibleInstallmentIndexes,
+  getResponsibleInstallmentCount,
+} from "@/lib/installmentResponsibility";
+
 export type CardScheduleLike = {
   closing_day: number | string | null | undefined;
   due_day?: number | string | null | undefined;
@@ -9,6 +15,7 @@ export type CardExpenseLike = {
   date: string;
   installment_total?: number | null;
   installments_paid?: number | null;
+  responsibility_installment_indexes?: unknown;
   is_paid?: boolean | null;
 };
 
@@ -114,20 +121,16 @@ export function getCardExpenseDueState(
 
   const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
   if (totalInstallments > 0) {
-    const paidInstallments = Math.min(
-      Math.max(Number(tx.installments_paid) || 0, 0),
-      totalInstallments,
-    );
     const txDate = parseLocalDate(tx.date);
     if (!txDate) return null;
 
     const perInstallment = amount / totalInstallments;
     let pendingInstallments = 0;
 
-    for (let index = paidInstallments; index < totalInstallments; index += 1) {
+    for (const installmentNumber of getPendingResponsibleInstallmentIndexes(tx)) {
       const installmentDate = new Date(
         txDate.getFullYear(),
-        txDate.getMonth() + index,
+        txDate.getMonth() + installmentNumber - 1,
         txDate.getDate(),
       );
       const timing = getCardChargeTiming(
@@ -161,20 +164,16 @@ export function getCardExpenseSettlementUpdate(
 
   const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
   if (totalInstallments > 0) {
-    const paidInstallments = Math.min(
-      Math.max(Number(tx.installments_paid) || 0, 0),
-      totalInstallments,
-    );
     const txDate = parseLocalDate(tx.date);
     if (!txDate) return null;
 
     const perInstallment = amount / totalInstallments;
     let installmentsToSettle = 0;
 
-    for (let index = paidInstallments; index < totalInstallments; index += 1) {
+    for (const installmentNumber of getPendingResponsibleInstallmentIndexes(tx)) {
       const installmentDate = new Date(
         txDate.getFullYear(),
-        txDate.getMonth() + index,
+        txDate.getMonth() + installmentNumber - 1,
         txDate.getDate(),
       );
       const timing = getCardChargeTiming(
@@ -189,15 +188,17 @@ export function getCardExpenseSettlementUpdate(
 
     if (installmentsToSettle <= 0) return null;
 
+    const paidInstallments = getPaidResponsibleInstallmentCount(tx);
+    const responsibleInstallments = getResponsibleInstallmentCount(tx);
     const nextPaidInstallments = Math.min(
       paidInstallments + installmentsToSettle,
-      totalInstallments,
+      responsibleInstallments,
     );
 
     return {
       update: {
         installments_paid: nextPaidInstallments,
-        is_paid: nextPaidInstallments >= totalInstallments,
+        is_paid: nextPaidInstallments >= responsibleInstallments,
       },
       balanceDelta: perInstallment * (nextPaidInstallments - paidInstallments),
     };

@@ -33,6 +33,7 @@ create table if not exists transactions (
   is_installment boolean,
   installment_total int,
   installments_paid int,
+  responsibility_installment_indexes int[],
   is_paid boolean,
   created_at timestamptz not null default now()
 );
@@ -40,6 +41,7 @@ create table if not exists transactions (
 alter table transactions add column if not exists is_installment boolean;
 alter table transactions add column if not exists installment_total int;
 alter table transactions add column if not exists installments_paid int;
+alter table transactions add column if not exists responsibility_installment_indexes int[];
 alter table transactions add column if not exists is_paid boolean;
 alter table transactions add column if not exists is_fixed boolean;
 
@@ -302,6 +304,7 @@ create table if not exists shared_transaction_requests (
   is_fixed boolean,
   is_installment boolean,
   installment_total int,
+  responsibility_installment_indexes int[],
   status text not null default 'pending' check (status in ('pending', 'accepted', 'declined')),
   sender_transaction_id uuid references transactions (id) on delete set null,
   recipient_transaction_id uuid references transactions (id) on delete set null,
@@ -316,6 +319,7 @@ create table if not exists shared_transaction_requests (
 alter table shared_transaction_requests add column if not exists is_fixed boolean;
 alter table shared_transaction_requests add column if not exists is_installment boolean;
 alter table shared_transaction_requests add column if not exists installment_total int;
+alter table shared_transaction_requests add column if not exists responsibility_installment_indexes int[];
 alter table shared_transaction_requests drop constraint if exists shared_transaction_requests_transaction_type_check;
 alter table shared_transaction_requests add constraint shared_transaction_requests_transaction_type_check
   check (transaction_type in ('income', 'expense', 'card_expense'));

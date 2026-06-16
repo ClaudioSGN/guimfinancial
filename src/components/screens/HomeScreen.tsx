@@ -30,6 +30,13 @@ import {
   getCardExpenseSettlementUpdate,
 } from "@/lib/cardStatements";
 import {
+  getPaidResponsibleInstallmentCount,
+  getPendingResponsibleInstallmentIndexes,
+  getResponsibleInstallmentCount,
+  getSettledResponsibleInstallmentAmount,
+  isResponsibleForInstallment,
+} from "@/lib/installmentResponsibility";
+import {
   ResponsiveContainer,
   ComposedChart,
   CartesianGrid,
@@ -60,6 +67,7 @@ type Transaction = {
   is_installment: boolean | null;
   installment_total: number | null;
   installments_paid: number | null;
+  responsibility_installment_indexes: number[] | null;
   is_paid: boolean | null;
 };
 
@@ -484,11 +492,7 @@ function getSettledCardExpenseAmount(tx: Transaction) {
 
   const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
   if (totalInstallments > 0) {
-    const paidInstallments = Math.min(
-      Math.max(Number(tx.installments_paid) || 0, 0),
-      totalInstallments,
-    );
-    return (amount / totalInstallments) * paidInstallments;
+    return getSettledResponsibleInstallmentAmount(amount, tx);
   }
 
   return tx.is_paid ? amount : 0;
@@ -660,6 +664,7 @@ function buildMonthTransactions(
       const perInstallment = amount / totalInstallments;
       const entries: DisplayTransaction[] = [];
       for (let i = 0; i < totalInstallments; i += 1) {
+        if (!isResponsibleForInstallment(tx, i + 1)) continue;
         const installmentDate = addMonthsClamped(txDate, i);
         if (installmentDate < monthStart || installmentDate > monthEnd) continue;
         entries.push({
@@ -921,7 +926,7 @@ export function HomeScreen() {
     async function loadTransactionsForDashboard() {
       const transactionsResult = await supabase
         .from("transactions")
-        .select("id,type,amount,value,date,account_id,card_id,description,category,is_fixed,is_installment,installment_total,installments_paid,is_paid")
+        .select("id,type,amount,value,date,account_id,card_id,description,category,is_fixed,is_installment,installment_total,installments_paid,responsibility_installment_indexes,is_paid")
         .eq("user_id", userId)
         .lte("date", queryEnd)
         .order("date", { ascending: false });
@@ -933,7 +938,7 @@ export function HomeScreen() {
         };
       }
 
-      if (!hasMissingColumnError(transactionsResult.error, ["value", "amount"])) {
+      if (!hasMissingColumnError(transactionsResult.error, ["value", "amount", "responsibility_installment_indexes"])) {
         return { data: [] as Transaction[], error: transactionsResult.error };
       }
 
@@ -961,7 +966,7 @@ export function HomeScreen() {
     async function loadCardTransactionsForDashboard() {
       const cardTransactionsResult = await supabase
         .from("transactions")
-        .select("id,type,amount,value,date,account_id,card_id,description,category,is_fixed,is_installment,installment_total,installments_paid,is_paid")
+        .select("id,type,amount,value,date,account_id,card_id,description,category,is_fixed,is_installment,installment_total,installments_paid,responsibility_installment_indexes,is_paid")
         .eq("user_id", userId)
         .not("card_id", "is", null)
         .order("date", { ascending: false });
@@ -973,7 +978,7 @@ export function HomeScreen() {
         };
       }
 
-      if (!hasMissingColumnError(cardTransactionsResult.error, ["value", "amount"])) {
+      if (!hasMissingColumnError(cardTransactionsResult.error, ["value", "amount", "responsibility_installment_indexes"])) {
         return { data: [] as Transaction[], error: cardTransactionsResult.error };
       }
 
@@ -1471,12 +1476,9 @@ export function HomeScreen() {
       const isInstallment = totalInstallments > 0;
 
       if (isInstallment) {
-        const paidInstallments = Math.min(
-          Math.max(Number(tx.installments_paid) || 0, 0),
-          totalInstallments,
-        );
-        const paidAmount = (amount / totalInstallments) * paidInstallments;
-        outstanding = Math.max(amount - paidAmount, 0);
+        const paidAmount = getSettledResponsibleInstallmentAmount(amount, tx);
+        const responsibleTotal = (amount / totalInstallments) * getResponsibleInstallmentCount(tx);
+        outstanding = Math.max(responsibleTotal - paidAmount, 0);
       } else if (tx.is_paid) {
         outstanding = 0;
       }
@@ -1539,17 +1541,15 @@ export function HomeScreen() {
         if (amount <= 0) return;
 
         const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
-        const paidInstallments = Math.min(
-          Math.max(Number(tx.installments_paid) || 0, 0),
-          totalInstallments,
-        );
+        const pendingInstallmentIndexes = getPendingResponsibleInstallmentIndexes(tx);
 
         if (totalInstallments > 0) {
           const perInstallment = amount / totalInstallments;
           const txDate = parseLocalDate(tx.date);
           if (!txDate) return;
 
-          for (let index = paidInstallments; index < totalInstallments; index += 1) {
+          for (const installmentIndex of pendingInstallmentIndexes) {
+            const index = installmentIndex - 1;
             const installmentDate = new Date(txDate.getFullYear(), txDate.getMonth() + index, txDate.getDate());
             const installmentTx = {
               ...tx,
@@ -1557,6 +1557,7 @@ export function HomeScreen() {
               amount: perInstallment,
               installment_total: null,
               installments_paid: null,
+              responsibility_installment_indexes: null,
               is_paid: false,
             } satisfies Transaction;
             const timing = getCardChargeTiming(installmentTx, card, currentDate);
@@ -2746,7 +2747,8 @@ export function HomeScreen() {
                   const isIncome = tx.type === "income";
                   const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
                   const isInstallment = totalInstallments > 0;
-                  const paidInstallments = Math.max(0, Number(tx.installments_paid) || 0);
+                  const paidInstallments = getPaidResponsibleInstallmentCount(tx);
+                  const responsibleInstallments = getResponsibleInstallmentCount(tx);
                   return (
                     <div
                       key={tx.displayId}
@@ -2769,8 +2771,8 @@ export function HomeScreen() {
                               })()}
                             </span>
                             {isInstallment ? (
-                              <span className={`ui-badge ${paidInstallments >= totalInstallments ? "ui-badge-income" : "ui-badge-warning"}`}>
-                                {paidInstallments >= totalInstallments ? "Pago" : "Em aberto"}
+                              <span className={`ui-badge ${paidInstallments >= responsibleInstallments ? "ui-badge-income" : "ui-badge-warning"}`}>
+                                {paidInstallments >= responsibleInstallments ? "Pago" : "Em aberto"}
                               </span>
                             ) : null}
                             {tx.isBudgetCarryover ? (

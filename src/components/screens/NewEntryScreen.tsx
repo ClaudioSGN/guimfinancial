@@ -9,8 +9,16 @@ import { useAuth } from "@/lib/auth";
 import { AppIcon } from "@/components/AppIcon";
 import { BankBrandBadge, BankBrandPicker } from "@/components/BankBrandBadge";
 import { DEFAULT_BANK_BRAND_CODE, type BankBrandCode } from "@/lib/bankBrands";
-import { hasMissingColumnError, hasMissingTableError } from "@/lib/errorUtils";
+import {
+  getMissingColumn,
+  hasMissingColumnError,
+  hasMissingTableError,
+} from "@/lib/errorUtils";
 import { formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
+import {
+  buildAlternatingInstallmentIndexes,
+  normalizeResponsibilityInstallmentIndexes,
+} from "@/lib/installmentResponsibility";
 import {
   createSharedTransactionRequest,
   getSocialErrorMessage,
@@ -44,6 +52,7 @@ type Props = {
 
 type BaseEntryType = "income" | "expense" | "card_expense" | "transfer";
 type ShareEntryChoice = "income" | "expense" | "card_expense";
+type MissingTransactionFeature = "fixed" | "installments" | "custom_installments" | null;
 
 function toDateString(date: Date) {
   const year = date.getFullYear();
@@ -110,6 +119,8 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
   const [isFixed, setIsFixed] = useState(false);
   const [isInstallment, setIsInstallment] = useState(false);
   const [installmentTotal, setInstallmentTotal] = useState("");
+  const [customInstallmentResponsibility, setCustomInstallmentResponsibility] = useState(false);
+  const [responsibilityInstallmentIndexes, setResponsibilityInstallmentIndexes] = useState<number[]>([]);
   const [createCardOpen, setCreateCardOpen] = useState(false);
   const [newCardName, setNewCardName] = useState("");
   const [newCardLimitAmount, setNewCardLimitAmount] = useState(emptyMoneyValue);
@@ -202,6 +213,10 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
   }, [user]);
 
   const parsedAmount = useMemo(() => parseCentsInput(amount), [amount]);
+  const parsedInstallmentTotal = useMemo(() => {
+    const parsed = Number(installmentTotal);
+    return Number.isInteger(parsed) && parsed >= 1 && parsed <= 120 ? parsed : null;
+  }, [installmentTotal]);
   const effectiveSelectedFriendId = useMemo(
     () =>
       selectedFriendId && friends.some((friend) => friend.user_id === selectedFriendId)
@@ -209,6 +224,131 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
         : friends[0]?.user_id ?? null,
     [friends, selectedFriendId],
   );
+  const installmentOptions = useMemo(
+    () =>
+      parsedInstallmentTotal
+        ? Array.from({ length: parsedInstallmentTotal }, (_, index) => index + 1)
+        : [],
+    [parsedInstallmentTotal],
+  );
+
+  function syncResponsibilityInstallments(nextTotal: number | null) {
+    if (!nextTotal) {
+      setResponsibilityInstallmentIndexes([]);
+      return;
+    }
+
+    const nextOptions = Array.from({ length: nextTotal }, (_, index) => index + 1);
+    setResponsibilityInstallmentIndexes((current) => {
+      const valid = current.filter((value) => value >= 1 && value <= nextTotal);
+      return valid.length ? valid : nextOptions;
+    });
+  }
+
+  function handleInstallmentToggle() {
+    setIsInstallment((current) => {
+      const next = !current;
+      if (!next) {
+        setCustomInstallmentResponsibility(false);
+        setResponsibilityInstallmentIndexes([]);
+      } else {
+        syncResponsibilityInstallments(parsedInstallmentTotal);
+      }
+      return next;
+    });
+  }
+
+  function handleInstallmentTotalChange(nextValue: string) {
+    setInstallmentTotal(nextValue);
+    const parsed = Number(nextValue);
+    const nextTotal =
+      Number.isInteger(parsed) && parsed >= 1 && parsed <= 120 ? parsed : null;
+    syncResponsibilityInstallments(nextTotal);
+  }
+
+  function handleCustomInstallmentResponsibilityToggle() {
+    setCustomInstallmentResponsibility((current) => {
+      const next = !current;
+      if (!next) {
+        setResponsibilityInstallmentIndexes([]);
+      } else {
+        syncResponsibilityInstallments(parsedInstallmentTotal);
+      }
+      return next;
+    });
+  }
+
+  async function insertTransactionWithCompatibility(
+    payload: Record<string, unknown>,
+    options: {
+      requiresFixed: boolean;
+      requiresInstallments: boolean;
+      requiresCustomInstallments: boolean;
+    },
+  ) {
+    const nextPayload: Record<string, unknown> = { ...payload };
+
+    while (true) {
+      const result = await supabase.from("transactions").insert([nextPayload]);
+      if (!result.error) {
+        return {
+          error: null as unknown,
+          missingFeature: null as MissingTransactionFeature,
+        };
+      }
+
+      const missingColumn = getMissingColumn(result.error);
+      if (!missingColumn) {
+        return {
+          error: result.error,
+          missingFeature: null as MissingTransactionFeature,
+        };
+      }
+
+      if (missingColumn === "responsibility_installment_indexes") {
+        if (options.requiresCustomInstallments) {
+          return {
+            error: result.error,
+            missingFeature: "custom_installments" as MissingTransactionFeature,
+          };
+        }
+        delete nextPayload.responsibility_installment_indexes;
+        continue;
+      }
+
+      if (
+        missingColumn === "is_installment" ||
+        missingColumn === "installment_total" ||
+        missingColumn === "installments_paid" ||
+        missingColumn === "is_paid"
+      ) {
+        if (options.requiresInstallments) {
+          return {
+            error: result.error,
+            missingFeature: "installments" as MissingTransactionFeature,
+          };
+        }
+        delete nextPayload[missingColumn];
+        continue;
+      }
+
+      if (missingColumn === "is_fixed") {
+        if (options.requiresFixed) {
+          return {
+            error: result.error,
+            missingFeature: "fixed" as MissingTransactionFeature,
+          };
+        }
+        delete nextPayload.is_fixed;
+        continue;
+      }
+
+      return {
+        error: result.error,
+        missingFeature: null as MissingTransactionFeature,
+      };
+    }
+  }
 
   async function updateAccountBalance(id: string, delta: number) {
     if (!user) return;
@@ -279,6 +419,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
       await updateAccountBalance(toAccountId!, parsedAmount);
     } else {
       let totalInstallments: number | null = null;
+      let responsibilityIndexes: number[] | null = null;
       if (isCardExpense && isInstallment) {
         const n = Number(installmentTotal);
         if (!n || !Number.isInteger(n) || n < 1 || n > 120) {
@@ -287,6 +428,24 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
           return;
         }
         totalInstallments = n;
+
+        if (customInstallmentResponsibility) {
+          if (!responsibilityInstallmentIndexes.length) {
+            setErrorMsg(
+              language === "pt"
+                ? "Selecione ao menos uma parcela que sera paga por voce."
+                : "Select at least one installment that you will pay.",
+            );
+            setSaving(false);
+            return;
+          }
+
+          responsibilityIndexes =
+            normalizeResponsibilityInstallmentIndexes(
+              responsibilityInstallmentIndexes,
+              totalInstallments,
+            ) ?? null;
+        }
       }
 
       if (shouldSendToFriend && effectiveSelectedFriendId) {
@@ -307,6 +466,8 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
             isFixed: canBeFixedEntry ? isFixed : null,
             isInstallment: isCardExpense ? isInstallment || null : null,
             installmentTotal: isCardExpense ? totalInstallments : null,
+            responsibilityInstallmentIndexes:
+              isCardExpense && isInstallment ? responsibilityIndexes : null,
             senderTransactionId: null,
             note:
               isCardExpense && language === "pt"
@@ -324,7 +485,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
           return;
         }
       } else {
-        const { error } = await supabase.from("transactions").insert([
+        const { error, missingFeature } = await insertTransactionWithCompatibility(
           {
             user_id: user.id,
             type: effectiveEntryType,
@@ -337,22 +498,38 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
             is_fixed: canBeFixedEntry ? isFixed : null,
             is_installment: isCardExpense ? isInstallment || null : null,
             installment_total: isCardExpense ? totalInstallments : null,
+            responsibility_installment_indexes:
+              isCardExpense && isInstallment ? responsibilityIndexes : null,
             installments_paid: isCardExpense && isInstallment ? 0 : null,
             is_paid: isCardExpense && isInstallment ? false : null,
           },
-        ]);
+          {
+            requiresFixed: Boolean(canBeFixedEntry && isFixed),
+            requiresInstallments: Boolean(isCardExpense && isInstallment),
+            requiresCustomInstallments: Boolean(
+              isCardExpense &&
+              isInstallment &&
+              responsibilityIndexes &&
+              responsibilityIndexes.length,
+            ),
+          },
+        );
 
         if (error) {
-          const rawError = `${error.code ?? ""} ${error.message ?? ""}`.toLowerCase();
-          const missingFixedColumn =
-            rawError.includes("is_fixed") &&
-            (error.code === "42703" || rawError.includes("column"));
           setErrorMsg(
-            missingFixedColumn
+            missingFeature === "fixed"
               ? language === "pt"
                 ? "Atualize o banco com supabase/schema.sql para usar a opcao de transacao fixa."
                 : "Update your database with supabase/schema.sql to use the fixed transaction option."
-              : t("newEntry.saveError"),
+              : missingFeature === "installments"
+                ? language === "pt"
+                  ? "Atualize o banco com supabase/schema.sql para usar compras parceladas no cartao."
+                  : "Update your database with supabase/schema.sql to use card installments."
+                : missingFeature === "custom_installments"
+                  ? language === "pt"
+                    ? "Atualize o banco com supabase/schema.sql para usar parcelas personalizadas."
+                    : "Update your database with supabase/schema.sql to use custom installment responsibility."
+                  : t("newEntry.saveError"),
           );
           setSaving(false);
           return;
@@ -608,13 +785,96 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface-3)] px-4 py-3">
               <span className="text-sm text-[var(--text-2)]">{language === "pt" ? "Compra parcelada" : "Installments"}</span>
-              <button type="button" onClick={() => setIsInstallment((v) => !v)}
+              <button type="button" onClick={handleInstallmentToggle}
                 className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isInstallment ? "bg-[var(--accent)]" : "bg-[var(--surface-3)] border border-[var(--border-bright)]"}`}>
                 <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${isInstallment ? "translate-x-4" : "translate-x-0.5"}`} />
               </button>
             </div>
             {isInstallment ? (
-              <input value={installmentTotal} onChange={(e) => setInstallmentTotal(e.target.value)} placeholder={language === "pt" ? "Número de parcelas" : "Installment count"} inputMode="numeric" pattern="[0-9]*" className="ui-input" />
+              <div className="flex flex-col gap-3">
+                <input value={installmentTotal} onChange={(e) => handleInstallmentTotalChange(e.target.value)} placeholder={language === "pt" ? "Número de parcelas" : "Installment count"} inputMode="numeric" pattern="[0-9]*" className="ui-input" />
+
+                {parsedInstallmentTotal && parsedInstallmentTotal > 1 ? (
+                  <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-3)] px-4 py-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-[var(--text-1)]">
+                          {language === "pt" ? "Parcelas que eu pago" : "Installments I pay"}
+                        </p>
+                        <p className="mt-1 text-xs text-[var(--text-3)]">
+                          {language === "pt"
+                            ? "Cadastre o valor total e deixe marcadas so as parcelas que saem do seu bolso."
+                            : "Register the full amount and keep selected only the installments that come out of your pocket."}
+                        </p>
+                      </div>
+                      <button type="button" onClick={handleCustomInstallmentResponsibilityToggle}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${customInstallmentResponsibility ? "bg-[var(--accent)]" : "bg-[var(--surface-3)] border border-[var(--border-bright)]"}`}>
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${customInstallmentResponsibility ? "translate-x-4" : "translate-x-0.5"}`} />
+                      </button>
+                    </div>
+
+                    {customInstallmentResponsibility ? (
+                      <div className="mt-4 flex flex-col gap-3">
+                        <div className="flex flex-wrap gap-2">
+                          <button type="button" onClick={() => setResponsibilityInstallmentIndexes(installmentOptions)} className="ui-btn ui-btn-secondary ui-btn-sm">
+                            {language === "pt" ? "Todas" : "All"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setResponsibilityInstallmentIndexes(
+                                buildAlternatingInstallmentIndexes(parsedInstallmentTotal, 1),
+                              )
+                            }
+                            className="ui-btn ui-btn-secondary ui-btn-sm"
+                          >
+                            {language === "pt" ? "1a, 3a, 5a..." : "1st, 3rd, 5th..."}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setResponsibilityInstallmentIndexes(
+                                buildAlternatingInstallmentIndexes(parsedInstallmentTotal, 2),
+                              )
+                            }
+                            className="ui-btn ui-btn-secondary ui-btn-sm"
+                          >
+                            {language === "pt" ? "2a, 4a, 6a..." : "2nd, 4th, 6th..."}
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 min-[420px]:grid-cols-4 min-[560px]:grid-cols-5">
+                          {installmentOptions.map((installmentIndex) => {
+                            const isSelected = responsibilityInstallmentIndexes.includes(installmentIndex);
+                            return (
+                              <button
+                                key={installmentIndex}
+                                type="button"
+                                onClick={() =>
+                                  setResponsibilityInstallmentIndexes((current) =>
+                                    current.includes(installmentIndex)
+                                      ? current.filter((value) => value !== installmentIndex)
+                                      : [...current, installmentIndex].sort((left, right) => left - right),
+                                  )
+                                }
+                                className={`ui-btn ui-btn-sm w-full justify-center ${isSelected ? "ui-btn-primary" : "ui-btn-secondary"}`}
+                              >
+                                {installmentIndex}x
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <p className="text-xs text-[var(--text-3)]">
+                          {language === "pt"
+                            ? "As parcelas desmarcadas ficam por conta do amigo ou de outro acordo."
+                            : "Unselected installments stay with your friend or another agreement."}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             ) : null}
           </div>
         ) : null}

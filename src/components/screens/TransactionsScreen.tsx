@@ -10,6 +10,13 @@ import { formatCentsFromNumber, formatCentsInput, parseCentsInput } from "@/lib/
 import { useAuth } from "@/lib/auth";
 import { AppIcon } from "@/components/AppIcon";
 import { hasMissingColumnError } from "@/lib/errorUtils";
+import {
+  getPaidResponsibleInstallmentCount,
+  getPendingResponsibleInstallmentIndexes,
+  getResponsibleInstallmentCount,
+  getSettledResponsibleInstallmentAmount,
+  isResponsibleForInstallment,
+} from "@/lib/installmentResponsibility";
 
 type Transaction = {
   id: string;
@@ -24,6 +31,7 @@ type Transaction = {
   is_installment: boolean | null;
   installment_total: number | null;
   installments_paid: number | null;
+  responsibility_installment_indexes: number[] | null;
   is_paid: boolean | null;
 };
 
@@ -204,7 +212,7 @@ export function TransactionsScreen() {
     setErrorMsg(null);
     const queryEnd = getTransactionsQueryEnd(selectedMonth);
     const txColumns =
-      "id,type,amount,description,category,date,account_id,card_id,is_fixed,is_installment,installment_total,installments_paid,is_paid";
+      "id,type,amount,description,category,date,account_id,card_id,is_fixed,is_installment,installment_total,installments_paid,responsibility_installment_indexes,is_paid";
     const txColumnsFallback =
       "id,type,amount,description,category,date,account_id,card_id,is_installment,installment_total,installments_paid,is_paid";
 
@@ -257,10 +265,12 @@ export function TransactionsScreen() {
     let txData = txResultWithFixed.data;
     let txError = txResultWithFixed.error;
     const rawError = `${txError?.code ?? ""} ${txError?.message ?? ""}`.toLowerCase();
-    const missingFixedColumn =
-      !!txError && txError.code === "42703" && rawError.includes("is_fixed");
+    const missingOptionalColumn =
+      !!txError &&
+      txError.code === "42703" &&
+      (rawError.includes("is_fixed") || rawError.includes("responsibility_installment_indexes"));
 
-    if (missingFixedColumn) {
+    if (missingOptionalColumn) {
       const fallback = await supabase
         .from("transactions")
         .select(txColumnsFallback)
@@ -271,7 +281,11 @@ export function TransactionsScreen() {
       txError = fallback.error;
       txData = (fallback.data ?? []).map((item) => ({
         ...item,
-        is_fixed: null,
+        is_fixed: "is_fixed" in item ? item.is_fixed ?? null : null,
+        responsibility_installment_indexes:
+          "responsibility_installment_indexes" in item
+            ? item.responsibility_installment_indexes ?? null
+            : null,
       }));
     }
 
@@ -343,6 +357,7 @@ export function TransactionsScreen() {
         const perInstallment = amount / totalInstallments;
         const entries: DisplayTransaction[] = [];
         for (let i = 0; i < totalInstallments; i += 1) {
+          if (!isResponsibleForInstallment(tx, i + 1)) continue;
           const installmentDate = addMonthsClamped(txDate, i);
           if (installmentDate < monthStart || installmentDate > monthEnd) continue;
           entries.push({
@@ -448,12 +463,7 @@ export function TransactionsScreen() {
       } else if (tx.type === "card_expense") {
         const isInstallment = !!tx.is_installment && (tx.installment_total ?? 0) > 0;
         if (isInstallment) {
-          const totalInstallments = Math.max(1, tx.installment_total ?? 1);
-          const paidInstallments = Math.min(
-            Math.max(tx.installments_paid ?? 0, 0),
-            totalInstallments,
-          );
-          rollbackDelta = (amount / totalInstallments) * paidInstallments;
+          rollbackDelta = getSettledResponsibleInstallmentAmount(amount, tx);
         } else if (tx.is_paid) {
           rollbackDelta = amount;
         }
@@ -508,10 +518,12 @@ export function TransactionsScreen() {
     if (!user) return;
     const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
     if (totalInstallments <= 0) return;
-    const paid = Math.max(0, Number(tx.installments_paid) || 0);
-    if (paid >= totalInstallments) return;
+    const responsibleInstallments = getResponsibleInstallmentCount(tx);
+    const paid = getPaidResponsibleInstallmentCount(tx);
+    if (paid >= responsibleInstallments) return;
     const offset = getInstallmentMonthOffset(tx.date, selectedMonth);
-    if (offset === null || offset !== paid) return;
+    const nextInstallmentIndex = getPendingResponsibleInstallmentIndexes(tx)[0] ?? null;
+    if (offset === null || nextInstallmentIndex == null || offset !== nextInstallmentIndex - 1) return;
     if (installmentSavingId) return;
     if (
       !window.confirm(
@@ -523,7 +535,7 @@ export function TransactionsScreen() {
 
     setInstallmentSavingId(tx.id);
     const nextPaid = paid + 1;
-    const nextIsPaid = nextPaid >= totalInstallments;
+    const nextIsPaid = nextPaid >= responsibleInstallments;
     const { error } = await supabase
       .from("transactions")
       .update({
@@ -566,13 +578,14 @@ export function TransactionsScreen() {
     if (!user) return;
     const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
     if (totalInstallments <= 0) return;
-    const paid = Math.max(0, Number(tx.installments_paid) || 0);
+    const responsibleInstallments = getResponsibleInstallmentCount(tx);
+    const paid = getPaidResponsibleInstallmentCount(tx);
     if (paid <= 0) return;
     if (undoSavingId) return;
     if (!window.confirm("Desfazer a ultima parcela registrada?")) return;
     setUndoSavingId(tx.id);
     const nextPaid = Math.max(paid - 1, 0);
-    const nextIsPaid = nextPaid >= totalInstallments;
+    const nextIsPaid = nextPaid >= responsibleInstallments;
     const { error } = await supabase
       .from("transactions")
       .update({
@@ -886,9 +899,18 @@ export function TransactionsScreen() {
             const isFixedExpense = !isIncome && !!item.is_fixed;
             const totalInstallments = Math.max(0, Number(item.installment_total) || 0);
             const isInstallment = totalInstallments > 0;
-            const paidInstallments = Math.max(0, Number(item.installments_paid) || 0);
+            const responsibleInstallments = getResponsibleInstallmentCount(item);
+            const paidInstallments = getPaidResponsibleInstallmentCount(item);
             const installmentOffset = isInstallment ? getInstallmentMonthOffset(item.date, selectedMonth) : null;
-            const canPayInstallment = isInstallment && installmentOffset !== null && installmentOffset === paidInstallments && paidInstallments < totalInstallments;
+            const nextInstallmentIndex = isInstallment
+              ? getPendingResponsibleInstallmentIndexes(item)[0] ?? null
+              : null;
+            const canPayInstallment =
+              isInstallment &&
+              installmentOffset !== null &&
+              nextInstallmentIndex !== null &&
+              installmentOffset === nextInstallmentIndex - 1 &&
+              paidInstallments < responsibleInstallments;
             const canUndoInstallment = isInstallment && paidInstallments > 0;
             const title = item.description || (isIncome ? t("newEntry.income") : isCard ? t("newEntry.cardExpense") : t("newEntry.expense"));
             const baseTx = baseTxById.get(item.baseId) ?? null;
@@ -916,8 +938,8 @@ export function TransactionsScreen() {
                         </span>
                       ) : null}
                       {isInstallment ? (
-                        <span className={`ui-badge ${paidInstallments >= totalInstallments ? "ui-badge-income" : "ui-badge-warning"}`}>
-                          {paidInstallments}/{totalInstallments}x
+                        <span className={`ui-badge ${paidInstallments >= responsibleInstallments ? "ui-badge-income" : "ui-badge-warning"}`}>
+                          {paidInstallments}/{responsibleInstallments}x
                         </span>
                       ) : null}
                       {isFixedExpense ? <span className="ui-badge ui-badge-neutral">{t("newEntry.fixedExpense")}</span> : null}

@@ -28,6 +28,7 @@ export type SharedTransactionRequest = {
   is_fixed: boolean | null;
   is_installment: boolean | null;
   installment_total: number | null;
+  responsibility_installment_indexes: number[] | null;
   status: SharedRequestStatus;
   sender_transaction_id: string | null;
   recipient_transaction_id: string | null;
@@ -197,6 +198,7 @@ export async function createSharedTransactionRequest(params: {
   isFixed?: boolean | null;
   isInstallment?: boolean | null;
   installmentTotal?: number | null;
+  responsibilityInstallmentIndexes?: number[] | null;
   senderTransactionId?: string | null;
   note?: string | null;
 }) {
@@ -215,6 +217,8 @@ export async function createSharedTransactionRequest(params: {
     is_fixed: params.isFixed ?? null,
     is_installment: params.isInstallment ?? null,
     installment_total: params.installmentTotal ?? null,
+    responsibility_installment_indexes:
+      params.responsibilityInstallmentIndexes ?? null,
     sender_transaction_id: params.senderTransactionId ?? null,
     note: params.note ?? null,
   };
@@ -230,6 +234,7 @@ export async function createSharedTransactionRequest(params: {
       "is_fixed",
       "is_installment",
       "installment_total",
+      "responsibility_installment_indexes",
       "note",
       "sender_transaction_id",
     ])
@@ -238,8 +243,17 @@ export async function createSharedTransactionRequest(params: {
     const missingSenderTransactionId = hasMissingColumnError(insertResult.error, [
       "sender_transaction_id",
     ]);
+    const missingResponsibilityInstallments = hasMissingColumnError(insertResult.error, [
+      "responsibility_installment_indexes",
+    ]);
     const legacyPayload = {
       ...basePayload,
+      ...(missingResponsibilityInstallments
+        ? {}
+        : {
+            responsibility_installment_indexes:
+              params.responsibilityInstallmentIndexes ?? null,
+          }),
       ...(missingSenderTransactionId
         ? {}
         : { sender_transaction_id: params.senderTransactionId ?? null }),
@@ -320,6 +334,10 @@ export async function acceptSharedRequest(
         installment_total:
           request.transaction_type === "card_expense" && request.is_installment
             ? request.installment_total
+            : null,
+        responsibility_installment_indexes:
+          request.transaction_type === "card_expense"
+            ? request.responsibility_installment_indexes
             : null,
         installments_paid:
           request.transaction_type === "card_expense" && request.is_installment
@@ -407,6 +425,7 @@ export function getSocialErrorMessage(
       "is_fixed",
       "is_installment",
       "installment_total",
+      "responsibility_installment_indexes",
       "email",
       "friend_code",
       "avatar_url",

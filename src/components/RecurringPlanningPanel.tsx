@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { hasMissingTableError } from "@/lib/errorUtils";
+import { hasMissingColumnError, hasMissingTableError } from "@/lib/errorUtils";
 import { useCurrency } from "@/lib/currency";
 import { formatCentsFromNumber, formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
 import { formatCurrencyValue } from "../../shared/currency";
+import { isResponsibleForInstallment } from "@/lib/installmentResponsibility";
 
 type BudgetRow = {
   id: string;
@@ -24,6 +25,7 @@ type TransactionRow = {
   is_fixed: boolean | null;
   is_installment: boolean | null;
   installment_total: number | null;
+  responsibility_installment_indexes: number[] | null;
 };
 
 type DisplayExpense = {
@@ -111,7 +113,7 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
         .order("category", { ascending: true }),
       supabase
         .from("transactions")
-        .select("id,type,amount,description,category,date,is_fixed,is_installment,installment_total")
+        .select("id,type,amount,description,category,date,is_fixed,is_installment,installment_total,responsibility_installment_indexes")
         .lte("date", monthEnd)
         .order("date", { ascending: true }),
     ]);
@@ -131,10 +133,29 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
     }
 
     if (txResult.error) {
-      setTransactions([]);
-      setErrorMsg(
-        language === "pt" ? "Falha ao carregar transacoes." : "Failed to load transactions.",
-      );
+      if (hasMissingColumnError(txResult.error, ["responsibility_installment_indexes"])) {
+        const fallbackTxResult = await supabase
+          .from("transactions")
+          .select("id,type,amount,description,category,date,is_fixed,is_installment,installment_total")
+          .lte("date", monthEnd)
+          .order("date", { ascending: true });
+        if (fallbackTxResult.error) {
+          setTransactions([]);
+          setErrorMsg(
+            language === "pt" ? "Falha ao carregar transacoes." : "Failed to load transactions.",
+          );
+        } else {
+          setTransactions((fallbackTxResult.data ?? []).map((item) => ({
+            ...item,
+            responsibility_installment_indexes: null,
+          })) as TransactionRow[]);
+        }
+      } else {
+        setTransactions([]);
+        setErrorMsg(
+          language === "pt" ? "Falha ao carregar transacoes." : "Failed to load transactions.",
+        );
+      }
     } else {
       setTransactions((txResult.data ?? []) as TransactionRow[]);
     }
@@ -188,6 +209,7 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
         const perInstallment = amount / totalInstallments;
         const rows: DisplayExpense[] = [];
         for (let index = 0; index < totalInstallments; index += 1) {
+          if (!isResponsibleForInstallment(tx, index + 1)) continue;
           const dueDate = addMonthsClamped(txDate, index);
           if (dueDate < monthStart || dueDate > monthEnd) continue;
           rows.push({
