@@ -1,8 +1,15 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { getStoredSessionUser, supabase } from "@/lib/supabaseClient";
+import {
+  clearForcedLogoutFlag,
+  clearStoredSupabaseSession,
+  getStoredSessionUser,
+  hasForcedLogoutFlag,
+  setForcedLogoutFlag,
+  supabase,
+} from "@/lib/supabaseClient";
 import { getErrorMessage, isTransientNetworkError } from "@/lib/errorUtils";
 import type { User } from "@supabase/supabase-js";
 
@@ -17,6 +24,8 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const lastKnownUserRef = useRef<User | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -28,9 +37,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error) throw error;
         return data.session?.user ?? null;
       } catch (error) {
+        if (isSigningOut) {
+          return null;
+        }
         if (isTransientNetworkError(error)) {
           console.warn("[auth] session recheck failed:", getErrorMessage(error));
-          return getStoredSessionUser();
+          return lastKnownUserRef.current ?? getStoredSessionUser();
         }
         console.error("[auth] session recheck failed:", error);
         return null;
@@ -38,18 +50,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     async function init() {
+      if (hasForcedLogoutFlag()) {
+        clearStoredSupabaseSession();
+        try {
+          await supabase.auth.signOut({ scope: "local" });
+        } catch {
+          // ignore local cleanup errors during forced logout recovery
+        }
+        if (!mounted) return;
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
       try {
         const nextUser = await resolveUserFromSession();
         if (!mounted) return;
+        if (nextUser) {
+          clearForcedLogoutFlag();
+        }
+        lastKnownUserRef.current = nextUser;
         setUser(nextUser);
       } catch (error) {
         if (!mounted) return;
+        if (isSigningOut) {
+          lastKnownUserRef.current = null;
+          setUser(null);
+          return;
+        }
         if (isTransientNetworkError(error)) {
           console.warn("[auth] session bootstrap failed:", getErrorMessage(error));
           // Preserve the locally cached session when refresh/bootstrap fails temporarily.
-          setUser(getStoredSessionUser());
+          const fallbackUser = lastKnownUserRef.current ?? getStoredSessionUser();
+          lastKnownUserRef.current = fallbackUser;
+          setUser(fallbackUser);
         } else {
           console.error("[auth] session bootstrap failed:", error);
+          lastKnownUserRef.current = null;
           setUser(null);
         }
       } finally {
@@ -67,16 +104,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         void (async () => {
           const nextUser = await resolveUserFromSession();
           if (!mounted) return;
+          lastKnownUserRef.current = nextUser;
           setUser(nextUser);
           setLoading(false);
         })();
       }, 0);
     }
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
 
+      if (event === "SIGNED_OUT" || isSigningOut) {
+        lastKnownUserRef.current = null;
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
       if (session?.user) {
+        clearForcedLogoutFlag();
+        lastKnownUserRef.current = session.user;
         setUser(session.user);
         setLoading(false);
         return;
@@ -92,14 +139,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       listener.subscription.unsubscribe();
     };
-  }, []);
+  }, [isSigningOut]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
       loading,
       signOut: async () => {
-        await supabase.auth.signOut({ scope: "local" });
+        setIsSigningOut(true);
+        setForcedLogoutFlag();
+        lastKnownUserRef.current = null;
+        setUser(null);
+        setLoading(false);
+        clearStoredSupabaseSession();
+        try {
+          const { error } = await supabase.auth.signOut();
+          if (error) {
+            await supabase.auth.signOut({ scope: "local" });
+          }
+        } finally {
+          clearStoredSupabaseSession();
+          setIsSigningOut(false);
+        }
       },
     }),
     [user, loading],

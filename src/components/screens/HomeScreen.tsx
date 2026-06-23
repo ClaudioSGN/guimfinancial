@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { BudgetRow, summarizeMonthlyBudget } from "@/lib/budget";
 import { supabase } from "@/lib/supabaseClient";
 import {
   getErrorMessage,
   hasMissingColumnError,
+  isOversizedHeaderError,
   isTransientNetworkError,
 } from "@/lib/errorUtils";
 import {
@@ -53,6 +55,17 @@ import {
   Cell,
   type TooltipContentProps,
 } from "recharts";
+
+function getSafeMetadataAvatar(user: { user_metadata?: { avatar_url?: unknown } } | null | undefined) {
+  const rawValue =
+    typeof user?.user_metadata?.avatar_url === "string"
+      ? user.user_metadata.avatar_url.trim()
+      : "";
+  if (!rawValue) return "";
+  if (rawValue.startsWith("data:")) return "";
+  if (rawValue.length > 2048) return "";
+  return rawValue;
+}
 
 type Transaction = {
   id: string;
@@ -744,6 +757,9 @@ export function HomeScreen() {
   const [cards, setCards] = useState<CreditCard[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [cardTransactions, setCardTransactions] = useState<Transaction[]>([]);
+  const [budgets, setBudgets] = useState<BudgetRow[]>([]);
+  const [budgetLoading, setBudgetLoading] = useState(true);
+  const [budgetSchemaMissing, setBudgetSchemaMissing] = useState(false);
   const [showBalance, setShowBalance] = useState(true);
   const [monthOpen, setMonthOpen] = useState(false);
   const [availableMonthKeys, setAvailableMonthKeys] = useState<string[]>([]);
@@ -1073,6 +1089,8 @@ export function HomeScreen() {
           transfersResult.error;
         if (isTransientNetworkError(error)) {
           console.warn("[home] supabase load error:", getErrorMessage(error));
+        } else if (isOversizedHeaderError(error)) {
+          // Known oversized-session case: surface it in the UI without triggering the dev overlay.
         } else {
           console.error("Supabase load error", getErrorMessage(error), error);
         }
@@ -1082,6 +1100,10 @@ export function HomeScreen() {
             : null;
         if (errorCode === "42P01") {
           setErrorMsg(t("home.schemaMissing"));
+        } else if (isOversizedHeaderError(error)) {
+          setErrorMsg(
+            "Sua sessao do Supabase ficou grande demais para carregar os dados. Saia e entre novamente.",
+          );
         } else if (isTransientNetworkError(error)) {
           setErrorMsg(t("home.connectionError"));
         } else {
@@ -1157,11 +1179,15 @@ export function HomeScreen() {
     } catch (error) {
       if (isTransientNetworkError(error)) {
         console.warn("[home] supabase request failed:", getErrorMessage(error));
+      } else if (isOversizedHeaderError(error)) {
+        // Known oversized-session case: surface it in the UI without triggering the dev overlay.
       } else {
         console.error("[home] unexpected load error:", error);
       }
       setErrorMsg(
-        isTransientNetworkError(error)
+        isOversizedHeaderError(error)
+          ? "Sua sessao do Supabase ficou grande demais para carregar os dados. Saia e entre novamente."
+          : isTransientNetworkError(error)
           ? t("home.connectionError")
           : t("home.dataLoadError"),
       );
@@ -1173,6 +1199,38 @@ export function HomeScreen() {
     loadData();
   }, [loadData]);
 
+  const loadBudgets = useCallback(async () => {
+    if (!user) {
+      setBudgets([]);
+      setBudgetSchemaMissing(false);
+      setBudgetLoading(false);
+      return;
+    }
+
+    setBudgetLoading(true);
+    const result = await supabase
+      .from("category_budgets")
+      .select("id,category,amount,month_key")
+      .eq("user_id", user.id)
+      .eq("month_key", getMonthKey(selectedMonth))
+      .order("category", { ascending: true });
+
+    if (result.error) {
+      setBudgetSchemaMissing(result.error.code === "42P01");
+      setBudgets([]);
+      setBudgetLoading(false);
+      return;
+    }
+
+    setBudgetSchemaMissing(false);
+    setBudgets((result.data ?? []) as BudgetRow[]);
+    setBudgetLoading(false);
+  }, [selectedMonth, user]);
+
+  useEffect(() => {
+    void loadBudgets();
+  }, [loadBudgets]);
+
   useEffect(() => {
     function handleRefresh() {
       loadData();
@@ -1181,6 +1239,15 @@ export function HomeScreen() {
     window.addEventListener("data-refresh", handleRefresh);
     return () => window.removeEventListener("data-refresh", handleRefresh);
   }, [loadData]);
+
+  useEffect(() => {
+    function handleRefresh() {
+      void loadBudgets();
+    }
+
+    window.addEventListener("data-refresh", handleRefresh);
+    return () => window.removeEventListener("data-refresh", handleRefresh);
+  }, [loadBudgets]);
 
   useEffect(() => {
     if (availableMonthKeys.length === 0) return;
@@ -1212,6 +1279,23 @@ export function HomeScreen() {
   const monthTransactions = useMemo(
     () => buildMonthTransactions(transactions, selectedMonth),
     [transactions, selectedMonth],
+  );
+  const budgetEntries = useMemo(() => {
+    return monthTransactions.map((tx) => ({
+      id: tx.displayId,
+      type: tx.type,
+      category: tx.category?.trim() || (language === "pt" ? "Sem categoria" : "No category"),
+      title:
+        tx.description?.trim() ||
+        tx.category?.trim() ||
+        (language === "pt" ? "Lancamento" : "Entry"),
+      amount: tx.displayAmount,
+      effectiveDate: tx.effectiveDate,
+    }));
+  }, [language, monthTransactions]);
+  const budgetOverview = useMemo(
+    () => summarizeMonthlyBudget(budgets, budgetEntries),
+    [budgetEntries, budgets],
   );
 
   const flowSeries = useMemo(
@@ -1610,6 +1694,22 @@ export function HomeScreen() {
     () => cards.filter((card) => (cardInsightsById[card.id]?.statementStatus ?? "open") === "closed").length,
     [cards, cardInsightsById],
   );
+  const selfCards = useMemo(
+    () => cards.filter((card) => (card.owner_type ?? "self") !== "friend"),
+    [cards],
+  );
+  const friendCards = useMemo(
+    () => cards.filter((card) => (card.owner_type ?? "self") === "friend"),
+    [cards],
+  );
+  const totalAvailableLimit = useMemo(
+    () =>
+      cards.reduce(
+        (sum, card) => sum + Math.max(0, cardInsightsById[card.id]?.availableLimit ?? 0),
+        0,
+      ),
+    [cardInsightsById, cards],
+  );
   const positiveAccountsCount = useMemo(
     () => accounts.filter((account) => (Number(account.balance) || 0) > 0).length,
     [accounts],
@@ -1625,14 +1725,11 @@ export function HomeScreen() {
     )[0] ?? null;
   }, [accounts]);
   const displayName =
-    (user?.user_metadata?.username as string | undefined) ||
     profile.name ||
+    (user?.user_metadata?.username as string | undefined) ||
     user?.email ||
     "Guim Financial";
-  const metadataAvatar =
-    typeof user?.user_metadata?.avatar_url === "string"
-      ? user.user_metadata.avatar_url.trim()
-      : "";
+  const metadataAvatar = getSafeMetadataAvatar(user);
   const avatarSrc = (profile.avatarUrl ?? "").trim() || metadataAvatar;
   const initials = useMemo(() => getInitials(displayName), [displayName]);
 
@@ -2061,6 +2158,142 @@ export function HomeScreen() {
     );
   };
 
+  const renderCreditCardCard = (card: CreditCard) => {
+    const isFriendCard = (card.owner_type ?? "self") === "friend";
+    const insight = cardInsightsById[card.id];
+    const statementStatus = insight?.statementStatus ?? "open";
+
+    return (
+      <div
+        key={card.id}
+        className={`ui-card-inner min-w-0 p-4 ${
+          isFriendCard ? "border-[var(--accent)] border-opacity-30" : ""
+        }`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <BankBrandBadge bankCode={card.bank_code} size="sm" />
+              <p className="min-w-0 break-words text-sm font-semibold text-[var(--text-1)]">
+                {card.name}
+              </p>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {isFriendCard ? (
+                <span className="ui-badge ui-badge-accent">{t("cards.ownerBadgeFriend")}</span>
+              ) : (
+                <span className="ui-badge ui-badge-neutral">
+                  {language === "pt" ? "Seu cartao" : "Your card"}
+                </span>
+              )}
+              <span
+                className={`ui-badge ${
+                  statementStatus === "closed" ? "ui-badge-warning" : "ui-badge-income"
+                }`}
+              >
+                {statementStatus === "closed"
+                  ? t("home.closedStatements")
+                  : t("home.openStatements")}
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleRemoveCard(card.id, card.name)}
+            disabled={deletingCardId === card.id}
+            className="ui-btn ui-btn-ghost ui-btn-sm shrink-0 text-[var(--text-3)] hover:text-[var(--red)]"
+          >
+            {deletingCardId === card.id ? "..." : "×"}
+          </button>
+        </div>
+
+        {isFriendCard && card.friend_name ? (
+          <p className="mt-2 text-xs text-[var(--text-3)]">
+            {t("home.friendCardOwner")}: {card.friend_name}
+          </p>
+        ) : null}
+
+        <p className="mt-1 text-xs text-[var(--text-3)]">
+          {t("cards.closes")} {card.closing_day} · {t("cards.due")} {card.due_day}
+        </p>
+
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <div className="ui-card-inner p-2.5">
+            <p className="ui-eyebrow">{language === "pt" ? "Fatura atual" : "Current"}</p>
+            <p className="mt-1 ui-amount text-sm text-[var(--text-1)]">
+              {formatCurrency(
+                (insight?.currentStatement ?? 0) + (insight?.overdueAmount ?? 0),
+                language,
+                currency,
+              )}
+            </p>
+            <p className="mt-0.5 text-[10px] text-[var(--text-3)]">
+              {insight && insight.currentStatement + insight.overdueAmount > 0
+                ? language === "pt"
+                  ? `Vence em ${insight.daysUntilDue} ${getDayWord(
+                      insight.daysUntilDue,
+                      language,
+                    )}`
+                  : `Due in ${insight.daysUntilDue} ${getDayWord(
+                      insight.daysUntilDue,
+                      language,
+                    )}`
+                : language === "pt"
+                  ? "Sem pendencia"
+                  : "No statement due"}
+            </p>
+          </div>
+          <div className="ui-card-inner p-2.5">
+            <p className="ui-eyebrow">{language === "pt" ? "Proxima" : "Next"}</p>
+            <p className="mt-1 ui-amount text-sm text-[var(--text-1)]">
+              {formatCurrency(insight?.nextStatement ?? 0, language, currency)}
+            </p>
+            <p className="mt-0.5 text-[10px] text-[var(--text-3)]">
+              {language === "pt"
+                ? `Fecha em ${insight?.daysUntilClosing ?? 0} ${getDayWord(
+                    insight?.daysUntilClosing ?? 0,
+                    language,
+                  )}`
+                : `Closes in ${insight?.daysUntilClosing ?? 0} ${getDayWord(
+                    insight?.daysUntilClosing ?? 0,
+                    language,
+                  )}`}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-3 h-1 rounded-full bg-[var(--surface)]">
+          <div
+            className="h-1 rounded-full bg-[var(--accent)]"
+            style={{ width: `${Math.min(100, Math.max(0, insight?.utilizationPercent ?? 0))}%` }}
+          />
+        </div>
+
+        <div className="mt-3 grid grid-cols-3 gap-2 text-[10px]">
+          <div className="ui-card-inner p-2.5">
+            <p className="text-[var(--text-3)]">{t("home.cardLimitAvailable")}</p>
+            <p className="mt-1 font-semibold text-[var(--green)]">
+              {loading ? "—" : formatCurrency(insight?.availableLimit ?? 0, language, currency)}
+            </p>
+          </div>
+          <div className="ui-card-inner p-2.5">
+            <p className="text-[var(--text-3)]">{t("home.cardLimitUsed")}</p>
+            <p className="mt-1 font-semibold text-[var(--text-1)]">
+              {loading ? "—" : formatCurrency(insight?.usedTotal ?? 0, language, currency)}
+            </p>
+          </div>
+          <div className="ui-card-inner p-2.5">
+            <p className="text-[var(--text-3)]">{t("home.cardLimitTotal")}</p>
+            <p className="mt-1 font-semibold text-[var(--text-1)]">
+              {loading ? "—" : formatCurrency(Number(card.limit_amount) || 0, language, currency)}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+  void renderCreditCardCard;
+
   return (
     <div className="flex flex-col gap-4">
       {/* ── Header ─────────────────────────────────────────── */}
@@ -2450,8 +2683,78 @@ export function HomeScreen() {
           </div>
         </div>
 
-        {/* Category breakdown */}
         <div className="ui-card p-5 sm:col-span-2 lg:col-span-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-[var(--text-1)]">{t("tabs.budget")}</p>
+              <p className="mt-1 text-xs text-[var(--text-3)]">{t("budget.monthBudget")}</p>
+            </div>
+            <Link href="/budget" className="ui-btn ui-btn-secondary ui-btn-sm">
+              {t("common.edit")}
+            </Link>
+          </div>
+
+          {budgetSchemaMissing ? (
+            <p className="text-xs text-[var(--text-3)]">{t("budget.schemaMissing")}</p>
+          ) : budgetLoading ? (
+            <p className="text-xs text-[var(--text-3)]">{t("common.loading")}</p>
+          ) : budgetOverview.rows.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-[var(--border-bright)] px-4 py-6 text-sm text-[var(--text-3)]">
+              {t("budget.empty")}
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <div className="ui-card-inner p-3">
+                  <p className="ui-eyebrow">{t("budget.planned")}</p>
+                  <p className="mt-1 text-sm font-semibold text-[var(--text-1)]">
+                    {formatCurrency(budgetOverview.plannedTotal, language, currency)}
+                  </p>
+                </div>
+                <div className="ui-card-inner p-3">
+                  <p className="ui-eyebrow">{t("budget.spent")}</p>
+                  <p className="mt-1 text-sm font-semibold text-[var(--red)]">
+                    {formatCurrency(budgetOverview.spentTotal, language, currency)}
+                  </p>
+                </div>
+                <div className="ui-card-inner p-3">
+                  <p className="ui-eyebrow">{t("budget.remaining")}</p>
+                  <p className={`mt-1 text-sm font-semibold ${budgetOverview.remainingTotal >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                    {formatCurrency(budgetOverview.remainingTotal, language, currency)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-[var(--surface)]">
+                <div
+                  className={`h-2 rounded-full ${
+                    budgetOverview.progressTotal >= 100
+                      ? "bg-[var(--red)]"
+                      : budgetOverview.progressTotal >= 80
+                        ? "bg-[#F59E0B]"
+                        : "bg-[var(--accent)]"
+                  }`}
+                  style={{ width: `${budgetOverview.progressTotal}%` }}
+                />
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="text-[var(--text-3)]">
+                  {t("budget.incomeCoverage")}:{" "}
+                  <span className={`font-semibold ${budgetOverview.coverage >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                    {formatCurrency(budgetOverview.coverage, language, currency)}
+                  </span>
+                </span>
+                <span className="text-[var(--text-3)]">
+                  {t("budget.progressLabel")}: {Math.round(budgetOverview.progressTotal)}%
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Category breakdown */}
+        <div className="ui-card p-5 sm:col-span-2 lg:col-span-5">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-sm font-semibold text-[var(--text-1)]">{t("home.categories")}</p>
             <span className="text-xs text-[var(--text-3)]">{t("transactions.monthSummary")}</span>
@@ -2530,7 +2833,7 @@ export function HomeScreen() {
         </div>
 
         {/* Daily flow chart */}
-        <div className="ui-card p-5 sm:col-span-2 lg:col-span-8">
+        <div className="ui-card p-5 sm:col-span-2 lg:col-span-12">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-[var(--text-1)]">{t("home.monthlyFlow")}</p>
@@ -2576,7 +2879,7 @@ export function HomeScreen() {
         </div>
 
         {/* Accounts */}
-        <div className="ui-card p-5 sm:col-span-2 lg:col-span-4">
+        <div className="ui-card p-5 sm:col-span-2 lg:col-span-3">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-sm font-semibold text-[var(--text-1)]">{t("home.accounts")}</p>
             <span className="text-xs text-[var(--text-3)]">
@@ -2586,7 +2889,22 @@ export function HomeScreen() {
           {accounts.length === 0 ? (
             <p className="text-xs text-[var(--text-3)]">{t("home.noAccounts")}</p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="ui-card-inner p-3">
+                  <p className="ui-eyebrow">{language === "pt" ? "Saldo medio" : "Avg balance"}</p>
+                  <p className="mt-1 text-sm font-semibold text-[var(--text-1)]">
+                    {loading ? "—" : formatCurrency(averageAccountBalance, language, currency)}
+                  </p>
+                </div>
+                <div className="ui-card-inner p-3">
+                  <p className="ui-eyebrow">{language === "pt" ? "Maior conta" : "Top account"}</p>
+                  <p className="mt-1 truncate text-sm font-semibold text-[var(--text-1)]">
+                    {largestAccount?.name ?? "—"}
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
               {accounts.map((account) => (
                 <div key={account.id} className="ui-card-inner flex items-center gap-3 p-3">
                   <div className="relative shrink-0">
@@ -2618,15 +2936,36 @@ export function HomeScreen() {
                   </button>
                 </div>
               ))}
+              </div>
             </div>
           )}
         </div>
 
         {/* Credit cards */}
-        <div className="ui-card p-5 sm:col-span-2 lg:col-span-8">
+        <div className="ui-card p-5 sm:col-span-2 lg:col-span-9">
           <div className="mb-4 flex items-center justify-between">
             <p className="text-sm font-semibold text-[var(--text-1)]">{t("home.creditCards")}</p>
             <AppIcon name="credit-card" size={16} color="var(--text-3)" />
+          </div>
+          <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+            <div className="ui-card-inner p-3">
+              <p className="ui-eyebrow">{language === "pt" ? "Cartoes totais" : "Total cards"}</p>
+              <p className="mt-1 text-sm font-semibold text-[var(--text-1)]">{cards.length}</p>
+            </div>
+            <div className="ui-card-inner p-3">
+              <p className="ui-eyebrow">{language === "pt" ? "Seus cartoes" : "Your cards"}</p>
+              <p className="mt-1 text-sm font-semibold text-[var(--text-1)]">{selfCards.length}</p>
+            </div>
+            <div className="ui-card-inner p-3">
+              <p className="ui-eyebrow">{language === "pt" ? "Cartoes de amigos" : "Friends' cards"}</p>
+              <p className="mt-1 text-sm font-semibold text-[var(--text-1)]">{friendCards.length}</p>
+            </div>
+            <div className="ui-card-inner p-3">
+              <p className="ui-eyebrow">{t("home.cardLimitAvailable")}</p>
+              <p className="mt-1 text-sm font-semibold text-[var(--green)]">
+                {loading ? "—" : formatCurrency(totalAvailableLimit, language, currency)}
+              </p>
+            </div>
           </div>
           <div className="mb-3 flex flex-wrap gap-2">
             <span className="ui-badge ui-badge-income">{t("home.openStatements")} {openStatementsCount}</span>
@@ -2635,8 +2974,8 @@ export function HomeScreen() {
           {cards.length === 0 ? (
             <p className="text-xs text-[var(--text-3)]">{t("home.noCards")}</p>
           ) : (
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {cards.map((card) => {
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {[...selfCards, ...friendCards].map((card) => {
                 const isFriendCard = (card.owner_type ?? "self") === "friend";
                 const insight = cardInsightsById[card.id];
                 const statementStatus = insight?.statementStatus ?? "open";

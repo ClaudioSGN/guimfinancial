@@ -14,6 +14,17 @@ function getInitials(name: string | null | undefined) {
   return initials || "GF";
 }
 
+function getSafeMetadataAvatar(user: { user_metadata?: { avatar_url?: unknown } } | null | undefined) {
+  const rawValue =
+    typeof user?.user_metadata?.avatar_url === "string"
+      ? user.user_metadata.avatar_url.trim()
+      : "";
+  if (!rawValue) return "";
+  if (rawValue.startsWith("data:")) return "";
+  if (rawValue.length > 2048) return "";
+  return rawValue;
+}
+
 export function ProfileScreen() {
   const { language, t } = useLanguage();
   const { user } = useAuth();
@@ -31,10 +42,7 @@ export function ProfileScreen() {
       typeof user?.user_metadata?.username === "string" ? user.user_metadata.username.trim() : "";
     const emailFallback =
       typeof user?.email === "string" ? user.email.split("@")[0].trim() : "";
-    const metadataAvatar =
-      typeof user?.user_metadata?.avatar_url === "string"
-        ? user.user_metadata.avatar_url.trim()
-        : "";
+    const metadataAvatar = getSafeMetadataAvatar(user);
 
     setProfileName(localProfile.name || metadataName || emailFallback || "");
     setProfileAvatar(localProfile.avatarUrl || metadataAvatar || null);
@@ -83,7 +91,8 @@ export function ProfileScreen() {
       const { error } = await supabase.auth.updateUser({
         data: {
           username: nextName,
-          avatar_url: profileAvatar || null,
+          // Keep avatar out of auth metadata to avoid oversized JWT/session headers.
+          avatar_url: null,
         },
       });
       if (error) throw error;

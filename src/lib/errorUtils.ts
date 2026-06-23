@@ -80,3 +80,15 @@ export function isTransientNetworkError(error: unknown): boolean {
     message.includes("authretryablefetcherror")
   );
 }
+
+export function isOversizedHeaderError(error: unknown): boolean {
+  const message = getErrorMessage(error).toLowerCase();
+  return (
+    message.includes("session header is too large") ||
+    message.includes("authenticated request because the session header is too large") ||
+    message.includes("request header or cookie too large") ||
+    message.includes("request header fields too large") ||
+    message.includes("header or cookie too large") ||
+    message.includes("cloudflare") && message.includes("header")
+  );
+}

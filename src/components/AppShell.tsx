@@ -13,6 +13,7 @@ import { NotificationsPanel } from "@/components/social/NotificationsPanel";
 type TabKey =
   | "home"
   | "transactions"
+  | "budget"
   | "investments"
   | "more";
 
@@ -53,6 +54,7 @@ export function AppShell({ activeTab, children }: Props) {
   const desktopNavItems = [
     { href: "/", key: "home", icon: "house", label: t("tabs.home") },
     { href: "/transactions", key: "transactions", icon: "list", label: t("tabs.transactions") },
+    { href: "/budget", key: "budget", icon: "wallet", label: t("tabs.budget") },
     { href: "/investments", key: "investments", icon: "calendar", label: t("tabs.investments") },
     { href: "/more", key: "more", icon: "more", label: t("tabs.more") },
   ] as const;
@@ -64,7 +66,7 @@ export function AppShell({ activeTab, children }: Props) {
     { href: "/more", key: "more", icon: "more", label: t("tabs.more") },
   ] as const;
 
-  const mobileActiveTab: TabKey = activeTab;
+  const mobileActiveTab: Exclude<TabKey, "budget"> = activeTab === "budget" ? "more" : activeTab;
 
   useEffect(() => {
     let timeoutId: number | undefined;

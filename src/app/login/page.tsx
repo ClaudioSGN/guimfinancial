@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  clearForcedLogoutFlag,
   getRememberLoginPreference,
   setRememberLoginPreference,
   supabase,
@@ -149,6 +150,7 @@ export default function LoginPage() {
     }
     setSaving(true);
     setRememberLoginPreference(rememberLogin);
+    clearForcedLogoutFlag();
     if (mode === "signup" && !username.trim()) {
       setSaving(false);
       setErrorMsg("Informe um nome de usuario.");

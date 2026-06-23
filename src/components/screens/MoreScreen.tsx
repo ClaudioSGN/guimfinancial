@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useLanguage } from "@/lib/language";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
@@ -31,7 +30,6 @@ export function MoreScreen() {
   const { language, setLanguage, t } = useLanguage();
   const { currency, setCurrency } = useCurrency();
   const { user, signOut } = useAuth();
-  const router = useRouter();
   const [enabled, setEnabled] = useState(true);
   const [hour, setHour] = useState(9);
   const [minute, setMinute] = useState(0);
@@ -138,7 +136,7 @@ export function MoreScreen() {
     setSigningOut(true);
     try {
       await signOut();
-      router.replace("/login");
+      window.location.replace("/login");
     } catch (error) {
       console.error(error);
       setSignOutError(
@@ -519,6 +517,7 @@ export function MoreScreen() {
         <div className="flex flex-col gap-2">
           {([
             { href: "/reports", label: language === "pt" ? "Relatórios" : "Reports", hint: language === "pt" ? "Resumo mensal, categorias e comparações." : "Monthly summary, categories, and comparisons." },
+            { href: "/budget", label: t("tabs.budget"), hint: t("more.budgetHint") },
             { href: "/accounts", label: t("more.accounts"), hint: t("more.accountsHint") },
             { href: "/cards", label: t("more.cards"), hint: t("more.cardsHint") },
             { href: "/export", label: t("more.export"), hint: t("more.exportHint") },

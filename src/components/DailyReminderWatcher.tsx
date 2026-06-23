@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/auth";
-import { getErrorMessage, isTransientNetworkError } from "@/lib/errorUtils";
+import {
+  isOversizedHeaderError,
+  isTransientNetworkError,
+} from "@/lib/errorUtils";
 
 type ReminderSettings = {
   enabled: boolean;
@@ -40,11 +43,10 @@ function getReminderKey(kind: string, dateKey: string, id?: string) {
 }
 
 function logReminderLoadError(scope: string, error: unknown) {
-  if (isTransientNetworkError(error)) {
-    console.warn(`[reminder] ${scope}:`, getErrorMessage(error));
+  if (isTransientNetworkError(error) || isOversizedHeaderError(error)) {
     return;
   }
-  console.error(`[reminder] ${scope}:`, error);
+  console.warn(`[reminder] ${scope}:`, error);
 }
 
 async function fetchSettingsFromSupabase(): Promise<ReminderSettings | null> {

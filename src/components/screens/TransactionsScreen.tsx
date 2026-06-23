@@ -12,6 +12,7 @@ import { AppIcon } from "@/components/AppIcon";
 import {
   getErrorMessage,
   hasMissingColumnError,
+  isOversizedHeaderError,
   isTransientNetworkError,
 } from "@/lib/errorUtils";
 import {
@@ -349,7 +350,11 @@ export function TransactionsScreen() {
       if (isTransientNetworkError(txError)) {
         console.warn("[transactions] load error:", getErrorMessage(txError));
       }
-      setErrorMsg(getLoadErrorMessage(txError));
+      setErrorMsg(
+        isOversizedHeaderError(txError)
+          ? "Sua sessao do Supabase ficou grande demais para carregar as transacoes. Saia e entre novamente."
+          : getLoadErrorMessage(txError),
+      );
       setLoading(false);
       return;
     }
@@ -358,7 +363,11 @@ export function TransactionsScreen() {
       if (isTransientNetworkError(accountsResult.error)) {
         console.warn("[transactions] accounts load error:", getErrorMessage(accountsResult.error));
       }
-      setErrorMsg(getLoadErrorMessage(accountsResult.error));
+      setErrorMsg(
+        isOversizedHeaderError(accountsResult.error)
+          ? "Sua sessao do Supabase ficou grande demais para carregar as transacoes. Saia e entre novamente."
+          : getLoadErrorMessage(accountsResult.error),
+      );
       setLoading(false);
       return;
     }
@@ -367,7 +376,11 @@ export function TransactionsScreen() {
       if (isTransientNetworkError(cardsResult.error)) {
         console.warn("[transactions] cards load error:", getErrorMessage(cardsResult.error));
       }
-      setErrorMsg(getLoadErrorMessage(cardsResult.error));
+      setErrorMsg(
+        isOversizedHeaderError(cardsResult.error)
+          ? "Sua sessao do Supabase ficou grande demais para carregar as transacoes. Saia e entre novamente."
+          : getLoadErrorMessage(cardsResult.error),
+      );
       setLoading(false);
       return;
     }
