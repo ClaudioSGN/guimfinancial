@@ -79,8 +79,12 @@ async function forwardSupabaseRequest(payload: ProxyRequestPayload) {
     responseHeaders.delete("transfer-encoding");
     responseHeaders.set("x-guimfinancial-supabase-rest-proxy", "1");
 
-    const responseBody =
-      normalizedMethod === "HEAD" ? null : await upstreamResponse.arrayBuffer();
+    const mustNotIncludeBody =
+      normalizedMethod === "HEAD" ||
+      upstreamResponse.status === 204 ||
+      upstreamResponse.status === 205 ||
+      upstreamResponse.status === 304;
+    const responseBody = mustNotIncludeBody ? null : await upstreamResponse.arrayBuffer();
 
     return new NextResponse(responseBody, {
       status: upstreamResponse.status,

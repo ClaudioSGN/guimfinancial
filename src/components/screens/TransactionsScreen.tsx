@@ -219,6 +219,20 @@ function hydrateLegacyCards(cards: LegacyCreditCard[]): CreditCard[] {
   }));
 }
 
+function getCardDisplayName(card: CreditCard, language: "pt" | "en") {
+  if (card.owner_type !== "friend") return card.name;
+
+  const friendName = card.friend_name?.trim();
+  if (friendName) return `${card.name} - ${language === "pt" ? "Amigo" : "Friend"}: ${friendName}`;
+
+  return `${card.name} - ${language === "pt" ? "Amigo" : "Friend"}`;
+}
+
+function getFriendCardLabel(card: CreditCard, language: "pt" | "en") {
+  if (card.owner_type !== "friend") return null;
+  return card.friend_name?.trim() || (language === "pt" ? "Amigo" : "Friend");
+}
+
 export function TransactionsScreen() {
   const { language, t } = useLanguage();
   const { currency } = useCurrency();
@@ -1136,8 +1150,14 @@ export function TransactionsScreen() {
                       <span className="text-xs text-[var(--text-3)]">Nenhum cartão cadastrado.</span>
                     ) : cards.map((card) => (
                       <button key={card.id} type="button" onClick={() => setEditCardId(card.id)}
-                        className={`ui-btn ui-btn-sm ${editCardId === card.id ? "ui-btn-primary" : "ui-btn-secondary"}`}>
-                        {card.name}
+                        title={getCardDisplayName(card, language)}
+                        className={`ui-btn ui-btn-sm flex-wrap gap-1.5 ${editCardId === card.id ? "ui-btn-primary" : "ui-btn-secondary"}`}>
+                        <span>{card.name}</span>
+                        {getFriendCardLabel(card, language) ? (
+                          <span className="ui-badge ui-badge-warning">
+                            {language === "pt" ? "Amigo" : "Friend"}: {getFriendCardLabel(card, language)}
+                          </span>
+                        ) : null}
                       </button>
                     ))}
                   </div>
