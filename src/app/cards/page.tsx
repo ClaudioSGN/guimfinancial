@@ -547,16 +547,18 @@ export default function CardsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0D0F14] px-6 py-6 text-slate-50">
-      <div className="mx-auto flex w-full max-w-[960px] flex-col gap-5">
-        <Link href="/more" className="text-xs text-[#9CA3AF]">← {t("tabs.more")}</Link>
+    <div className="app-shell min-h-screen px-6 py-6 text-slate-50 lg:px-10">
+      <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6">
+        <Link href="/more" className="ui-btn ui-btn-secondary ui-btn-sm w-fit">
+          ← {t("tabs.more")}
+        </Link>
 
-        <div className="space-y-1">
-          <p className="text-[11px] uppercase tracking-[0.2em] text-[#7F8694]">{t("cards.title")}</p>
-          <p className="text-2xl font-semibold text-[#E5E8EF]">
+        <div className="ui-card-2 p-6">
+          <p className="ui-eyebrow">{t("cards.title")}</p>
+          <p className="mt-2 font-[var(--font-display)] text-3xl font-black tracking-[-0.05em] text-[#E5E8EF]">
             {language === "pt" ? "Gerir cartoes e faturas" : "Manage cards and statements"}
           </p>
-          <p className="text-sm text-[#8A93A3]">
+          <p className="mt-2 max-w-2xl text-sm text-[var(--text-2)]">
             {language === "pt"
               ? "Acompanhe limite usado, fatura atual, proxima fatura e pagamentos."
               : "Track used limit, current statement, next statement, and payments."}
@@ -564,27 +566,30 @@ export default function CardsPage() {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl border border-[#1E232E] bg-[#121621] p-4">
+          <div className="ui-card p-4">
             <p className="text-xs text-[#8A93A3]">{language === "pt" ? "Cartoes" : "Cards"}</p>
             <p className="mt-2 text-2xl font-semibold text-[#E5E8EF]">{cards.length}</p>
           </div>
-          <div className="rounded-2xl border border-[#1E232E] bg-[#121621] p-4">
+          <div className="ui-card p-4">
             <p className="text-xs text-[#8A93A3]">{language === "pt" ? "Faturas abertas" : "Open statements"}</p>
             <p className="mt-2 text-2xl font-semibold text-[#5DD6C7]">{openStatementsCount}</p>
           </div>
-          <div className="rounded-2xl border border-[#1E232E] bg-[#121621] p-4">
+          <div className="ui-card p-4">
             <p className="text-xs text-[#8A93A3]">{language === "pt" ? "Faturas para pagar" : "Statements due"}</p>
             <p className="mt-2 text-2xl font-semibold text-[#F4C27A]">{closedStatementsCount}</p>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[#1E232E] bg-[#121621] p-4 sm:p-5">
+        <div className="ui-card p-4 sm:p-5">
           <div className="space-y-3">
+            <p className="text-sm font-bold text-[var(--text-1)]">
+              {language === "pt" ? "Novo cartao" : "New card"}
+            </p>
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8B94A6]">{t("cards.ownerLabel")}</p>
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => setOwnerType("self")} className={`rounded-full border px-3 py-1 text-xs ${ownerType === "self" ? "border-[#5DD6C7] bg-[#173038] text-[#D7FBF6]" : "border-[#2A3140] bg-[#0F141E] text-[#A8B2C3]"}`}>{t("cards.ownerSelf")}</button>
-                <button type="button" onClick={() => setOwnerType("friend")} className={`rounded-full border px-3 py-1 text-xs ${ownerType === "friend" ? "border-[#5DD6C7] bg-[#173038] text-[#D7FBF6]" : "border-[#2A3140] bg-[#0F141E] text-[#A8B2C3]"}`}>{t("cards.ownerFriend")}</button>
+                <button type="button" onClick={() => setOwnerType("self")} className={`border px-3 py-1 text-xs ${ownerType === "self" ? "border-[#5DD6C7] bg-[#173038] text-[#D7FBF6]" : "border-[#2A3140] bg-[#0F141E] text-[#A8B2C3]"}`}>{t("cards.ownerSelf")}</button>
+                <button type="button" onClick={() => setOwnerType("friend")} className={`border px-3 py-1 text-xs ${ownerType === "friend" ? "border-[#5DD6C7] bg-[#173038] text-[#D7FBF6]" : "border-[#2A3140] bg-[#0F141E] text-[#A8B2C3]"}`}>{t("cards.ownerFriend")}</button>
               </div>
             </div>
             <BankBrandPicker selected={bankCode} onSelect={setBankCode} />
@@ -596,17 +601,17 @@ export default function CardsPage() {
               <input value={dueDay} onChange={(event) => setDueDay(event.target.value)} placeholder={t("cards.dueDayPlaceholder")} className="w-full rounded-xl border border-[#1E232E] bg-[#0F141E] px-4 py-3 text-sm text-[#E4E7EC]" />
             </div>
             {errorMsg ? <p className="text-xs text-red-400">{errorMsg}</p> : null}
-            <button type="button" onClick={handleAdd} disabled={saving} className="w-full rounded-xl bg-[#E6EDF3] py-3 text-sm font-semibold text-[#0C1018] disabled:opacity-60">{saving ? t("common.saving") : t("cards.add")}</button>
+            <button type="button" onClick={handleAdd} disabled={saving} className="ui-btn ui-btn-primary ui-btn-lg w-full disabled:opacity-60">{saving ? t("common.saving") : t("cards.add")}</button>
           </div>
         </div>
 
         <div className="grid gap-4">
           {loading ? (
-            <div className="rounded-2xl border border-[#1E232E] bg-[#121621] p-6 text-sm text-[#8A93A3]">
+            <div className="border border-[#1E232E] bg-[#121621] p-6 text-sm text-[#8A93A3]">
               {language === "pt" ? "A carregar cartoes..." : "Loading cards..."}
             </div>
           ) : cards.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[#263043] bg-[#121621] p-6 text-sm text-[#8A93A3]">
+            <div className="border border-dashed border-[#263043] bg-[#121621] p-6 text-sm text-[#8A93A3]">
               {language === "pt" ? "Nenhum cartao registado ainda." : "No cards registered yet."}
             </div>
           ) : (
@@ -632,16 +637,16 @@ export default function CardsPage() {
                         ? `Vence em ${insight?.daysUntilDue ?? 0} dia(s)`
                         : `Due in ${insight?.daysUntilDue ?? 0} day(s)`;
               return (
-                <div key={item.id} className={`min-w-0 rounded-2xl border p-4 sm:p-5 ${item.owner_type === "friend" ? "border-[#25404B] bg-[#10212A]" : "border-[#1E232E] bg-[#121621]"}`}>
+                <div key={item.id} className={`min-w-0 border p-4 sm:p-5 ${item.owner_type === "friend" ? "border-[#25404B] bg-[#10212A]" : "border-[#1E232E] bg-[#121621]"}`}>
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 flex-1 space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <BankBrandBadge bankCode={item.bank_code} />
                         <p className="min-w-0 break-words text-lg font-semibold text-[#E4E7EC]">{item.name}</p>
-                        <span className="rounded-full border border-[#2A3140] bg-[#0F141E] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[#9AA3B2]">
+                        <span className="border border-[#2A3140] bg-[#0F141E] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[#9AA3B2]">
                           {item.owner_type === "friend" ? t("cards.ownerBadgeFriend") : t("cards.ownerBadgeSelf")}
                         </span>
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] ${statementClosed ? "border-amber-500/45 bg-amber-500/10 text-amber-200" : "border-[#2A8C73] bg-[#163137] text-[#91E6DA]"}`}>
+                        <span className={`border px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] ${statementClosed ? "border-amber-500/45 bg-amber-500/10 text-amber-200" : "border-[#2A8C73] bg-[#163137] text-[#91E6DA]"}`}>
                           {statementClosed ? (language === "pt" ? "Fatura fechada" : "Statement due") : (language === "pt" ? "Fatura aberta" : "Statement open")}
                         </span>
                       </div>
@@ -649,17 +654,17 @@ export default function CardsPage() {
                         <p className="text-sm text-[#A8D7D1]">{t("home.friendCardOwner")}: {item.friend_name}</p>
                       ) : null}
                       <p className="text-xs text-[#8A93A3]">{t("cards.closes")} {item.closing_day} · {t("cards.due")} {item.due_day}</p>
-                      <div className="h-2 rounded-full bg-[#1A2230]">
-                        <div className="h-2 rounded-full bg-[#5DD6C7]" style={{ width: `${Math.min(100, Math.max(0, insight?.utilizationPercent ?? 0))}%` }} />
+                      <div className="h-2 bg-[#1A2230]">
+                        <div className="h-2 bg-[#5DD6C7]" style={{ width: `${Math.min(100, Math.max(0, insight?.utilizationPercent ?? 0))}%` }} />
                       </div>
                     </div>
 
                     <div className="flex flex-wrap gap-2 lg:justify-end">
-                      <button type="button" onClick={() => handleMarkStatementPaid(item)} disabled={!canMarkPaid || payingCardId === item.id} className="rounded-full border border-[#2A3140] bg-[#0F141E] px-3 py-1.5 text-xs text-[#D6DEE8] hover:border-[#5DD6C7]/60 hover:text-[#5DD6C7] disabled:opacity-50">
+                      <button type="button" onClick={() => handleMarkStatementPaid(item)} disabled={!canMarkPaid || payingCardId === item.id} className="border border-[#2A3140] bg-[#0F141E] px-3 py-1.5 text-xs text-[#D6DEE8] hover:border-[#5DD6C7]/60 hover:text-[#5DD6C7] disabled:opacity-50">
                         {payingCardId === item.id ? (language === "pt" ? "A pagar..." : "Paying...") : (language === "pt" ? "Marcar fatura paga" : "Mark statement paid")}
                       </button>
-                      <button type="button" onClick={() => openEdit(item)} className="rounded-full border border-[#2A3140] bg-[#0F141E] px-3 py-1.5 text-xs text-[#8B94A6] hover:border-[#5DD6C7]/60 hover:text-[#5DD6C7]">{t("common.edit")}</button>
-                      <button type="button" onClick={() => handleRemove(item)} disabled={deletingId === item.id} className="rounded-full border border-[#2A3140] bg-[#0F141E] px-3 py-1.5 text-xs text-[#8B94A6] hover:border-red-500/60 hover:text-red-400 disabled:opacity-60">
+                      <button type="button" onClick={() => openEdit(item)} className="border border-[#2A3140] bg-[#0F141E] px-3 py-1.5 text-xs text-[#8B94A6] hover:border-[#5DD6C7]/60 hover:text-[#5DD6C7]">{t("common.edit")}</button>
+                      <button type="button" onClick={() => handleRemove(item)} disabled={deletingId === item.id} className="border border-[#2A3140] bg-[#0F141E] px-3 py-1.5 text-xs text-[#8B94A6] hover:border-red-500/60 hover:text-red-400 disabled:opacity-60">
                         {deletingId === item.id
                           ? t("common.saving")
                           : language === "pt"
@@ -700,7 +705,7 @@ export default function CardsPage() {
 
       {editing ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4">
-          <div className="w-full max-w-md rounded-2xl border border-[#1E232E] bg-[#121621] p-5" onClick={(event) => event.stopPropagation()}>
+          <div className="w-full max-w-md border border-[#1E232E] bg-[#121621] p-5" onClick={(event) => event.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
               <p className="text-sm font-semibold text-[#E5E8EF]">{t("cards.title")}</p>
               <button type="button" onClick={() => !editSaving && setEditing(null)} className="text-xs text-[#8B94A6]">{t("common.cancel")}</button>
@@ -709,8 +714,8 @@ export default function CardsPage() {
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8B94A6]">{t("cards.ownerLabel")}</p>
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => setEditOwnerType("self")} className={`rounded-full border px-3 py-1 text-xs ${editOwnerType === "self" ? "border-[#5DD6C7] bg-[#173038] text-[#D7FBF6]" : "border-[#2A3140] bg-[#0F141E] text-[#A8B2C3]"}`}>{t("cards.ownerSelf")}</button>
-                  <button type="button" onClick={() => setEditOwnerType("friend")} className={`rounded-full border px-3 py-1 text-xs ${editOwnerType === "friend" ? "border-[#5DD6C7] bg-[#173038] text-[#D7FBF6]" : "border-[#2A3140] bg-[#0F141E] text-[#A8B2C3]"}`}>{t("cards.ownerFriend")}</button>
+                  <button type="button" onClick={() => setEditOwnerType("self")} className={`border px-3 py-1 text-xs ${editOwnerType === "self" ? "border-[#5DD6C7] bg-[#173038] text-[#D7FBF6]" : "border-[#2A3140] bg-[#0F141E] text-[#A8B2C3]"}`}>{t("cards.ownerSelf")}</button>
+                  <button type="button" onClick={() => setEditOwnerType("friend")} className={`border px-3 py-1 text-xs ${editOwnerType === "friend" ? "border-[#5DD6C7] bg-[#173038] text-[#D7FBF6]" : "border-[#2A3140] bg-[#0F141E] text-[#A8B2C3]"}`}>{t("cards.ownerFriend")}</button>
                 </div>
               </div>
               <BankBrandPicker selected={editBankCode} onSelect={setEditBankCode} />

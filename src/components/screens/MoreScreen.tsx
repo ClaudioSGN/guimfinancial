@@ -348,32 +348,37 @@ export function MoreScreen() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <p className="ui-eyebrow">{t("tabs.more")}</p>
-        <p className="mt-1 text-xl font-semibold text-[var(--text-1)]">{t("more.title")}</p>
-        <p className="mt-0.5 text-sm text-[var(--text-3)]">{t("more.subtitle")}</p>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-1 md:grid-cols-2">
-        {([
-          { key: "settings", label: language === "pt" ? "Configuracoes" : "Settings", className: "" },
-          { key: "friends", label: language === "pt" ? "Amigos" : "Friends", className: "" },
-          { key: "notifications", label: language === "pt" ? "Notificacoes" : "Notifications", className: "md:hidden" },
-        ] as const).map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setActiveSection(tab.key)}
-            className={`${tab.className} rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${
-              activeSection === tab.key
-                ? "bg-[var(--accent)] text-white shadow-[0_10px_24px_rgba(79,142,255,0.25)]"
-                : "text-[var(--text-3)]"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+    <div className="flex flex-col gap-7">
+      <div className="ui-card-2 overflow-hidden p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="ui-eyebrow">{t("tabs.more")}</p>
+            <p className="mt-2 font-[var(--font-display)] text-2xl font-black tracking-[-0.04em] text-[var(--text-1)]">
+              {t("more.title")}
+            </p>
+            <p className="mt-1 max-w-2xl text-sm text-[var(--text-2)]">{t("more.subtitle")}</p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 border border-[var(--border)] bg-[rgba(255,255,255,0.035)] p-1 md:w-[28rem] md:grid-cols-2">
+            {([
+              { key: "settings", label: language === "pt" ? "Configuracoes" : "Settings", className: "" },
+              { key: "friends", label: language === "pt" ? "Amigos" : "Friends", className: "" },
+              { key: "notifications", label: language === "pt" ? "Notificacoes" : "Notifications", className: "md:hidden" },
+            ] as const).map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveSection(tab.key)}
+                className={`${tab.className} rounded-xl px-3 py-2.5 text-xs font-bold transition-colors ${
+                  activeSection === tab.key
+                    ? "bg-[var(--accent)] text-white shadow-[0_10px_24px_rgba(79,142,255,0.25)]"
+                    : "text-[var(--text-3)] hover:bg-[rgba(255,255,255,0.045)] hover:text-[var(--text-1)]"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {activeSection === "friends" ? (
@@ -514,7 +519,7 @@ export function MoreScreen() {
       {/* Navigation links */}
       <div className="flex flex-col gap-3">
         <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-3)]">{t("more.moreOptions")}</p>
-        <div className="flex flex-col gap-2">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {([
             { href: "/reports", label: language === "pt" ? "Relatórios" : "Reports", hint: language === "pt" ? "Resumo mensal, categorias e comparações." : "Monthly summary, categories, and comparisons." },
             { href: "/budget", label: t("tabs.budget"), hint: t("more.budgetHint") },
@@ -522,9 +527,9 @@ export function MoreScreen() {
             { href: "/cards", label: t("more.cards"), hint: t("more.cardsHint") },
             { href: "/export", label: t("more.export"), hint: t("more.exportHint") },
           ] as const).map((item) => (
-            <Link key={item.href} href={item.href} className="ui-card block p-4 transition-colors hover:border-[var(--border-bright)] hover:bg-[var(--surface-2)]">
+            <Link key={item.href} href={item.href} className="ui-card group block p-5 transition-all hover:-translate-y-0.5 hover:border-[var(--border-bright)] hover:bg-[var(--surface-2)]">
               <p className="text-sm font-semibold text-[var(--text-1)]">{item.label}</p>
-              <p className="mt-0.5 text-xs text-[var(--text-3)]">{item.hint}</p>
+              <p className="mt-1 text-xs leading-5 text-[var(--text-3)] group-hover:text-[var(--text-2)]">{item.hint}</p>
             </Link>
           ))}
         </div>

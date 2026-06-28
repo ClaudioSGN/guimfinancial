@@ -2,20 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useLanguage } from "@/lib/language";
-import { useAuth } from "@/lib/auth";
+import { useRouter } from "next/navigation";
 import { AppIcon } from "@/components/AppIcon";
-import { NewEntryScreen } from "@/components/screens/NewEntryScreen";
 import { NotificationsPanel } from "@/components/social/NotificationsPanel";
+import { NewEntryScreen } from "@/components/screens/NewEntryScreen";
+import { useAuth } from "@/lib/auth";
+import { useLanguage } from "@/lib/language";
+import { loadProfileSettings, type ProfileSettings } from "@/lib/profile";
 
-type TabKey =
-  | "home"
-  | "transactions"
-  | "budget"
-  | "investments"
-  | "more";
+type TabKey = "home" | "transactions" | "budget" | "investments" | "more";
 
 type Props = {
   activeTab: TabKey;
@@ -30,24 +26,79 @@ export function AppShell({ activeTab, children }: Props) {
   const [menuVisible, setMenuVisible] = useState(false);
   const [activeModalType, setActiveModalType] = useState<string | null>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [profile, setProfile] = useState<ProfileSettings>({});
   const menuRef = useRef<HTMLDivElement | null>(null);
   const investmentEntryCounter = useRef(0);
   const notificationsLabel = language === "en" ? "Notifications" : "Notificacoes";
 
+  const userName =
+    profile.name?.trim()
+      ? profile.name.trim()
+      : typeof user?.user_metadata?.name === "string" && user.user_metadata.name.trim()
+      ? user.user_metadata.name.trim()
+      : user?.email?.split("@")[0] ?? "Guim";
+
+  const userInitials =
+    userName
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "GF";
+  const metadataAvatar =
+    typeof user?.user_metadata?.avatar_url === "string" &&
+    user.user_metadata.avatar_url.trim() &&
+    !user.user_metadata.avatar_url.startsWith("data:") &&
+    user.user_metadata.avatar_url.length <= 2048
+      ? user.user_metadata.avatar_url.trim()
+      : "";
+  const avatarSrc = profile.avatarUrl?.trim() || metadataAvatar;
+
   const menuItems = useMemo(
-    () => [
-      {
-        key: "share_with_friend",
-        label: language === "en" ? "Assign to friends" : "Atribuir a amigos",
-        icon: "arrow-right",
-        color: "#F472B6",
-      },
-      { key: "transfer", label: t("newEntry.transfer"), icon: "transfer", color: "#A78BFA" },
-      { key: "income", label: t("newEntry.income"), icon: "arrow-up", color: "#34D399" },
-      { key: "investment", label: t("investments.newInvestment"), icon: "wallet", color: "#60A5FA" },
-      { key: "card_expense", label: t("newEntry.cardExpense"), icon: "credit-card", color: "#FBBF24" },
-      { key: "expense", label: t("newEntry.expense"), icon: "arrow-down", color: "#F87171" },
-    ] as const,
+    () =>
+      [
+        {
+          key: "income",
+          label: t("newEntry.income"),
+          description: language === "pt" ? "Dinheiro entrando em uma conta" : "Money entering an account",
+          icon: "arrow-up",
+          color: "#19d28f",
+        },
+        {
+          key: "expense",
+          label: t("newEntry.expense"),
+          description: language === "pt" ? "Despesa paga direto da conta" : "Expense paid from an account",
+          icon: "arrow-down",
+          color: "#ff5d5d",
+        },
+        {
+          key: "card_expense",
+          label: t("newEntry.cardExpense"),
+          description: language === "pt" ? "Compra em cartao proprio ou de amigo" : "Purchase on your card or a friend's",
+          icon: "credit-card",
+          color: "#f5b51b",
+        },
+        {
+          key: "share_with_friend",
+          label: language === "en" ? "Assign to friends" : "Atribuir a amigos",
+          description: language === "pt" ? "Envie uma cobranca para outro usuario" : "Send a charge to another user",
+          icon: "arrow-right",
+          color: "#38bdf8",
+        },
+        {
+          key: "transfer",
+          label: t("newEntry.transfer"),
+          description: language === "pt" ? "Mover saldo entre contas" : "Move balance between accounts",
+          icon: "transfer",
+          color: "#9b8cff",
+        },
+        {
+          key: "investment",
+          label: t("investments.newInvestment"),
+          description: language === "pt" ? "Registrar ativo na carteira" : "Register an asset in the portfolio",
+          icon: "wallet",
+          color: "#7dd3fc",
+        },
+      ] as const,
     [language, t],
   );
 
@@ -66,19 +117,53 @@ export function AppShell({ activeTab, children }: Props) {
     { href: "/more", key: "more", icon: "more", label: t("tabs.more") },
   ] as const;
 
+  const activeNavItem = desktopNavItems.find((item) => item.key === activeTab) ?? desktopNavItems[0];
   const mobileActiveTab: Exclude<TabKey, "budget"> = activeTab === "budget" ? "more" : activeTab;
+
+  const pageSubtitles: Record<TabKey, string> = {
+    home:
+      language === "pt"
+        ? "Comece pelo saldo, veja o que pesa no mes e aja pelo botao Registrar."
+        : "Start with balance, see what weighs on the month, and act through Register.",
+    transactions:
+      language === "pt"
+        ? "Filtre, confira cartoes de amigos e ajuste movimentacoes sem sair da lista."
+        : "Filter, check friend cards, and adjust movements without leaving the list.",
+    budget:
+      language === "pt"
+        ? "Transforme categorias em limites simples e acompanhe o espaco restante."
+        : "Turn categories into simple limits and track remaining room.",
+    investments:
+      language === "pt"
+        ? "Sua carteira organizada por ativo, indicadores e valor total."
+        : "Your portfolio organized by asset, indicators, and total value.",
+    more:
+      language === "pt"
+        ? "Ajustes, contas, cartoes, amigos e preferencias do produto."
+        : "Settings, accounts, cards, friends, and product preferences.",
+  };
 
   useEffect(() => {
     let timeoutId: number | undefined;
     if (menuOpen) {
       timeoutId = window.setTimeout(() => setMenuVisible(true), 0);
     } else if (menuVisible) {
-      timeoutId = window.setTimeout(() => setMenuVisible(false), 200);
+      timeoutId = window.setTimeout(() => setMenuVisible(false), 180);
     }
     return () => {
       if (timeoutId) window.clearTimeout(timeoutId);
     };
   }, [menuOpen, menuVisible]);
+
+  useEffect(() => {
+    setProfile(loadProfileSettings());
+    function handleProfileUpdate() {
+      setProfile(loadProfileSettings());
+    }
+
+    window.addEventListener("profile-updated", handleProfileUpdate);
+    return () => window.removeEventListener("profile-updated", handleProfileUpdate);
+  }, []);
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 767px)");
@@ -120,64 +205,101 @@ export function AppShell({ activeTab, children }: Props) {
   }
 
   return (
-    <div className="h-[100dvh] overflow-hidden md:min-h-screen md:h-auto md:overflow-visible">
-      <aside className="fixed left-0 top-0 z-40 hidden h-full w-[60px] flex-col items-center border-r border-[var(--border)] bg-[var(--surface)] py-4 md:flex">
-        <div className="flex flex-1 flex-col items-center gap-1 pt-2">
-          {desktopNavItems.map((item) => {
-            const isActive = activeTab === item.key;
-            return (
-              <Link
-                key={item.key}
-                href={item.href}
-                title={item.label}
-                className={`group relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors ${
-                  isActive
-                    ? "bg-[var(--accent-dim)] text-[var(--accent)]"
-                    : "text-[var(--text-3)] hover:bg-[var(--surface-3)] hover:text-[var(--text-2)]"
-                }`}
-              >
-                <AppIcon name={item.icon} size={20} />
-                <span className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 z-50 -translate-y-1/2 whitespace-nowrap rounded-lg border border-[var(--border-bright)] bg-[var(--surface-2)] px-2.5 py-1.5 text-xs font-semibold text-[var(--text-1)] opacity-0 shadow-[var(--shadow-md)] transition-opacity group-hover:opacity-100">
-                  {item.label}
-                </span>
-              </Link>
-            );
-          })}
-          <button
-            type="button"
-            title={notificationsLabel}
-            onClick={() => setNotificationsOpen(true)}
-            className={`group relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors ${
-              notificationsOpen
-                ? "bg-[var(--accent-dim)] text-[var(--accent)]"
-                : "text-[var(--text-3)] hover:bg-[var(--surface-3)] hover:text-[var(--text-2)]"
-            }`}
-          >
-            <AppIcon name="bell" size={20} />
-            <span className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 z-50 -translate-y-1/2 whitespace-nowrap rounded-lg border border-[var(--border-bright)] bg-[var(--surface-2)] px-2.5 py-1.5 text-xs font-semibold text-[var(--text-1)] opacity-0 shadow-[var(--shadow-md)] transition-opacity group-hover:opacity-100">
-              {notificationsLabel}
+    <div className="app-shell min-h-screen overflow-hidden md:overflow-visible">
+      <header className="site-topbar fixed left-0 right-0 top-0 z-40 hidden border-b border-[var(--border)] md:block">
+        <div className="mx-auto grid h-[76px] max-w-[1880px] grid-cols-[260px_1fr_auto] items-center gap-5 px-6 xl:px-8">
+          <Link href="/" className="group flex items-center gap-3">
+            <span className="grid h-11 w-11 place-items-center border border-[var(--border-bright)] bg-[var(--accent)] text-sm font-black text-white shadow-[6px_6px_0_rgba(20,184,166,0.24)]">
+              GF
             </span>
-          </button>
-        </div>
+            <span className="min-w-0">
+              <span className="block font-[var(--font-display)] text-lg font-black uppercase tracking-[-0.04em] text-[var(--text-1)]">
+                GuimFinancial
+              </span>
+              <span className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-3)]">
+                {language === "pt" ? "Painel financeiro" : "Finance board"}
+              </span>
+            </span>
+          </Link>
 
-        <button
-          type="button"
-          title={t("newEntry.title")}
-          onClick={() => setMenuOpen((value) => !value)}
-          className="mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--accent)] text-white shadow-[0_4px_16px_rgba(79,142,255,0.35)] transition-transform hover:scale-105 active:scale-95"
-        >
-          <div className={`transition-transform duration-200 ${menuOpen ? "rotate-45" : "rotate-0"}`}>
-            <AppIcon name="plus" size={18} color="#fff" />
+          <nav className="flex min-w-0 items-center justify-center gap-1">
+            {desktopNavItems.map((item) => {
+              const isActive = activeTab === item.key;
+              return (
+                <Link
+                  key={item.key}
+                  href={item.href}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`site-nav-item ${isActive ? "site-nav-item-active" : ""}`}
+                >
+                  <AppIcon name={item.icon} size={17} />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setNotificationsOpen(true)}
+              className="site-action-button"
+              title={notificationsLabel}
+            >
+              <AppIcon name="bell" size={17} />
+              <span>{notificationsLabel}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMenuOpen((value) => !value)}
+              className="site-primary-button"
+            >
+              <AppIcon name="plus" size={17} color="#041016" />
+              <span>{language === "pt" ? "Registrar" : "Register"}</span>
+            </button>
+            <Link href="/profile" className="ml-2 flex h-11 items-center gap-3 border-l border-[var(--border)] pl-4 transition-opacity hover:opacity-85">
+              <div className="text-right">
+                <p className="max-w-[150px] truncate text-xs font-bold text-[var(--text-1)]">{userName}</p>
+                <p className="max-w-[150px] truncate text-[11px] text-[var(--text-3)]">{user?.email}</p>
+              </div>
+              <div className="grid h-10 w-10 place-items-center overflow-hidden border border-[var(--border-bright)] bg-[var(--surface-3)] text-xs font-black text-[var(--text-1)]">
+                {avatarSrc ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={avatarSrc} alt="Profile" className="h-full w-full object-cover" />
+                ) : (
+                  userInitials
+                )}
+              </div>
+            </Link>
           </div>
-        </button>
-      </aside>
+        </div>
+      </header>
 
-      <div className="h-full md:min-h-screen md:h-auto md:pl-[60px]">
+      <div className="h-[100dvh] md:h-auto md:min-h-screen md:pt-[76px]">
         <div
-          className="h-[calc(100dvh-6rem-env(safe-area-inset-bottom))] overflow-y-auto overscroll-y-none px-3 pb-4 pt-4 sm:px-4 md:h-auto md:min-h-screen md:overflow-visible md:px-6 md:pb-6 md:pt-6"
+          className="h-[calc(100dvh-6rem-env(safe-area-inset-bottom))] overflow-y-auto overscroll-y-none px-3 pb-4 pt-4 sm:px-4 md:h-auto md:min-h-[calc(100vh-76px)] md:overflow-visible md:px-6 md:pb-10 md:pt-6 xl:px-8"
           style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}
         >
-          {children}
+          <section className="page-command-strip mx-auto mb-6 hidden max-w-[1880px] grid-cols-[minmax(0,1fr)_360px] gap-4 md:grid">
+            <div className="page-title-panel">
+              <div className="flex items-center gap-3">
+                <span className="page-kicker">{language === "pt" ? "Voce esta em" : "You are in"}</span>
+                <span className="page-current">{activeNavItem.label}</span>
+              </div>
+              <h1>{activeNavItem.label}</h1>
+              <p>{pageSubtitles[activeTab]}</p>
+            </div>
+            <aside className="page-help-panel">
+              <p className="page-kicker">{language === "pt" ? "Como usar rapido" : "Quick use"}</p>
+              <p className="mt-2 text-sm font-semibold text-[var(--text-1)]">
+                {language === "pt"
+                  ? "Use Registrar para adicionar receitas, despesas, cartao ou atribuicoes sem procurar por menus."
+                  : "Use Register to add income, expenses, cards, or friend assignments without hunting menus."}
+              </p>
+            </aside>
+          </section>
+
+          <main className="mx-auto w-full max-w-[1880px]">{children}</main>
         </div>
       </div>
 
@@ -190,16 +312,14 @@ export function AppShell({ activeTab, children }: Props) {
                 key={item.key}
                 href={item.href}
                 aria-current={isActive ? "page" : undefined}
-                className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-2xl px-1 py-2 text-[10px] font-semibold transition-all ${
+                className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition-all ${
                   isActive
-                    ? "bg-[linear-gradient(180deg,rgba(79,142,255,0.18),rgba(79,142,255,0.08))] text-[var(--text-1)] shadow-[0_10px_24px_rgba(8,14,24,0.22)]"
+                    ? "bg-[rgba(79,142,255,0.18)] text-[var(--text-1)]"
                     : "text-[var(--text-3)]"
                 }`}
               >
-                <span className={`absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 rounded-full transition-opacity ${isActive ? "bg-[var(--accent)] opacity-100" : "opacity-0"}`} />
-                <span className={`flex h-9 w-9 items-center justify-center rounded-2xl transition-colors ${
-                  isActive ? "bg-[var(--accent-dim)] text-[var(--accent)]" : "text-current"
-                }`}>
+                <span className={`absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 transition-opacity ${isActive ? "bg-[var(--accent)] opacity-100" : "opacity-0"}`} />
+                <span className="flex h-9 w-9 items-center justify-center">
                   <AppIcon name={item.icon} size={20} />
                 </span>
                 <span className="truncate">{item.label}</span>
@@ -210,7 +330,7 @@ export function AppShell({ activeTab, children }: Props) {
           <button
             type="button"
             onClick={() => setMenuOpen((value) => !value)}
-            className="mx-1 flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] shadow-[0_6px_20px_rgba(79,142,255,0.4)] transition-transform active:scale-95"
+            className="mx-1 flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] shadow-[0_6px_20px_rgba(79,142,255,0.4)] transition-transform active:scale-95"
           >
             <div className={`transition-transform duration-200 ${menuOpen ? "rotate-45" : "rotate-0"}`}>
               <AppIcon name="plus" size={22} color="#fff" />
@@ -224,16 +344,14 @@ export function AppShell({ activeTab, children }: Props) {
                 key={item.key}
                 href={item.href}
                 aria-current={isActive ? "page" : undefined}
-                className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-2xl px-1 py-2 text-[10px] font-semibold transition-all ${
+                className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition-all ${
                   isActive
-                    ? "bg-[linear-gradient(180deg,rgba(79,142,255,0.18),rgba(79,142,255,0.08))] text-[var(--text-1)] shadow-[0_10px_24px_rgba(8,14,24,0.22)]"
+                    ? "bg-[rgba(79,142,255,0.18)] text-[var(--text-1)]"
                     : "text-[var(--text-3)]"
                 }`}
               >
-                <span className={`absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 rounded-full transition-opacity ${isActive ? "bg-[var(--accent)] opacity-100" : "opacity-0"}`} />
-                <span className={`flex h-9 w-9 items-center justify-center rounded-2xl transition-colors ${
-                  isActive ? "bg-[var(--accent-dim)] text-[var(--accent)]" : "text-current"
-                }`}>
+                <span className={`absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 transition-opacity ${isActive ? "bg-[var(--accent)] opacity-100" : "opacity-0"}`} />
+                <span className="flex h-9 w-9 items-center justify-center">
                   <AppIcon name={item.icon} size={20} />
                 </span>
                 <span className="truncate">{item.label}</span>
@@ -249,7 +367,7 @@ export function AppShell({ activeTab, children }: Props) {
           onClick={() => setActiveModalType(null)}
         >
           <div
-            className="ui-card-2 ui-slide-up relative mx-2 w-[min(100%,42rem)] overflow-y-auto rounded-t-2xl px-4 pb-4 pt-3 sm:mx-4 sm:rounded-2xl sm:px-5 sm:pb-5 sm:pt-4"
+            className="ui-card-2 ui-slide-up relative mx-2 w-[min(100%,42rem)] overflow-y-auto px-4 pb-4 pt-3 sm:mx-4 sm:px-5 sm:pb-5 sm:pt-4"
             style={{
               maxHeight: "min(92dvh, 820px)",
               paddingBottom: "max(1rem, calc(env(safe-area-inset-bottom) + 1rem))",
@@ -259,7 +377,7 @@ export function AppShell({ activeTab, children }: Props) {
             <button
               type="button"
               onClick={() => setActiveModalType(null)}
-              className="absolute right-3 top-3 z-10 rounded-lg px-2.5 py-1.5 text-sm font-medium text-[var(--text-2)] transition-colors hover:bg-[var(--surface-3)] hover:text-[var(--text-1)] sm:right-4 sm:top-4"
+              className="absolute right-3 top-3 z-10 px-2.5 py-1.5 text-sm font-medium text-[var(--text-2)] transition-colors hover:bg-[var(--surface-3)] hover:text-[var(--text-1)] sm:right-4 sm:top-4"
             >
               {language === "pt" ? "Fechar" : "Close"}
             </button>
@@ -274,22 +392,18 @@ export function AppShell({ activeTab, children }: Props) {
           onClick={() => setNotificationsOpen(false)}
         >
           <div
-            className="absolute left-[72px] top-6 w-[min(520px,calc(100vw-104px))]"
+            className="absolute right-8 top-24 w-[min(560px,calc(100vw-4rem))]"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="ui-card-2 max-h-[calc(100dvh-3rem)] overflow-y-auto rounded-2xl p-4 shadow-[var(--shadow-lg)]">
-              <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="ui-card-2 max-h-[calc(100dvh-8rem)] overflow-y-auto p-5 shadow-[var(--shadow-lg)]">
+              <div className="mb-5 flex items-start justify-between gap-4 border-b border-[var(--border)] pb-4">
                 <div>
-                  <p className="ui-eyebrow">{notificationsLabel}</p>
-                  <p className="mt-1 text-sm font-semibold text-[var(--text-1)]">
-                    {language === "pt" ? "Sua caixa de notificacoes" : "Your notifications inbox"}
+                  <p className="page-kicker">{notificationsLabel}</p>
+                  <p className="mt-1 text-lg font-black text-[var(--text-1)]">
+                    {language === "pt" ? "Caixa de entrada" : "Inbox"}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setNotificationsOpen(false)}
-                  className="ui-btn ui-btn-ghost ui-btn-sm"
-                >
+                <button type="button" onClick={() => setNotificationsOpen(false)} className="ui-btn ui-btn-ghost ui-btn-sm">
                   {language === "pt" ? "Fechar" : "Close"}
                 </button>
               </div>
@@ -310,35 +424,46 @@ export function AppShell({ activeTab, children }: Props) {
 
       {menuVisible ? (
         <div
-          className={`ui-modal-backdrop fixed inset-0 z-50 transition-opacity duration-200 ${
+          className={`ui-modal-backdrop fixed inset-0 z-50 transition-opacity duration-180 ${
             menuOpen ? "opacity-100" : "pointer-events-none opacity-0"
           }`}
           onClick={() => setMenuOpen(false)}
         >
           <div
-            className="absolute bottom-16 left-[72px] hidden md:block"
+            className="absolute right-8 top-24 hidden md:block"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="ui-card-2 ui-slide-up flex flex-col gap-1 overflow-hidden p-2">
-              {menuItems.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    openNewEntry(item.key);
-                  }}
-                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[var(--text-1)] transition-colors hover:bg-[var(--surface-3)]"
-                >
-                  <span
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-                    style={{ background: `${item.color}18`, color: item.color }}
+            <div className="command-menu ui-slide-up w-[520px] overflow-hidden p-0 shadow-[0_26px_90px_rgba(0,0,0,0.45)]">
+              <div className="command-menu-header">
+                <p className="page-kicker">{language === "pt" ? "Registrar" : "Register"}</p>
+                <h2>{language === "pt" ? "Escolha o proximo passo" : "Choose the next step"}</h2>
+                <p>
+                  {language === "pt"
+                    ? "Cada opcao abre somente os campos necessarios. Menos tela, menos duvida."
+                    : "Each option opens only the fields needed. Less screen, less doubt."}
+                </p>
+              </div>
+              <div className="grid grid-cols-2">
+                {menuItems.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openNewEntry(item.key);
+                    }}
+                    className="command-menu-item"
                   >
-                    <AppIcon name={item.icon} size={16} />
-                  </span>
-                  {item.label}
-                </button>
-              ))}
+                    <span className="command-menu-icon" style={{ color: item.color }}>
+                      <AppIcon name={item.icon} size={18} />
+                    </span>
+                    <span>
+                      <span className="block text-sm font-black text-[var(--text-1)]">{item.label}</span>
+                      <span className="mt-1 block text-xs leading-relaxed text-[var(--text-3)]">{item.description}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -376,12 +501,12 @@ export function AppShell({ activeTab, children }: Props) {
                     }}
                   >
                     <span
-                      className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--border-bright)] bg-[var(--surface-2)] shadow-[var(--shadow-md)]"
+                      className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--border-bright)] bg-[var(--surface-2)] shadow-[var(--shadow-md)]"
                       style={{ color: item.color }}
                     >
                       <AppIcon name={item.icon} size={18} />
                     </span>
-                    <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[10px] font-semibold text-[var(--text-1)]">
+                    <span className="rounded-md bg-[var(--surface-2)] px-2 py-0.5 text-[10px] font-semibold text-[var(--text-1)]">
                       {item.label}
                     </span>
                   </button>

@@ -197,22 +197,31 @@ export default function AccountsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0D0F14] px-6 py-6 text-slate-50">
-      <div className="mx-auto flex w-full max-w-[720px] flex-col gap-5">
-        <Link href="/more" className="text-xs text-[#9CA3AF]">
+    <div className="app-shell min-h-screen px-6 py-6 text-slate-50 lg:px-10">
+      <div className="mx-auto flex w-full max-w-[1320px] flex-col gap-6">
+        <Link href="/more" className="ui-btn ui-btn-secondary ui-btn-sm w-fit">
           ← {t("tabs.more")}
         </Link>
 
-        <div className="space-y-1">
-          <p className="text-[11px] uppercase tracking-[0.2em] text-[#7F8694]">
+        <div className="ui-card-2 p-6">
+          <p className="ui-eyebrow">
             {t("accounts.title")}
           </p>
-          <p className="text-2xl font-semibold text-[#E5E8EF]">
+          <p className="mt-2 font-[var(--font-display)] text-3xl font-black tracking-[-0.05em] text-[#E5E8EF]">
             {t("accounts.subtitle")}
+          </p>
+          <p className="mt-2 max-w-2xl text-sm text-[var(--text-2)]">
+            {language === "pt"
+              ? "Cadastre onde seu dinheiro fica para que saldos, receitas e despesas conversem entre si."
+              : "Register where your money lives so balances, income, and expenses stay connected."}
           </p>
         </div>
 
-        <div className="space-y-3">
+        <div className="grid gap-5 lg:grid-cols-[minmax(360px,0.85fr)_minmax(0,1.15fr)]">
+        <div className="ui-card space-y-3 p-5">
+          <p className="text-sm font-bold text-[var(--text-1)]">
+            {language === "pt" ? "Nova conta" : "New account"}
+          </p>
           <BankBrandPicker selected={bankCode} onSelect={setBankCode} />
           <input
             value={name}
@@ -255,17 +264,24 @@ export default function AccountsPage() {
             type="button"
             onClick={handleAdd}
             disabled={saving}
-            className="w-full rounded-xl bg-[#E6EDF3] py-3 text-sm font-semibold text-[#0C1018] disabled:opacity-60"
+            className="ui-btn ui-btn-primary ui-btn-lg w-full disabled:opacity-60"
           >
             {saving ? t("common.saving") : t("accounts.add")}
           </button>
         </div>
 
-        <div className="flex flex-col gap-3">
+        <div className="ui-card p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-bold text-[var(--text-1)]">{language === "pt" ? "Contas cadastradas" : "Registered accounts"}</p>
+              <p className="text-xs text-[var(--text-3)]">{accounts.length} {language === "pt" ? "contas" : "accounts"}</p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3">
           {accounts.map((item) => (
             <div
               key={item.id}
-              className="flex items-center justify-between rounded-2xl border border-[#1E232E] bg-[#121621] p-4"
+              className="flex items-center justify-between border border-[#1E232E] bg-[#121621]/80 p-4 transition-colors hover:border-[var(--border-bright)]"
             >
               <div className="flex items-center gap-3">
                 <BankBrandBadge bankCode={item.bank_code} />
@@ -284,13 +300,15 @@ export default function AccountsPage() {
                 <button
                   type="button"
                   onClick={() => openEdit(item)}
-                  className="rounded-full border border-[#2A3140] bg-[#0F141E] px-3 py-1 text-xs text-[#8B94A6] hover:border-[#5DD6C7]/60 hover:text-[#5DD6C7]"
+                  className="border border-[#2A3140] bg-[#0F141E] px-3 py-1 text-xs text-[#8B94A6] hover:border-[#5DD6C7]/60 hover:text-[#5DD6C7]"
                 >
                   {t("common.edit")}
                 </button>
               </div>
             </div>
           ))}
+          </div>
+        </div>
         </div>
       </div>
 
@@ -299,7 +317,7 @@ export default function AccountsPage() {
           className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4"
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-[#1E232E] bg-[#121621] p-5"
+            className="w-full max-w-md border border-[#1E232E] bg-[#121621] p-5"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">

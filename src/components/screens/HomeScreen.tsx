@@ -21,10 +21,6 @@ import { useLanguage } from "@/lib/language";
 import { useCurrency } from "@/lib/currency";
 import { useAuth } from "@/lib/auth";
 import { AppIcon } from "@/components/AppIcon";
-import {
-  loadProfileSettings,
-  type ProfileSettings,
-} from "@/lib/profile";
 import { BankBrandBadge } from "@/components/BankBrandBadge";
 import {
   getCardChargeTiming,
@@ -50,22 +46,9 @@ import {
   Bar,
   Line,
   Area,
-  PieChart,
-  Pie,
   Cell,
   type TooltipContentProps,
 } from "recharts";
-
-function getSafeMetadataAvatar(user: { user_metadata?: { avatar_url?: unknown } } | null | undefined) {
-  const rawValue =
-    typeof user?.user_metadata?.avatar_url === "string"
-      ? user.user_metadata.avatar_url.trim()
-      : "";
-  if (!rawValue) return "";
-  if (rawValue.startsWith("data:")) return "";
-  if (rawValue.length > 2048) return "";
-  return rawValue;
-}
 
 type Transaction = {
   id: string;
@@ -582,13 +565,6 @@ function computePeriodAccountBalance(
   return balance;
 }
 
-function getInitials(name?: string) {
-  if (!name) return "GF";
-  const parts = name.trim().split(" ").filter(Boolean);
-  const initials = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "");
-  return initials.join("") || "GF";
-}
-
 const CATEGORY_CHART_COLORS = [
   "#F59E0B",
   "#3B82F6",
@@ -767,7 +743,6 @@ export function HomeScreen() {
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
   const [payingReminderCardId, setPayingReminderCardId] = useState<string | null>(null);
   const [dismissedCardReminderKeys, setDismissedCardReminderKeys] = useState<Record<string, true>>({});
-  const [profile, setProfile] = useState<ProfileSettings>({});
   const [activeCategoryIndex, setActiveCategoryIndex] = useState<number | null>(null);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickAddInput, setQuickAddInput] = useState("");
@@ -792,10 +767,6 @@ export function HomeScreen() {
   );
 
   useEffect(() => {
-    setProfile(loadProfileSettings());
-  }, []);
-
-  useEffect(() => {
     setQuickAddForm((current) => ({
       ...current,
       amount:
@@ -817,20 +788,10 @@ export function HomeScreen() {
     setDismissedCardReminderKeys(loadCardReminderDismissals());
   }, [user?.id]);
 
-  useEffect(() => {
-    function handleProfileUpdate() {
-      setProfile(loadProfileSettings());
-    }
-
-    window.addEventListener("profile-updated", handleProfileUpdate);
-    return () => window.removeEventListener("profile-updated", handleProfileUpdate);
-  }, []);
-
   const monthTitle = useMemo(
     () => getMonthTitle(selectedMonth, language),
     [selectedMonth, language],
   );
-  const profileSecondaryLabel = user?.email || "GuimFinancial";
 
   const loadData = useCallback(async () => {
     if (!user) return;
@@ -1416,13 +1377,6 @@ export function HomeScreen() {
     }));
   }, [monthTransactions, language]);
 
-  const categoryPaddingAngle = useMemo(() => {
-    if (categoryChartData.length <= 4) return 1.8;
-    if (categoryChartData.length <= 8) return 1.2;
-    if (categoryChartData.length <= 14) return 0.8;
-    return 0.4;
-  }, [categoryChartData.length]);
-
   const totalCategoryAmount = useMemo(
     () => categoryChartData.reduce((sum, category) => sum + category.value, 0),
     [categoryChartData],
@@ -1724,15 +1678,6 @@ export function HomeScreen() {
       (a, b) => (Number(b.balance) || 0) - (Number(a.balance) || 0),
     )[0] ?? null;
   }, [accounts]);
-  const displayName =
-    profile.name ||
-    (user?.user_metadata?.username as string | undefined) ||
-    user?.email ||
-    "Guim Financial";
-  const metadataAvatar = getSafeMetadataAvatar(user);
-  const avatarSrc = (profile.avatarUrl ?? "").trim() || metadataAvatar;
-  const initials = useMemo(() => getInitials(displayName), [displayName]);
-
   function resetQuickAddState() {
     quickAddRecognitionRef.current?.stop();
     quickAddRecognitionRef.current = null;
@@ -2297,20 +2242,27 @@ export function HomeScreen() {
   return (
     <div className="flex flex-col gap-4">
       {/* ── Header ─────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+      <div className="ui-card-inner flex flex-col gap-3 p-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="page-kicker">{language === "pt" ? "Controle do painel" : "Dashboard controls"}</p>
+          <p className="mt-1 text-xs text-[var(--text-3)]">
+            {language === "pt" ? "Escolha o mes ou registre uma entrada por voz." : "Choose the month or add an entry by voice."}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
           {/* Month picker */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setMonthOpen((v) => !v)}
-              className="flex items-center gap-1.5 rounded-full border border-[var(--border-bright)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-2)] transition hover:bg-[var(--surface-3)]"
+              className="site-action-button h-10"
             >
               {monthTitle}
               <AppIcon name="chevron-down" size={14} color="currentColor" />
             </button>
             {monthOpen ? (
-              <div className="absolute left-0 top-10 z-30 w-44 overflow-hidden rounded-xl border border-[var(--border-bright)] bg-[var(--surface-2)] py-1 shadow-[var(--shadow-lg)]">
+              <div className="absolute right-0 top-12 z-30 w-48 overflow-hidden border border-[var(--border-bright)] bg-[var(--surface-2)] py-1 shadow-[var(--shadow-lg)]">
                 {monthOptions.map((option) => (
                   <button
                     key={option.label}
@@ -2329,7 +2281,7 @@ export function HomeScreen() {
           <button
             type="button"
             onClick={openQuickAddModal}
-            className="flex items-center gap-1.5 rounded-full border border-[var(--border-bright)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-2)] transition hover:bg-[var(--surface-3)]"
+            className="site-action-button h-10"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M12 4a3 3 0 013 3v5a3 3 0 01-6 0V7a3 3 0 013-3z" />
@@ -2340,20 +2292,6 @@ export function HomeScreen() {
             <span className="sm:hidden">{language === "pt" ? "Voz" : "Voice"}</span>
           </button>
         </div>
-
-        {/* Profile */}
-        <Link href="/profile" className="group flex items-center gap-2.5">
-          <div className="hidden flex-col text-right sm:flex">
-            <span className="text-xs font-semibold text-[var(--text-1)]">{displayName}</span>
-            <span className="text-[10px] text-[var(--text-3)]">{profileSecondaryLabel}</span>
-          </div>
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--border-bright)] bg-[var(--surface-3)] text-xs font-semibold text-[var(--text-1)] transition group-hover:border-[var(--accent)]">
-            {avatarSrc ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={avatarSrc} alt="Profile" className="h-full w-full object-cover" />
-            ) : initials}
-          </div>
-        </Link>
       </div>
 
       {errorMsg ? (
@@ -2754,36 +2692,41 @@ export function HomeScreen() {
         </div>
 
         {/* Category breakdown */}
-        <div className="ui-card p-5 sm:col-span-2 lg:col-span-5">
+        <div className="ui-card p-5 sm:col-span-2 lg:col-span-8">
           <div className="mb-3 flex items-center justify-between">
-            <p className="text-sm font-semibold text-[var(--text-1)]">{t("home.categories")}</p>
-            <span className="text-xs text-[var(--text-3)]">{t("transactions.monthSummary")}</span>
+            <div>
+              <p className="text-sm font-semibold text-[var(--text-1)]">{t("home.categories")}</p>
+              <p className="mt-1 text-xs text-[var(--text-3)]">
+                {language === "pt" ? "Volume de gastos por categoria" : "Expense volume by category"}
+              </p>
+            </div>
+            <span className="ui-badge ui-badge-neutral">{t("transactions.monthSummary")}</span>
           </div>
           {categoryChartData.length === 0 ? (
             <p className="text-xs text-[var(--text-3)]">{t("transactions.empty")}</p>
           ) : (
             <div className="ui-card-inner p-3">
               <p className="text-xs font-semibold text-[var(--text-1)]">
-                {language === "pt" ? "Principais categorias" : "Top categories"}
+                {language === "pt" ? "Gastos por categoria" : "Spending by category"}
               </p>
               <p className="mt-0.5 text-[11px] text-[var(--text-3)]">
                 {formatCurrency(totalCategoryAmount, language, currency)}
               </p>
-              <div className="relative mt-3 grid grid-cols-[1fr_126px] items-center gap-1 overflow-hidden">
-                <div className="max-h-40 space-y-1 overflow-y-auto pr-1">
+              <div className="relative mt-4 grid gap-4 xl:grid-cols-[19rem_minmax(0,1fr)]">
+                <div className="max-h-[260px] space-y-2 overflow-y-auto pr-1">
                   {categoryChartData.map((category, index) => (
                     <div
                       key={category.name}
-                      className={`flex items-center gap-2 rounded-lg px-1 py-1 transition-colors cursor-default ${
-                        activeCategoryIndex === index ? "bg-[var(--surface-3)]" : "hover:bg-[var(--surface-3)]"
+                      className={`grid cursor-default grid-cols-[2rem_1fr] items-center gap-2 border border-transparent px-2 py-2 transition-colors ${
+                        activeCategoryIndex === index ? "border-[var(--border-bright)] bg-[var(--surface-3)]" : "hover:bg-[var(--surface-3)]"
                       }`}
                       onMouseEnter={() => setActiveCategoryIndex(index)}
                       onMouseLeave={() => setActiveCategoryIndex(null)}
                     >
-                      <span className="h-8 w-1 shrink-0 rounded-full" style={{ backgroundColor: category.color }} />
+                      <span className="text-xs font-black text-[var(--text-3)]">{String(index + 1).padStart(2, "0")}</span>
                       <div className="min-w-0">
                         <p className="truncate text-xs font-semibold text-[var(--text-1)]">
-                          {index + 1}. {category.name}
+                          {category.name}
                         </p>
                         <div className="flex items-center gap-1.5 text-[10px] text-[var(--text-3)]">
                           <span>{formatPercent(category.percent, language)}</span>
@@ -2794,37 +2737,48 @@ export function HomeScreen() {
                     </div>
                   ))}
                 </div>
-                <div className="h-40 w-[176px] -mr-12 overflow-hidden">
-                  <ResponsiveContainer width="100%" height="100%" minHeight={120}>
-                    <PieChart>
-                      <Pie
-                        data={categoryChartData}
+                <div className="h-[240px] min-w-0">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={220}>
+                    <ComposedChart
+                      data={categoryChartData.slice(0, 8)}
+                      layout="vertical"
+                      margin={{ top: 6, right: 24, bottom: 4, left: 12 }}
+                    >
+                      <CartesianGrid stroke="rgba(255,255,255,0.055)" strokeDasharray="4 6" horizontal={false} />
+                      <XAxis
+                        type="number"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#4a6278", fontSize: 10 }}
+                        tickFormatter={(value) => formatCurrency(Number(value), language, currency)}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        axisLine={false}
+                        tickLine={false}
+                        width={118}
+                        tick={{ fill: "#8ba3be", fontSize: 11 }}
+                      />
+                      <Tooltip content={CategoryTooltip} cursor={{ fill: "rgba(255,255,255,0.025)" }} />
+                      <Bar
                         dataKey="value"
-                        nameKey="name"
-                        cx="62%"
-                        cy="50%"
-                        startAngle={90}
-                        endAngle={-270}
-                        innerRadius="58%"
-                        outerRadius="84%"
-                        paddingAngle={categoryPaddingAngle}
-                        stroke="none"
+                        barSize={16}
+                        isAnimationActive
+                        animationDuration={700}
+                        animationEasing="ease-out"
                         onMouseEnter={(_, index) => setActiveCategoryIndex(index)}
                         onMouseLeave={() => setActiveCategoryIndex(null)}
-                        isAnimationActive
-                        animationDuration={850}
-                        animationEasing="ease-out"
                       >
-                        {categoryChartData.map((category, index) => (
+                        {categoryChartData.slice(0, 8).map((category, index) => (
                           <Cell
                             key={`${category.name}-${index}`}
                             fill={category.color}
-                            fillOpacity={activeCategoryIndex == null || activeCategoryIndex === index ? 1 : 0.28}
+                            fillOpacity={activeCategoryIndex == null || activeCategoryIndex === index ? 1 : 0.38}
                           />
                         ))}
-                      </Pie>
-                      <Tooltip content={CategoryTooltip} cursor={false} wrapperStyle={{ outline: "none" }} />
-                    </PieChart>
+                      </Bar>
+                    </ComposedChart>
                   </ResponsiveContainer>
                 </div>
               </div>
@@ -2948,7 +2902,7 @@ export function HomeScreen() {
             <AppIcon name="credit-card" size={16} color="var(--text-3)" />
           </div>
           <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
-            <div className="ui-card-inner p-3">
+            <div className="ui-card-inner p-4">
               <p className="ui-eyebrow">{language === "pt" ? "Cartoes totais" : "Total cards"}</p>
               <p className="mt-1 text-sm font-semibold text-[var(--text-1)]">{cards.length}</p>
             </div>
