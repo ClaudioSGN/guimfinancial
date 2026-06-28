@@ -124,6 +124,10 @@ alter table investment_purchases add column if not exists user_id uuid reference
 alter table investments add column if not exists cdi_rate_pct numeric;
 alter table investments add column if not exists cdi_multiplier_pct numeric;
 alter table investments add column if not exists fixed_started_at timestamptz;
+alter table investments add column if not exists asset_type text;
+alter table investments add column if not exists sector text;
+alter table investments add column if not exists current_price numeric;
+alter table investments add column if not exists updated_at timestamptz not null default now();
 alter table investments drop constraint if exists investments_type_check;
 alter table investments add constraint investments_type_check check (type in ('b3', 'crypto', 'fixed_income'));
 

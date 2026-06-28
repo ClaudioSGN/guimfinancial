@@ -31,6 +31,12 @@ import {
   normalizeInvestmentCurrency,
   type SupportedInvestmentCurrency,
 } from "../../../shared/investmentCurrency";
+import {
+  calculatePortfolioRisk,
+  type PortfolioAssetInput,
+  type PortfolioAssetType,
+  type PortfolioRiskClassification,
+} from "@/utils/portfolioAnalysis";
 
 type InvestmentType = "b3" | "crypto" | "fixed_income";
 
@@ -42,10 +48,14 @@ type Investment = {
   currency: SupportedInvestmentCurrency;
   quantity: number;
   average_price: number;
+  asset_type?: PortfolioAssetType | null;
+  sector?: string | null;
+  current_price?: number | null;
   cdi_rate_pct: number | null;
   cdi_multiplier_pct: number | null;
   fixed_started_at: string | null;
   created_at: string | null;
+  updated_at?: string | null;
 };
 
 type Quote = {
@@ -712,6 +722,63 @@ function getInvestmentCategory(asset: Investment): InvestmentCategory {
   return "other";
 }
 
+function getPortfolioAssetType(asset: Investment): PortfolioAssetType {
+  if (asset.asset_type) return asset.asset_type;
+  const category = getInvestmentCategory(asset);
+  if (category === "fixed") return "fixed_income";
+  if (category === "fii" || category === "etf" || category === "crypto") return category;
+  if (category === "bdr") return "international";
+  if (category === "stock") return "stock";
+  return "other";
+}
+
+function getPortfolioSector(asset: Investment, language: "pt" | "en") {
+  if (asset.sector?.trim()) return asset.sector.trim();
+  const category = getInvestmentCategory(asset);
+  const labels: Record<InvestmentCategory, string> = {
+    fii: language === "pt" ? "Fundos imobiliários" : "Real estate funds",
+    etf: "ETFs",
+    stock: language === "pt" ? "Ações brasileiras" : "Brazilian stocks",
+    bdr: language === "pt" ? "Internacional" : "International",
+    crypto: language === "pt" ? "Criptoativos" : "Crypto assets",
+    fixed: language === "pt" ? "Renda fixa" : "Fixed income",
+    other: language === "pt" ? "Não classificado" : "Unclassified",
+  };
+  return labels[category];
+}
+
+function getPortfolioAssetTypeLabel(type: PortfolioAssetType, language: "pt" | "en") {
+  const labels: Record<PortfolioAssetType, string> = {
+    stock: language === "pt" ? "Ação" : "Stock",
+    fii: language === "pt" ? "FII" : "REIT/FII",
+    etf: "ETF",
+    fixed_income: language === "pt" ? "Renda fixa" : "Fixed Income",
+    crypto: language === "pt" ? "Cripto" : "Crypto",
+    international: language === "pt" ? "Internacional" : "International",
+    other: language === "pt" ? "Outro" : "Other",
+  };
+  return labels[type];
+}
+
+function getRiskText(classification: PortfolioRiskClassification, language: "pt" | "en") {
+  const labels: Record<PortfolioRiskClassification, string> = {
+    neutral: language === "pt" ? "Sem análise" : "No analysis",
+    low: language === "pt" ? "Risco baixo" : "Low risk",
+    moderate: language === "pt" ? "Risco moderado" : "Moderate risk",
+    high: language === "pt" ? "Risco alto" : "High risk",
+    very_high: language === "pt" ? "Risco muito alto" : "Very high risk",
+  };
+  return labels[classification];
+}
+
+function getRiskTone(classification: PortfolioRiskClassification) {
+  if (classification === "low") return "border-[var(--green)] bg-[var(--green-dim)] text-[var(--green)]";
+  if (classification === "moderate") return "border-[var(--amber)] bg-[var(--amber-dim)] text-[var(--amber)]";
+  if (classification === "high") return "border-[var(--red)] bg-[var(--red-dim)] text-[var(--red)]";
+  if (classification === "very_high") return "border-[var(--red)] bg-[var(--red-dim)] text-[var(--red)]";
+  return "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)]";
+}
+
 function getInvestmentPrincipal(asset: Investment) {
   if (asset.type === "fixed_income") return Number(asset.quantity) || 0;
   return (Number(asset.quantity) || 0) * (Number(asset.average_price) || 0);
@@ -846,6 +913,18 @@ function isFixedIncomeSchemaError(error: unknown) {
     text.includes("cdi_rate_pct") ||
     text.includes("cdi_multiplier_pct") ||
     text.includes("fixed_started_at")
+  );
+}
+
+function isPortfolioSchemaError(error: unknown) {
+  const text = getErrorText(error);
+  if (!text) return false;
+  return (
+    text.includes("42703") ||
+    text.includes("asset_type") ||
+    text.includes("sector") ||
+    text.includes("current_price") ||
+    text.includes("updated_at")
   );
 }
 
@@ -1043,6 +1122,8 @@ export function InvestmentsScreen() {
   const [quantity, setQuantity] = useState("");
   const [investedValue, setInvestedValue] = useState("");
   const [manualPrice, setManualPrice] = useState("");
+  const [assetProfileType, setAssetProfileType] = useState<PortfolioAssetType>("stock");
+  const [sector, setSector] = useState("");
   const [fixedCdiRatePct, setFixedCdiRatePct] = useState("10.5");
   const [fixedCdiMultiplierPct, setFixedCdiMultiplierPct] = useState("100");
   const [date, setDate] = useState(toDateString(new Date()));
@@ -1061,6 +1142,8 @@ export function InvestmentsScreen() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [editSymbol, setEditSymbol] = useState("");
   const [editName, setEditName] = useState("");
+  const [editAssetProfileType, setEditAssetProfileType] = useState<PortfolioAssetType>("stock");
+  const [editSector, setEditSector] = useState("");
   const [editCurrency, setEditCurrency] = useState<SupportedInvestmentCurrency>(
     DEFAULT_INVESTMENT_CURRENCY,
   );
@@ -1079,7 +1162,7 @@ export function InvestmentsScreen() {
   const loadAssets = useCallback(async () => {
     if (!user) return;
     const fullSelect =
-      "id,type,symbol,name,currency,quantity,average_price,cdi_rate_pct,cdi_multiplier_pct,fixed_started_at,created_at";
+      "id,type,symbol,name,currency,quantity,average_price,asset_type,sector,current_price,cdi_rate_pct,cdi_multiplier_pct,fixed_started_at,created_at,updated_at";
     const baseSelect = "id,type,symbol,name,quantity,average_price,created_at";
 
     const { data, error } = await supabase
@@ -1120,6 +1203,10 @@ export function InvestmentsScreen() {
         cdi_rate_pct: null,
         cdi_multiplier_pct: null,
         fixed_started_at: null,
+        asset_type: null,
+        sector: null,
+        current_price: null,
+        updated_at: null,
       })) as Investment[];
       setAssets(normalizedFallback);
       return;
@@ -1240,6 +1327,16 @@ export function InvestmentsScreen() {
     if (currency === DEFAULT_INVESTMENT_CURRENCY) return;
     setCurrency(DEFAULT_INVESTMENT_CURRENCY);
   }, [currency, type]);
+
+  useEffect(() => {
+    if (type === "crypto") {
+      setAssetProfileType("crypto");
+    } else if (type === "fixed_income") {
+      setAssetProfileType("fixed_income");
+    } else if (assetProfileType === "crypto" || assetProfileType === "fixed_income") {
+      setAssetProfileType("stock");
+    }
+  }, [assetProfileType, type]);
 
   useEffect(() => {
     const nextCurrency = normalizeInvestmentCurrency(currency, type);
@@ -1744,15 +1841,31 @@ export function InvestmentsScreen() {
     }
     setEditSaving(true);
     setErrorMsg(null);
-    const { error } = await supabase
+    const updatePayload = {
+      symbol: nextSymbol,
+      name: nextName || null,
+      currency: nextCurrency,
+    };
+    const portfolioUpdatePayload = {
+      ...updatePayload,
+      asset_type: editAssetProfileType,
+      sector: editSector.trim() || null,
+      current_price: selectedAsset.current_price ?? null,
+      updated_at: new Date().toISOString(),
+    };
+    let { error } = await supabase
       .from("investments")
-      .update({
-        symbol: nextSymbol,
-        name: nextName || null,
-        currency: nextCurrency,
-      })
+      .update(portfolioUpdatePayload)
       .eq("id", selectedAsset.id)
       .eq("user_id", user.id);
+    if (error && isPortfolioSchemaError(error)) {
+      const retry = await supabase
+        .from("investments")
+        .update(updatePayload)
+        .eq("id", selectedAsset.id)
+        .eq("user_id", user.id);
+      error = retry.error;
+    }
     if (error) {
       console.error(error);
       setEditSaving(false);
@@ -1776,6 +1889,8 @@ export function InvestmentsScreen() {
     setQuantity("");
     setInvestedValue("");
     setManualPrice("");
+    setAssetProfileType("stock");
+    setSector("");
     setFixedCdiRatePct("10.5");
     setFixedCdiMultiplierPct("100");
     setDate(toDateString(new Date()));
@@ -1800,6 +1915,8 @@ export function InvestmentsScreen() {
     setErrorMsg(null);
     setEditSymbol(asset.symbol ?? "");
     setEditName(asset.name ?? "");
+    setEditAssetProfileType(getPortfolioAssetType(asset));
+    setEditSector(asset.sector ?? "");
     setEditCurrency(getAssetCurrency(asset));
   }
 
@@ -1933,21 +2050,35 @@ export function InvestmentsScreen() {
       : computed.qty;
 
     let assetId = existing?.id;
+    const portfolioFields = {
+      asset_type: assetProfileType,
+      sector: sector.trim() || null,
+      current_price: isFixedIncome ? null : priceBig?.toString() ?? null,
+      updated_at: new Date().toISOString(),
+    };
 
     if (existing) {
-      const { error } = await supabase
+      const updatePayload = {
+        quantity: nextQty.toString(),
+        average_price: nextAvg.toString(),
+        currency: formCurrency,
+        cdi_rate_pct: isFixedIncome ? fixedAnnualCdiPct : null,
+        cdi_multiplier_pct: isFixedIncome ? fixedCdiMultiplier : null,
+        fixed_started_at: isFixedIncome
+          ? new Date((parseLocalDateInputToMs(date) ?? Date.now())).toISOString()
+          : null,
+      };
+      let { error } = await supabase
         .from("investments")
-        .update({
-          quantity: nextQty.toString(),
-          average_price: nextAvg.toString(),
-          currency: formCurrency,
-          cdi_rate_pct: isFixedIncome ? fixedAnnualCdiPct : null,
-          cdi_multiplier_pct: isFixedIncome ? fixedCdiMultiplier : null,
-          fixed_started_at: isFixedIncome
-            ? new Date((parseLocalDateInputToMs(date) ?? Date.now())).toISOString()
-            : null,
-        })
+        .update({ ...updatePayload, ...portfolioFields })
         .eq("id", existing.id);
+      if (error && isPortfolioSchemaError(error)) {
+        const retry = await supabase
+          .from("investments")
+          .update(updatePayload)
+          .eq("id", existing.id);
+        error = retry.error;
+      }
       if (error) {
         const message = getErrorText(error);
         if (message) {
@@ -1964,26 +2095,34 @@ export function InvestmentsScreen() {
         return;
       }
     } else {
-      const { data, error } = await supabase
+      const insertPayload = {
+        user_id: user.id,
+        type,
+        symbol: normalized,
+        name: persistedName,
+        quantity: nextQty.toString(),
+        average_price: nextAvg.toString(),
+        cdi_rate_pct: isFixedIncome ? fixedAnnualCdiPct : null,
+        cdi_multiplier_pct: isFixedIncome ? fixedCdiMultiplier : null,
+        fixed_started_at: isFixedIncome
+          ? new Date((parseLocalDateInputToMs(date) ?? Date.now())).toISOString()
+          : null,
+        currency: formCurrency,
+      };
+      let { data, error } = await supabase
         .from("investments")
-        .insert([
-          {
-            user_id: user.id,
-            type,
-            symbol: normalized,
-            name: persistedName,
-            quantity: nextQty.toString(),
-            average_price: nextAvg.toString(),
-            cdi_rate_pct: isFixedIncome ? fixedAnnualCdiPct : null,
-            cdi_multiplier_pct: isFixedIncome ? fixedCdiMultiplier : null,
-            fixed_started_at: isFixedIncome
-              ? new Date((parseLocalDateInputToMs(date) ?? Date.now())).toISOString()
-              : null,
-            currency: formCurrency,
-          },
-        ])
+        .insert([{ ...insertPayload, ...portfolioFields }])
         .select("id")
         .maybeSingle();
+      if (error && isPortfolioSchemaError(error)) {
+        const retry = await supabase
+          .from("investments")
+          .insert([insertPayload])
+          .select("id")
+          .maybeSingle();
+        data = retry.data;
+        error = retry.error;
+      }
       if (error || !data) {
         if (error) {
           const message = getErrorText(error);
@@ -2222,6 +2361,87 @@ export function InvestmentsScreen() {
       .slice(0, 5);
   }, [allQuotes, assets, fixedSnapshotByAssetId, language]);
 
+  const portfolioRisk = useMemo(() => {
+    const portfolioAssets: PortfolioAssetInput[] = assets.map((asset) => {
+      const quote = allQuotes[getAssetQuoteKey(asset)];
+      const fixedSnapshot = fixedSnapshotByAssetId[asset.id];
+      const quantity = Number(asset.quantity) || 0;
+      const averagePrice =
+        asset.type === "fixed_income" ? 1 : Number(asset.average_price) || 0;
+      const fallbackCurrentValue = getInvestmentCurrentValue(asset, quote, fixedSnapshot);
+      const currentPrice =
+        asset.type === "fixed_income"
+          ? quantity > 0
+            ? fallbackCurrentValue / quantity
+            : 1
+          : Number(asset.current_price) || quote?.price || Number(asset.average_price) || 0;
+
+      return {
+        id: asset.id,
+        name: getAssetDisplayName(asset),
+        ticker: asset.symbol?.toUpperCase() || getAssetDisplayName(asset),
+        assetType: getPortfolioAssetType(asset),
+        sector: getPortfolioSector(asset, language),
+        quantity,
+        averagePrice,
+        currentPrice,
+      };
+    });
+
+    return calculatePortfolioRisk(portfolioAssets);
+  }, [allQuotes, assets, fixedSnapshotByAssetId, language]);
+
+  const portfolioDisplayCurrency = portfolioSummaryByCurrency[0]?.currency ?? DEFAULT_INVESTMENT_CURRENCY;
+  const portfolioRiskTone = getRiskTone(portfolioRisk.classification);
+  const portfolioSummaryCards = [
+    {
+      label: language === "pt" ? "Total investido" : "Total invested",
+      value: formatCurrency(portfolioRisk.totals.invested, language, portfolioDisplayCurrency),
+      tone: "text-[var(--text-1)]",
+    },
+    {
+      label: language === "pt" ? "Valor atual estimado" : "Current estimated value",
+      value: formatCurrency(portfolioRisk.totals.current, language, portfolioDisplayCurrency),
+      tone: "text-[var(--text-1)]",
+    },
+    {
+      label: language === "pt" ? "Lucro/prejuízo" : "Profit/loss",
+      value: `${portfolioRisk.totals.result >= 0 ? "+" : "-"}${formatCurrency(Math.abs(portfolioRisk.totals.result), language, portfolioDisplayCurrency)}`,
+      tone: portfolioRisk.totals.result >= 0 ? "text-[var(--green)]" : "text-[var(--red)]",
+    },
+    {
+      label: language === "pt" ? "Retorno total" : "Total return",
+      value: formatPercent(portfolioRisk.totals.resultPercentage, language),
+      tone: portfolioRisk.totals.resultPercentage >= 0 ? "text-[var(--green)]" : "text-[var(--red)]",
+    },
+    {
+      label: language === "pt" ? "Número de ativos" : "Number of assets",
+      value: String(portfolioRisk.totals.assetCount),
+      tone: "text-[var(--text-1)]",
+    },
+  ];
+
+  function translateRiskAlert(message: string) {
+    if (language !== "pt") return message;
+    const translations: Record<string, string> = {
+      "Your portfolio is still empty. Add assets to start the risk analysis.":
+        "Sua carteira ainda está vazia. Adicione ativos para iniciar a análise de risco.",
+      "Your portfolio is highly concentrated in a single asset.":
+        "Sua carteira está muito concentrada em um único ativo.",
+      "One asset has a relevant weight in your portfolio.":
+        "Um ativo tem um peso relevante na sua carteira.",
+      "There are fewer than 3 assets in the portfolio.":
+        "A carteira tem menos de 3 ativos.",
+      "There is little diversification between asset types.":
+        "Há pouca diversificação entre tipos de ativos.",
+      "One sector represents a large part of your portfolio.":
+        "Um setor representa uma grande parte da sua carteira.",
+      "Your portfolio is well distributed.":
+        "Sua carteira está bem distribuída.",
+    };
+    return translations[message] ?? message;
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between">
@@ -2247,6 +2467,248 @@ export function InvestmentsScreen() {
         </div>
       ) : null}
 
+      <section className="ui-card p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-xl font-semibold text-[var(--text-1)]">
+              {language === "pt" ? "Minha carteira" : "My Portfolio"}
+            </p>
+            <p className="mt-1 text-sm text-[var(--text-3)]">
+              {language === "pt"
+                ? "Acompanhe seus ativos, alocação da carteira e nível de risco."
+                : "Track your assets, portfolio allocation, and risk level."}
+            </p>
+          </div>
+          <button type="button" onClick={openCreate} className="ui-btn ui-btn-primary">
+            <AppIcon name="plus" size={15} />
+            {language === "pt" ? "Adicionar ativo" : "Add asset"}
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {portfolioSummaryCards.map((card) => (
+            <div key={card.label} className="ui-card-inner p-4">
+              <p className="ui-eyebrow">{card.label}</p>
+              <p className={`mt-2 text-lg font-semibold ${card.tone}`}>{card.value}</p>
+            </div>
+          ))}
+        </div>
+
+        {portfolioRisk.assets.length === 0 ? (
+          <div className="mt-5 rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-6 text-sm text-[var(--text-3)]">
+            {language === "pt"
+              ? "Sua carteira ainda está vazia. Adicione seu primeiro investimento para iniciar a análise."
+              : "Your portfolio is still empty. Add your first investment to start the analysis."}
+          </div>
+        ) : (
+          <div className="mt-5 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[980px] text-left text-xs">
+                <thead className="bg-[var(--surface-3)] text-[var(--text-3)]">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">{language === "pt" ? "Ativo" : "Ticker or asset name"}</th>
+                    <th className="px-4 py-3 font-semibold">{language === "pt" ? "Tipo" : "Asset type"}</th>
+                    <th className="px-4 py-3 font-semibold">{language === "pt" ? "Quantidade" : "Quantity"}</th>
+                    <th className="px-4 py-3 font-semibold">{language === "pt" ? "Preço médio" : "Average price"}</th>
+                    <th className="px-4 py-3 font-semibold">{language === "pt" ? "Preço atual" : "Current price"}</th>
+                    <th className="px-4 py-3 font-semibold">{language === "pt" ? "Investido" : "Invested value"}</th>
+                    <th className="px-4 py-3 font-semibold">{language === "pt" ? "Valor atual" : "Current value"}</th>
+                    <th className="px-4 py-3 font-semibold">{language === "pt" ? "Resultado" : "Result"}</th>
+                    <th className="px-4 py-3 font-semibold">{language === "pt" ? "Retorno" : "Result %"}</th>
+                    <th className="px-4 py-3 font-semibold">{language === "pt" ? "Ações" : "Actions"}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {portfolioRisk.assets.map((asset) => {
+                    const sourceAsset = assets.find((item) => item.id === asset.id);
+                    const rowCurrency = sourceAsset ? getAssetCurrency(sourceAsset) : portfolioDisplayCurrency;
+                    return (
+                      <tr key={`portfolio-row-${asset.id}`} className="border-t border-[var(--border)]">
+                        <td className="px-4 py-3">
+                          <p className="font-semibold text-[var(--text-1)]">{asset.name}</p>
+                          <p className="text-[11px] text-[var(--text-3)]">{asset.ticker} · {asset.sector}</p>
+                        </td>
+                        <td className="px-4 py-3 text-[var(--text-2)]">
+                          {getPortfolioAssetTypeLabel(asset.assetType, language)}
+                        </td>
+                        <td className="px-4 py-3 text-[var(--text-2)]">
+                          {new Intl.NumberFormat(language === "pt" ? "pt-BR" : "en-US", {
+                            maximumFractionDigits: 8,
+                          }).format(asset.quantity)}
+                        </td>
+                        <td className="px-4 py-3 text-[var(--text-2)]">
+                          {formatCurrency(asset.averagePrice, language, rowCurrency)}
+                        </td>
+                        <td className="px-4 py-3 text-[var(--text-2)]">
+                          {formatCurrency(asset.currentPrice, language, rowCurrency)}
+                        </td>
+                        <td className="px-4 py-3 text-[var(--text-1)]">
+                          {formatCurrency(asset.investedValue, language, rowCurrency)}
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-[var(--text-1)]">
+                          {formatCurrency(asset.currentValue, language, rowCurrency)}
+                        </td>
+                        <td className={`px-4 py-3 font-semibold ${asset.result >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                          {asset.result >= 0 ? "+" : "-"}{formatCurrency(Math.abs(asset.result), language, rowCurrency)}
+                        </td>
+                        <td className={`px-4 py-3 font-semibold ${asset.resultPercentage >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                          {formatPercent(asset.resultPercentage, language)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-2">
+                            {sourceAsset ? (
+                              <button type="button" onClick={() => openDetails(sourceAsset)} className="ui-btn ui-btn-secondary ui-btn-sm">
+                                {language === "pt" ? "Editar" : "Edit"}
+                              </button>
+                            ) : null}
+                            {sourceAsset ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const confirmed = window.confirm(
+                                    language === "pt"
+                                      ? "Remover este ativo da carteira?"
+                                      : "Remove this asset from your portfolio?",
+                                  );
+                                  if (confirmed) void handleRemove(sourceAsset.id);
+                                }}
+                                className="ui-btn ui-btn-ghost ui-btn-sm text-[var(--red)]"
+                              >
+                                {language === "pt" ? "Remover" : "Remove"}
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-5 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+          <div className="ui-card-inner p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-[var(--text-1)]">
+                  {language === "pt" ? "Análise de risco da carteira" : "Portfolio Risk Analysis"}
+                </p>
+                <p className="mt-1 text-xs text-[var(--text-3)]">
+                  {language === "pt"
+                    ? "Pontuação simples baseada em concentração, diversificação e tipo de ativo."
+                    : "Simple score based on concentration, diversification, and asset type."}
+                </p>
+              </div>
+              <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${portfolioRiskTone}`}>
+                {getRiskText(portfolioRisk.classification, language)}
+              </span>
+            </div>
+
+            <div className="mt-5">
+              <div className="flex items-end justify-between">
+                <p className="text-4xl font-semibold text-[var(--text-1)]">{portfolioRisk.score}</p>
+                <p className="text-xs text-[var(--text-3)]">0 - 100</p>
+              </div>
+              <div className="mt-3 h-3 overflow-hidden rounded-full bg-[var(--surface)]">
+                <div
+                  className="h-full rounded-full bg-[var(--accent)]"
+                  style={{ width: `${Math.max(2, Math.min(portfolioRisk.score, 100))}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-2">
+              {portfolioRisk.alerts.map((alert) => {
+                const tone =
+                  alert.kind === "success"
+                    ? "border-[var(--green)] bg-[var(--green-dim)] text-[var(--green)]"
+                    : alert.kind === "danger"
+                      ? "border-[var(--red)] bg-[var(--red-dim)] text-[var(--red)]"
+                      : alert.kind === "warning"
+                        ? "border-[var(--amber)] bg-[var(--amber-dim)] text-[var(--amber)]"
+                        : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)]";
+                return (
+                  <div key={alert.message} className={`rounded-xl border border-opacity-30 px-3 py-2 text-xs ${tone}`}>
+                    {translateRiskAlert(alert.message)}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="ui-card-inner p-4">
+              <p className="text-sm font-semibold text-[var(--text-1)]">
+                {language === "pt" ? "Alocação por tipo" : "Allocation by asset type"}
+              </p>
+              <div className="mt-4 space-y-3">
+                {portfolioRisk.allocationByType.length === 0 ? (
+                  <p className="text-sm text-[var(--text-3)]">--</p>
+                ) : portfolioRisk.allocationByType.map((row) => (
+                  <div key={`type-risk-${row.key}`} className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-3 text-xs">
+                      <span className="font-medium text-[var(--text-1)]">
+                        {getPortfolioAssetTypeLabel(row.key as PortfolioAssetType, language)}
+                      </span>
+                      <span className="text-[var(--text-3)]">{formatPercent(row.weight, language)}</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-[var(--surface)]">
+                      <div className="h-2 rounded-full bg-[var(--accent)]" style={{ width: `${Math.max(3, Math.min(row.weight, 100))}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="ui-card-inner p-4">
+              <p className="text-sm font-semibold text-[var(--text-1)]">
+                {language === "pt" ? "Alocação por setor" : "Allocation by sector"}
+              </p>
+              <div className="mt-4 space-y-3">
+                {portfolioRisk.allocationBySector.length === 0 ? (
+                  <p className="text-sm text-[var(--text-3)]">--</p>
+                ) : portfolioRisk.allocationBySector.map((row) => (
+                  <div key={`sector-risk-${row.key}`} className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-3 text-xs">
+                      <span className="font-medium text-[var(--text-1)]">{row.label}</span>
+                      <span className="text-[var(--text-3)]">{formatPercent(row.weight, language)}</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-[var(--surface)]">
+                      <div className="h-2 rounded-full bg-[var(--green)]" style={{ width: `${Math.max(3, Math.min(row.weight, 100))}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-5 ui-card-inner p-4">
+          <p className="text-sm font-semibold text-[var(--text-1)]">
+            {language === "pt" ? "Maiores pesos da carteira" : "Largest portfolio weights"}
+          </p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            {portfolioRisk.largestWeights.length === 0 ? (
+              <p className="text-sm text-[var(--text-3)]">--</p>
+            ) : portfolioRisk.largestWeights.map((asset) => (
+              <div key={`weight-${asset.id}`} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+                <p className="text-sm font-semibold text-[var(--text-1)]">{asset.name}</p>
+                <p className="mt-1 text-xs text-[var(--text-3)]">{asset.ticker}</p>
+                <p className="mt-3 text-lg font-semibold text-[var(--text-1)]">{formatPercent(asset.weight, language)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <p className="mt-4 text-[11px] text-[var(--text-3)]">
+          {language === "pt"
+            ? "A análise de risco é educativa e não representa recomendação de investimento."
+            : "The risk analysis is educational and does not represent investment advice."}
+        </p>
+      </section>
+
       <div className="grid gap-4 xl:grid-cols-[1.45fr_1fr]">
         <div className="ui-card p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2255,7 +2717,7 @@ export function InvestmentsScreen() {
                 {language === "pt" ? "Resumo da carteira" : "Portfolio summary"}
               </p>
               <p className="text-xs text-[var(--text-3)]">
-                {language === "pt" ? "Visao consolidada por moeda dos teus investimentos." : "Consolidated view by currency of your investments."}
+                {language === "pt" ? "Visão consolidada por moeda dos seus investimentos." : "Consolidated view by currency of your investments."}
               </p>
             </div>
             <div className="flex flex-wrap gap-2 text-[11px]">
@@ -2315,10 +2777,10 @@ export function InvestmentsScreen() {
 
         <div className="ui-card p-5">
           <p className="text-sm font-semibold text-[var(--text-1)]">
-            {language === "pt" ? "Distribuicao por categoria" : "Allocation by category"}
+            {language === "pt" ? "Distribuição por categoria" : "Allocation by category"}
           </p>
           <p className="text-xs text-[var(--text-3)]">
-            {language === "pt" ? "Onde a carteira esta mais concentrada agora." : "Where the portfolio is most concentrated right now."}
+            {language === "pt" ? "Onde a carteira está mais concentrada agora." : "Where the portfolio is most concentrated right now."}
           </p>
 
           {categoryAllocation.length === 0 ? (
@@ -2345,7 +2807,7 @@ export function InvestmentsScreen() {
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-[var(--text-1)]">
-              {language === "pt" ? "Maiores posicoes" : "Top holdings"}
+              {language === "pt" ? "Maiores posições" : "Top holdings"}
             </p>
             <p className="text-xs text-[var(--text-3)]">
               {language === "pt" ? "Os ativos com maior peso dentro da carteira." : "Assets with the biggest weight in the portfolio."}
@@ -2444,7 +2906,7 @@ export function InvestmentsScreen() {
                   {displayChangePct != null ? (
                     <span className={`text-xs font-semibold ${displayChangePct >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
                       {formatPercent(displayChangePct, language)}{" "}
-                      {asset.type === "fixed_income" ? (language === "pt" ? "(desde o inicio)" : "(since start)") : (language === "pt" ? "(1 ano)" : "(1 year)")}
+                      {asset.type === "fixed_income" ? (language === "pt" ? "(desde o início)" : "(since start)") : (language === "pt" ? "(1 ano)" : "(1 year)")}
                     </span>
                   ) : null}
                 </div>
@@ -2661,7 +3123,7 @@ export function InvestmentsScreen() {
                                 </button>
                               ))
                             ) : (
-                              <p className="px-2 py-1 text-[11px] text-[var(--text-3)]">{language === "pt" ? "Sem criptos disponiveis no momento." : "No cryptos available right now."}</p>
+                              <p className="px-2 py-1 text-[11px] text-[var(--text-3)]">{language === "pt" ? "Sem criptos disponíveis no momento." : "No cryptos available right now."}</p>
                             )}
                           </div>
                         ) : null}
@@ -2681,6 +3143,32 @@ export function InvestmentsScreen() {
                   </div>
                   <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t("investments.name")} className="ui-input w-full" />
                   <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="ui-input w-full" />
+                </div>
+
+                <div className="grid min-w-0 gap-3 md:grid-cols-2">
+                  <label className="space-y-1.5">
+                    <span className="ui-eyebrow">{language === "pt" ? "Tipo do ativo" : "Asset type"}</span>
+                    <select
+                      value={assetProfileType}
+                      onChange={(event) => setAssetProfileType(event.target.value as PortfolioAssetType)}
+                      className="ui-input w-full"
+                    >
+                      {(["stock", "fii", "etf", "fixed_income", "crypto", "international", "other"] as PortfolioAssetType[]).map((option) => (
+                        <option key={option} value={option}>
+                          {getPortfolioAssetTypeLabel(option, language)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="space-y-1.5">
+                    <span className="ui-eyebrow">{language === "pt" ? "Setor" : "Sector"}</span>
+                    <input
+                      value={sector}
+                      onChange={(event) => setSector(event.target.value)}
+                      placeholder={language === "pt" ? "Ex: Tecnologia" : "Ex: Technology"}
+                      className="ui-input w-full"
+                    />
+                  </label>
                 </div>
 
                 <div className="space-y-2">
@@ -2911,6 +3399,31 @@ export function InvestmentsScreen() {
                     <input value={editSymbol} onChange={(event) => setEditSymbol(event.target.value)} placeholder={t("investments.symbol")} className="ui-input w-full" />
                     <input value={editName} onChange={(event) => setEditName(event.target.value)} placeholder={t("investments.name")} className="ui-input w-full" />
                   </div>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <label className="space-y-1.5">
+                      <span className="ui-eyebrow">{language === "pt" ? "Tipo do ativo" : "Asset type"}</span>
+                      <select
+                        value={editAssetProfileType}
+                        onChange={(event) => setEditAssetProfileType(event.target.value as PortfolioAssetType)}
+                        className="ui-input w-full"
+                      >
+                        {(["stock", "fii", "etf", "fixed_income", "crypto", "international", "other"] as PortfolioAssetType[]).map((option) => (
+                          <option key={option} value={option}>
+                            {getPortfolioAssetTypeLabel(option, language)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="space-y-1.5">
+                      <span className="ui-eyebrow">{language === "pt" ? "Setor" : "Sector"}</span>
+                      <input
+                        value={editSector}
+                        onChange={(event) => setEditSector(event.target.value)}
+                        placeholder={language === "pt" ? "Ex: Tecnologia" : "Ex: Technology"}
+                        className="ui-input w-full"
+                      />
+                    </label>
+                  </div>
                   <div className="space-y-2">
                     <p className="ui-eyebrow">{t("investments.currency")}</p>
                     <div className="flex min-w-0 gap-2">
@@ -2949,4 +3462,3 @@ export function InvestmentsScreen() {
     </div>
   );
 }
-
