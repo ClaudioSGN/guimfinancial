@@ -121,7 +121,7 @@ export function AccountsList({ accounts }: Props) {
 
   async function handleDeleteAccount(accountId: string, accountName: string) {
     const ok = window.confirm(
-      `Tem certeza que deseja apagar a conta "${accountName}"?\n\nIsso tambem vai apagar todas as transacoes associadas a esta conta.`,
+      `Tem certeza que deseja apagar a conta "${accountName}"?\n\nIsso também vai apagar todas as transações associadas a esta conta.`,
     );
 
     if (!ok) return;
@@ -130,7 +130,7 @@ export function AccountsList({ accounts }: Props) {
 
     if (txError) {
       console.error(txError);
-      alert(`Erro ao apagar transacoes desta conta: ${txError.message}`);
+      alert(`Erro ao apagar transações desta conta: ${txError.message}`);
       return;
     }
 
@@ -272,7 +272,7 @@ export function AccountsList({ accounts }: Props) {
               ) : null}
 
               <div className="space-y-1 text-sm">
-                <label className="text-xs text-[#69798e]">Limite total do cartao (opcional)</label>
+                <label className="text-xs text-[#69798e]">Limite total do cartão (opcional)</label>
                 <input
                   type="number"
                   step="0.01"

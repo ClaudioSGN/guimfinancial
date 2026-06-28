@@ -232,7 +232,7 @@ export default function CardsPage() {
       setAccounts(nextAccounts);
     } catch (error) {
       console.error("Error loading cards:", error);
-      setErrorMsg(language === "pt" ? "Falha ao carregar cartoes." : "Failed to load cards.");
+      setErrorMsg(language === "pt" ? "Falha ao carregar cartões." : "Failed to load cards.");
     } finally {
       setLoading(false);
     }
@@ -499,7 +499,7 @@ export default function CardsPage() {
   }
 
   async function handleRemove(card: Card) {
-    if (!window.confirm(`Remover o cartao "${card.name}"?`) || deletingId) return;
+    if (!window.confirm(`Remover o cartão "${card.name}"?`) || deletingId) return;
     setDeletingId(card.id);
     const { error } = await supabase.from("credit_cards").delete().eq("id", card.id);
     setDeletingId(null);
@@ -512,7 +512,7 @@ export default function CardsPage() {
     if (payingCardId) return;
     const message =
       language === "pt"
-        ? `Marcar a fatura do cartao "${card.name}" como paga?`
+        ? `Marcar a fatura do cartão "${card.name}" como paga?`
         : `Mark the "${card.name}" card statement as paid?`;
     if (!window.confirm(message)) return;
     setErrorMsg(null);
@@ -556,7 +556,7 @@ export default function CardsPage() {
         <div className="ui-card-2 p-6">
           <p className="ui-eyebrow">{t("cards.title")}</p>
           <p className="mt-2 font-[var(--font-display)] text-3xl font-black tracking-[-0.05em] text-[#E5E8EF]">
-            {language === "pt" ? "Gerir cartoes e faturas" : "Manage cards and statements"}
+            {language === "pt" ? "Gerenciar cartões e faturas" : "Manage cards and statements"}
           </p>
           <p className="mt-2 max-w-2xl text-sm text-[var(--text-2)]">
             {language === "pt"
@@ -583,7 +583,7 @@ export default function CardsPage() {
         <div className="ui-card p-4 sm:p-5">
           <div className="space-y-3">
             <p className="text-sm font-bold text-[var(--text-1)]">
-              {language === "pt" ? "Novo cartao" : "New card"}
+              {language === "pt" ? "Novo cartão" : "New card"}
             </p>
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8B94A6]">{t("cards.ownerLabel")}</p>
@@ -608,11 +608,11 @@ export default function CardsPage() {
         <div className="grid gap-4">
           {loading ? (
             <div className="border border-[#1E232E] bg-[#121621] p-6 text-sm text-[#8A93A3]">
-              {language === "pt" ? "A carregar cartoes..." : "Loading cards..."}
+              {language === "pt" ? "Carregando cartões..." : "Loading cards..."}
             </div>
           ) : cards.length === 0 ? (
             <div className="border border-dashed border-[#263043] bg-[#121621] p-6 text-sm text-[#8A93A3]">
-              {language === "pt" ? "Nenhum cartao registado ainda." : "No cards registered yet."}
+              {language === "pt" ? "Nenhum cartão cadastrado ainda." : "No cards registered yet."}
             </div>
           ) : (
             cards.map((item) => {

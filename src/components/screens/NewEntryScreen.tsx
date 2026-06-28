@@ -456,7 +456,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
           if (!responsibilityInstallmentIndexes.length) {
             setErrorMsg(
               language === "pt"
-                ? "Selecione ao menos uma parcela que sera paga por voce."
+                ? "Selecione ao menos uma parcela que será paga por você."
                 : "Select at least one installment that you will pay.",
             );
             setSaving(false);
@@ -480,7 +480,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
           if (!customInstallmentResponsibility) {
             setErrorMsg(
               language === "pt"
-                ? "Ao atribuir uma compra parcelada para um amigo, selecione primeiro as parcelas que ficam com voce."
+                ? "Ao atribuir uma compra parcelada para um amigo, selecione primeiro as parcelas que ficam com você."
                 : "When assigning an installment purchase to a friend, first select the installments that stay with you.",
             );
             setSaving(false);
@@ -538,11 +538,11 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
             setErrorMsg(
               senderErrorFeature === "fixed"
                 ? language === "pt"
-                  ? "Atualize o banco com supabase/schema.sql para usar a opcao de transacao fixa."
+                  ? "Atualize o banco com supabase/schema.sql para usar a opção de transação fixa."
                   : "Update your database with supabase/schema.sql to use the fixed transaction option."
                 : senderErrorFeature === "installments"
                   ? language === "pt"
-                    ? "Atualize o banco com supabase/schema.sql para usar compras parceladas no cartao."
+                    ? "Atualize o banco com supabase/schema.sql para usar compras parceladas no cartão."
                     : "Update your database with supabase/schema.sql to use card installments."
                   : senderErrorFeature === "custom_installments"
                     ? language === "pt"
@@ -583,7 +583,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
             senderTransactionId,
             note:
               isCardExpense && language === "pt"
-                ? "Sua parte ja foi criada. O amigo escolhe o cartao e as parcelas restantes ao aceitar."
+                ? "Sua parte já foi criada. O amigo escolhe o cartão e as parcelas restantes ao aceitar."
                 : isCardExpense
                   ? "Your side has already been created. Your friend will choose their card and remaining installments when accepting."
                   : null,
@@ -632,11 +632,11 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
           setErrorMsg(
             missingFeature === "fixed"
               ? language === "pt"
-                ? "Atualize o banco com supabase/schema.sql para usar a opcao de transacao fixa."
+                ? "Atualize o banco com supabase/schema.sql para usar a opção de transação fixa."
                 : "Update your database with supabase/schema.sql to use the fixed transaction option."
               : missingFeature === "installments"
                 ? language === "pt"
-                  ? "Atualize o banco com supabase/schema.sql para usar compras parceladas no cartao."
+                  ? "Atualize o banco com supabase/schema.sql para usar compras parceladas no cartão."
                   : "Update your database with supabase/schema.sql to use card installments."
                 : missingFeature === "custom_installments"
                   ? language === "pt"
@@ -823,7 +823,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
             <div className="grid grid-cols-1 gap-2 min-[460px]:grid-cols-3">
               {([
                 { key: "expense", label: language === "pt" ? "Despesa" : "Expense" },
-                { key: "card_expense", label: language === "pt" ? "Despesa cartao" : "Card expense" },
+                { key: "card_expense", label: language === "pt" ? "Despesa cartão" : "Card expense" },
                 { key: "income", label: language === "pt" ? "Receita" : "Income" },
               ] as const).map((option) => (
                 <button
@@ -1033,7 +1033,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
                 </p>
                 <p className="text-xs text-[var(--text-3)]">
                   {language === "pt"
-                    ? "Sua transacao sera salva agora. O amigo escolhe a conta ou cartao dele ao aceitar."
+                    ? "Sua transação será salva agora. O amigo escolhe a conta ou cartão dele ao aceitar."
                     : "Your transaction will be saved now. Your friend will choose their own account or card when accepting."}
                 </p>
               </div>
@@ -1042,7 +1042,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
             {!friends.length ? (
               <p className="text-xs text-[var(--text-3)]">
                 {language === "pt"
-                  ? "Adicione amigos na aba Mais para usar atribuicoes compartilhadas."
+                  ? "Adicione amigos na aba Mais para usar atribuições compartilhadas."
                   : "Add friends in the More tab to use shared attributions."}
               </p>
             ) : (
@@ -1064,7 +1064,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
                 </div>
                 <p className="text-xs text-[var(--text-3)]">
                   {language === "pt"
-                    ? "O amigo podera aceitar ou recusar na aba Notificacoes."
+                    ? "O amigo poderá aceitar ou recusar na aba Notificações."
                     : "Your friend will be able to accept or decline it in Notifications."}
                 </p>
               </div>

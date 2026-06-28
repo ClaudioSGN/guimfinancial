@@ -29,7 +29,7 @@ export function AppShell({ activeTab, children }: Props) {
   const [profile, setProfile] = useState<ProfileSettings>({});
   const menuRef = useRef<HTMLDivElement | null>(null);
   const investmentEntryCounter = useRef(0);
-  const notificationsLabel = language === "en" ? "Notifications" : "Notificacoes";
+  const notificationsLabel = language === "en" ? "Notifications" : "Notificações";
 
   const userName =
     profile.name?.trim()
@@ -73,14 +73,14 @@ export function AppShell({ activeTab, children }: Props) {
         {
           key: "card_expense",
           label: t("newEntry.cardExpense"),
-          description: language === "pt" ? "Compra em cartao proprio ou de amigo" : "Purchase on your card or a friend's",
+          description: language === "pt" ? "Compra em cartão próprio ou de amigo" : "Purchase on your card or a friend's",
           icon: "credit-card",
           color: "#f5b51b",
         },
         {
           key: "share_with_friend",
           label: language === "en" ? "Assign to friends" : "Atribuir a amigos",
-          description: language === "pt" ? "Envie uma cobranca para outro usuario" : "Send a charge to another user",
+          description: language === "pt" ? "Envie uma cobrança para outro usuário" : "Send a charge to another user",
           icon: "arrow-right",
           color: "#38bdf8",
         },
@@ -123,15 +123,15 @@ export function AppShell({ activeTab, children }: Props) {
   const pageSubtitles: Record<TabKey, string> = {
     home:
       language === "pt"
-        ? "Comece pelo saldo, veja o que pesa no mes e aja pelo botao Registrar."
+        ? "Comece pelo saldo, veja o que pesa no mês e aja pelo botão Registrar."
         : "Start with balance, see what weighs on the month, and act through Register.",
     transactions:
       language === "pt"
-        ? "Filtre, confira cartoes de amigos e ajuste movimentacoes sem sair da lista."
+        ? "Filtre, confira cartões de amigos e ajuste movimentações sem sair da lista."
         : "Filter, check friend cards, and adjust movements without leaving the list.",
     budget:
       language === "pt"
-        ? "Transforme categorias em limites simples e acompanhe o espaco restante."
+        ? "Transforme categorias em limites simples e acompanhe o espaço restante."
         : "Turn categories into simple limits and track remaining room.",
     investments:
       language === "pt"
@@ -139,7 +139,7 @@ export function AppShell({ activeTab, children }: Props) {
         : "Your portfolio organized by asset, indicators, and total value.",
     more:
       language === "pt"
-        ? "Ajustes, contas, cartoes, amigos e preferencias do produto."
+        ? "Ajustes, contas, cartões, amigos e preferências do produto."
         : "Settings, accounts, cards, friends, and product preferences.",
   };
 
@@ -283,17 +283,17 @@ export function AppShell({ activeTab, children }: Props) {
           <section className="page-command-strip mx-auto mb-6 hidden max-w-[1880px] grid-cols-[minmax(0,1fr)_360px] gap-4 md:grid">
             <div className="page-title-panel">
               <div className="flex items-center gap-3">
-                <span className="page-kicker">{language === "pt" ? "Voce esta em" : "You are in"}</span>
+                <span className="page-kicker">{language === "pt" ? "Você está em" : "You are in"}</span>
                 <span className="page-current">{activeNavItem.label}</span>
               </div>
               <h1>{activeNavItem.label}</h1>
               <p>{pageSubtitles[activeTab]}</p>
             </div>
             <aside className="page-help-panel">
-              <p className="page-kicker">{language === "pt" ? "Como usar rapido" : "Quick use"}</p>
+              <p className="page-kicker">{language === "pt" ? "Como usar rápido" : "Quick use"}</p>
               <p className="mt-2 text-sm font-semibold text-[var(--text-1)]">
                 {language === "pt"
-                  ? "Use Registrar para adicionar receitas, despesas, cartao ou atribuicoes sem procurar por menus."
+                  ? "Use Registrar para adicionar receitas, despesas, cartão ou atribuições sem procurar por menus."
                   : "Use Register to add income, expenses, cards, or friend assignments without hunting menus."}
               </p>
             </aside>
@@ -400,7 +400,7 @@ export function AppShell({ activeTab, children }: Props) {
                 <div>
                   <p className="page-kicker">{notificationsLabel}</p>
                   <p className="mt-1 text-lg font-black text-[var(--text-1)]">
-                    {language === "pt" ? "Caixa de entrada" : "Inbox"}
+                  {language === "pt" ? "Caixa de entrada" : "Inbox"}
                   </p>
                 </div>
                 <button type="button" onClick={() => setNotificationsOpen(false)} className="ui-btn ui-btn-ghost ui-btn-sm">
@@ -413,7 +413,7 @@ export function AppShell({ activeTab, children }: Props) {
               ) : (
                 <div className="ui-card p-5 text-sm text-[var(--text-3)]">
                   {language === "pt"
-                    ? "Entre na sua conta para ver notificacoes."
+                    ? "Entre na sua conta para ver notificações."
                     : "Sign in to view notifications."}
                 </div>
               )}
@@ -436,10 +436,10 @@ export function AppShell({ activeTab, children }: Props) {
             <div className="command-menu ui-slide-up w-[520px] overflow-hidden p-0 shadow-[0_26px_90px_rgba(0,0,0,0.45)]">
               <div className="command-menu-header">
                 <p className="page-kicker">{language === "pt" ? "Registrar" : "Register"}</p>
-                <h2>{language === "pt" ? "Escolha o proximo passo" : "Choose the next step"}</h2>
+                <h2>{language === "pt" ? "Escolha o próximo passo" : "Choose the next step"}</h2>
                 <p>
                   {language === "pt"
-                    ? "Cada opcao abre somente os campos necessarios. Menos tela, menos duvida."
+                    ? "Cada opção abre somente os campos necessários. Menos tela, menos dúvida."
                     : "Each option opens only the fields needed. Less screen, less doubt."}
                 </p>
               </div>

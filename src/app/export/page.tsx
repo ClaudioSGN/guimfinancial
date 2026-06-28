@@ -270,13 +270,13 @@ export default function ExportPage() {
 
   const copy = language === "pt"
     ? {
-        subtitle: "Baixe o CSV do mes com o padrao Data, Categoria, Descricao, Valor, Tipo e parcelas.",
+        subtitle: "Baixe o CSV do mês com o padrão Data, Categoria, Descrição, Valor, Tipo e parcelas.",
         month: "Mes da exportacao",
         button: "Exportar CSV",
         exporting: "Exportando...",
         ready: "CSV gerado com sucesso.",
-        empty: "Nenhuma transacao encontrada para o mes selecionado.",
-        error: "Nao foi possivel gerar o CSV agora.",
+        empty: "Nenhuma transação encontrada para o mês selecionado.",
+        error: "Não foi possível gerar o CSV agora.",
       }
     : {
         subtitle: "Download the month CSV using the Data, Categoria, Descricao, Valor, Tipo and installment pattern.",

@@ -91,7 +91,7 @@ export function FriendsPanel({ userId }: Props) {
       if (!profile) {
         setErrorMsg(
           language === "pt"
-            ? "Nenhum usuario encontrado com esse e-mail ou codigo."
+            ? "Nenhum usuário encontrado com esse e-mail ou código."
             : "No user was found with that email or code.",
         );
         setAdding(false);
@@ -263,7 +263,7 @@ export function FriendsPanel({ userId }: Props) {
                             : "Sent income"
                           : request.transaction_type === "card_expense"
                             ? language === "pt"
-                              ? "Despesa no cartao enviada"
+                              ? "Despesa no cartão enviada"
                               : "Sent card expense"
                             : language === "pt"
                               ? "Despesa enviada"

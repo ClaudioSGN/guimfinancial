@@ -106,7 +106,7 @@ export default function ResetPasswordPage() {
         ) : !hasSession ? (
           <div className="space-y-3">
             <p className="text-sm text-[#E4A6A6]">
-              Nao encontramos uma sessao de recuperacao valida. Abra novamente o link enviado por email.
+              Não encontramos uma sessão de recuperação válida. Abra novamente o link enviado por e-mail.
             </p>
             <button
               type="button"

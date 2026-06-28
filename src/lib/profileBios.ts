@@ -19,7 +19,7 @@ export const PROFILE_BIOS: ProfileBioDefinition[] = [
   {
     code: "sobrevivente_do_mes",
     missionClaimsRequired: 1,
-    labelPt: "Sobrevivente do mes",
+    labelPt: "Sobrevivente do mês",
     labelEn: "Month Survivor",
   },
   {

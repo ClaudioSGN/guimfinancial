@@ -148,7 +148,7 @@ export function TransactionRow({ tx }: Props) {
     setEditSaving(false);
 
     if (error) {
-      console.error("Erro ao editar transacao:", error);
+      console.error("Erro ao editar transação:", error);
       setEditError("Erro ao editar transação.");
       return;
     }
@@ -168,7 +168,7 @@ export function TransactionRow({ tx }: Props) {
     setDeleting(false);
 
     if (error) {
-      console.error("Erro ao apagar transacao:", error);
+      console.error("Erro ao apagar transação:", error);
       alert("Erro ao apagar transação.");
       return;
     }

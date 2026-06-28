@@ -112,7 +112,7 @@ export function BudgetScreen() {
         setBudgets([]);
       } else {
         setErrorMsg(
-          language === "pt" ? "Falha ao carregar orcamentos." : "Failed to load budgets.",
+          language === "pt" ? "Falha ao carregar orçamentos." : "Failed to load budgets.",
         );
       }
     } else {
@@ -132,7 +132,7 @@ export function BudgetScreen() {
         setTransactions([]);
         setErrorMsg((current) =>
           current ??
-          (language === "pt" ? "Falha ao carregar transacoes." : "Failed to load transactions."),
+          (language === "pt" ? "Falha ao carregar transações." : "Failed to load transactions."),
         );
       } else {
         const fallbackSelect = hasMissingColumnError(txResult.error, ["value"])
@@ -150,7 +150,7 @@ export function BudgetScreen() {
           setTransactions([]);
           setErrorMsg((current) =>
             current ??
-            (language === "pt" ? "Falha ao carregar transacoes." : "Failed to load transactions."),
+            (language === "pt" ? "Falha ao carregar transações." : "Failed to load transactions."),
           );
         } else {
           nextTransactions = normalizeTransactions(
@@ -229,7 +229,7 @@ export function BudgetScreen() {
     setSaving(false);
 
     if (error) {
-      setErrorMsg(language === "pt" ? "Falha ao salvar orcamento." : "Failed to save budget.");
+      setErrorMsg(language === "pt" ? "Falha ao salvar orçamento." : "Failed to save budget.");
       return;
     }
 
@@ -241,14 +241,14 @@ export function BudgetScreen() {
   async function handleDeleteBudget(budget: BudgetRow) {
     const confirmed = window.confirm(
       language === "pt"
-        ? `Remover orcamento de ${budget.category}?`
+        ? `Remover orçamento de ${budget.category}?`
         : `Remove ${budget.category} budget?`,
     );
     if (!confirmed) return;
 
     const { error } = await supabase.from("category_budgets").delete().eq("id", budget.id);
     if (error) {
-      setErrorMsg(language === "pt" ? "Falha ao apagar orcamento." : "Failed to delete budget.");
+      setErrorMsg(language === "pt" ? "Falha ao apagar orçamento." : "Failed to delete budget.");
       return;
     }
 

@@ -135,7 +135,7 @@ function inferCategoryAndDescription(text: string, language: "pt" | "en") {
     { keywords: ["mercado", "supermercado", "ifood", "restaurante", "almoco", "jantar", "lunch", "dinner"], categoryPt: "Alimentacao", categoryEn: "Food", description: "Mercado" },
     { keywords: ["amazon", "shopee", "magalu", "loja", "store"], categoryPt: "Compras", categoryEn: "Shopping", description: "Amazon" },
     { keywords: ["aluguel", "rent"], categoryPt: "Moradia", categoryEn: "Housing", description: "Aluguel" },
-    { keywords: ["salario", "salário", "salary", "payroll"], categoryPt: "Salario", categoryEn: "Salary", description: "Salario" },
+    { keywords: ["salario", "salário", "salary", "payroll"], categoryPt: "Salário", categoryEn: "Salary", description: "Salário" },
     { keywords: ["farmacia", "saude", "health"], categoryPt: "Saude", categoryEn: "Health", description: "Farmacia" },
   ];
 
@@ -184,7 +184,7 @@ function buildRuleBasedResult(body: Required<Pick<ParseRequestBody, "text" | "la
     missingFields.push(body.language === "pt" ? "conta" : "account");
   }
   if (entryType === "card_expense" && !cardName) {
-    missingFields.push(body.language === "pt" ? "cartao" : "card");
+    missingFields.push(body.language === "pt" ? "cartão" : "card");
   }
   if (entryType === "unknown") {
     missingFields.push(body.language === "pt" ? "tipo" : "type");

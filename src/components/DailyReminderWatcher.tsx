@@ -213,7 +213,7 @@ function maybeShowNotifications(
         if (localStorage.getItem(closingKey) !== "yes") {
           notify(
             `Cartao fecha hoje: ${card.name}`,
-            "A fatura do cartao fechou hoje.",
+            "A fatura do cartão fechou hoje.",
             `guim-card-closing-${card.id}`,
           );
           localStorage.setItem(closingKey, "yes");

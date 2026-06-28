@@ -360,9 +360,9 @@ export function MoreScreen() {
           </div>
           <div className="grid grid-cols-3 gap-2 border border-[var(--border)] bg-[rgba(255,255,255,0.035)] p-1 md:w-[28rem] md:grid-cols-2">
             {([
-              { key: "settings", label: language === "pt" ? "Configuracoes" : "Settings", className: "" },
+              { key: "settings", label: language === "pt" ? "Configurações" : "Settings", className: "" },
               { key: "friends", label: language === "pt" ? "Amigos" : "Friends", className: "" },
-              { key: "notifications", label: language === "pt" ? "Notificacoes" : "Notifications", className: "md:hidden" },
+              { key: "notifications", label: language === "pt" ? "Notificações" : "Notifications", className: "md:hidden" },
             ] as const).map((tab) => (
               <button
                 key={tab.key}

@@ -129,7 +129,7 @@ export function NotificationsPanel({ userId }: Props) {
       return language === "pt" ? "Escolha a conta da receita" : "Choose the income account";
     }
     if (acceptTarget.transaction_type === "card_expense") {
-      return language === "pt" ? "Escolha o cartao da despesa" : "Choose the expense card";
+      return language === "pt" ? "Escolha o cartão da despesa" : "Choose the expense card";
     }
     return language === "pt" ? "Escolha a conta da despesa" : "Choose the expense account";
   }, [acceptTarget, language]);
@@ -182,7 +182,7 @@ export function NotificationsPanel({ userId }: Props) {
     if (acceptTarget.transaction_type === "card_expense" && !selectedCardId) {
       setErrorMsg(
         language === "pt"
-          ? "Selecione o cartao que recebera essa despesa."
+          ? "Selecione o cartão que receberá essa despesa."
           : "Select the card that will receive this expense.",
       );
       return;
@@ -191,7 +191,7 @@ export function NotificationsPanel({ userId }: Props) {
     if (acceptTarget.transaction_type !== "card_expense" && !selectedAccountId) {
       setErrorMsg(
         language === "pt"
-          ? "Selecione a conta que recebera essa transacao."
+          ? "Selecione a conta que receberá essa transação."
           : "Select the account that will receive this transaction.",
       );
       return;
@@ -204,7 +204,7 @@ export function NotificationsPanel({ userId }: Props) {
     ) {
       setErrorMsg(
         language === "pt"
-          ? "Essa atribuicao nao deixou parcelas disponiveis para voce. Peça para o remetente ajustar a divisao."
+          ? "Essa atribuição não deixou parcelas disponíveis para você. Peça para o remetente ajustar a divisão."
           : "This attribution did not leave any installments available for you. Ask the sender to adjust the split.",
       );
       return;
@@ -218,7 +218,7 @@ export function NotificationsPanel({ userId }: Props) {
     ) {
       setErrorMsg(
         language === "pt"
-          ? "Selecione ao menos uma parcela que ficara com voce."
+          ? "Selecione ao menos uma parcela que ficará com você."
           : "Select at least one installment that will stay with you.",
       );
       return;
@@ -238,7 +238,7 @@ export function NotificationsPanel({ userId }: Props) {
       });
       setSuccessMsg(
         language === "pt"
-          ? "Atribuicao aceita e adicionada nas suas transacoes."
+          ? "Atribuição aceita e adicionada nas suas transações."
           : "Attribution accepted and added to your transactions.",
       );
       closeAcceptModal();
@@ -329,7 +329,7 @@ export function NotificationsPanel({ userId }: Props) {
                     : "Incoming income"
                   : request.transaction_type === "card_expense"
                     ? language === "pt"
-                      ? "Despesa no cartao recebida"
+                      ? "Despesa no cartão recebida"
                       : "Incoming card expense"
                     : language === "pt"
                       ? "Despesa recebida"
@@ -437,10 +437,10 @@ export function NotificationsPanel({ userId }: Props) {
               <p className="mt-1 text-xs text-[var(--text-3)]">
                 {acceptTarget.transaction_type === "card_expense"
                   ? language === "pt"
-                    ? "A despesa sera criada no cartao escolhido com o mesmo tipo da origem."
+                    ? "A despesa será criada no cartão escolhido com o mesmo tipo da origem."
                     : "The expense will be created on the selected card with the same original type."
                   : language === "pt"
-                    ? "A transacao sera criada na conta escolhida."
+                    ? "A transação será criada na conta escolhida."
                     : "The transaction will be created in the selected account."}
               </p>
             </div>
@@ -451,7 +451,7 @@ export function NotificationsPanel({ userId }: Props) {
                 <div className="flex flex-wrap gap-2">
                   {cards.length === 0 ? (
                     <p className="text-xs text-[var(--text-3)]">
-                      {language === "pt" ? "Nenhum cartao cadastrado." : "No cards registered."}
+                      {language === "pt" ? "Nenhum cartão cadastrado." : "No cards registered."}
                     </p>
                   ) : cards.map((card) => (
                     <button
@@ -490,7 +490,7 @@ export function NotificationsPanel({ userId }: Props) {
             {acceptTarget.transaction_type === "card_expense" && acceptTarget.is_installment ? (
               <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface-3)] px-4 py-4">
                 <p className="text-sm font-semibold text-[var(--text-1)]">
-                  {language === "pt" ? "Parcelas que ficam com voce" : "Installments that stay with you"}
+                  {language === "pt" ? "Parcelas que ficam com você" : "Installments that stay with you"}
                 </p>
                 <p className="mt-1 text-xs text-[var(--text-3)]">
                   {language === "pt"
@@ -581,7 +581,7 @@ export function NotificationsPanel({ userId }: Props) {
                   </p>
                   <p>
                     {language === "pt"
-                      ? "As destacadas serao criadas na sua transacao."
+                      ? "As destacadas serão criadas na sua transação."
                       : "Highlighted installments will be created in your transaction."}
                   </p>
                 </div>
@@ -591,7 +591,7 @@ export function NotificationsPanel({ userId }: Props) {
             {acceptTarget.is_fixed ? (
               <p className="mt-2 text-xs text-[var(--text-3)]">
                 {language === "pt"
-                  ? "A configuracao de transacao fixa tambem sera preservada."
+                  ? "A configuração de transação fixa também será preservada."
                   : "The fixed transaction setting will also be preserved."}
               </p>
             ) : null}
@@ -634,11 +634,11 @@ export function NotificationsPanel({ userId }: Props) {
           >
             <div className="mb-4">
               <p className="text-sm font-semibold text-[var(--text-1)]">
-                {language === "pt" ? "Por que voce esta recusando?" : "Why are you declining this?"}
+                {language === "pt" ? "Por que você está recusando?" : "Why are you declining this?"}
               </p>
               <p className="mt-1 text-xs text-[var(--text-3)]">
                 {language === "pt"
-                  ? "Esse motivo sera mostrado para quem enviou a atribuicao."
+                  ? "Esse motivo será mostrado para quem enviou a atribuição."
                   : "This reason will be shown to the person who sent the attribution."}
               </p>
             </div>

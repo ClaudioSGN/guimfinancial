@@ -1063,7 +1063,7 @@ export function HomeScreen() {
           setErrorMsg(t("home.schemaMissing"));
         } else if (isOversizedHeaderError(error)) {
           setErrorMsg(
-            "Sua sessao do Supabase ficou grande demais para carregar os dados. Saia e entre novamente.",
+            "Sua sessão do Supabase ficou grande demais para carregar os dados. Saia e entre novamente.",
           );
         } else if (isTransientNetworkError(error)) {
           setErrorMsg(t("home.connectionError"));
@@ -1147,7 +1147,7 @@ export function HomeScreen() {
       }
       setErrorMsg(
         isOversizedHeaderError(error)
-          ? "Sua sessao do Supabase ficou grande demais para carregar os dados. Saia e entre novamente."
+          ? "Sua sessão do Supabase ficou grande demais para carregar os dados. Saia e entre novamente."
           : isTransientNetworkError(error)
           ? t("home.connectionError")
           : t("home.dataLoadError"),
@@ -1740,7 +1740,7 @@ export function HomeScreen() {
     if (!rawText) {
       setQuickAddError(
         language === "pt"
-          ? "Digite ou fale o lancamento que voce quer adicionar."
+          ? "Digite ou fale o lançamento que você quer adicionar."
           : "Type or speak the entry you want to add.",
       );
       return;
@@ -1775,14 +1775,14 @@ export function HomeScreen() {
             ? "Interpretado com IA. Confira antes de salvar."
             : "Interpreted with AI. Please review before saving."
           : language === "pt"
-            ? "Interpretacao rapida pronta. Confira antes de salvar."
+            ? "Interpretação rápida pronta. Confira antes de salvar."
             : "Quick interpretation ready. Please review before saving.",
       );
     } catch (error) {
       console.error("Quick add parse error:", error);
       setQuickAddError(
         language === "pt"
-          ? "Nao consegui interpretar esse lancamento agora."
+          ? "Não consegui interpretar esse lançamento agora."
           : "I couldn't interpret that entry right now.",
       );
     } finally {
@@ -1834,12 +1834,12 @@ export function HomeScreen() {
       } else if (errorCode === "network") {
         message =
           language === "pt"
-            ? "A voz falhou por rede ou indisponibilidade do servico. Voce pode digitar normalmente."
+            ? "A voz falhou por rede ou indisponibilidade do serviço. Você pode digitar normalmente."
             : "Voice failed due to a network or service issue. You can type normally instead.";
       } else if (errorCode === "no-speech" || errorCode === "audio-capture") {
         message =
           language === "pt"
-            ? "Nao ouvi sua fala. Tente novamente ou digite o lancamento."
+            ? "Não ouvi sua fala. Tente novamente ou digite o lançamento."
             : "I couldn't hear your speech. Try again or type the entry.";
       } else if (errorCode === "aborted") {
         message =
@@ -1849,7 +1849,7 @@ export function HomeScreen() {
       } else {
         message =
           language === "pt"
-            ? "Nao foi possivel capturar sua voz agora. Voce pode digitar o lancamento."
+            ? "Não foi possível capturar sua voz agora. Você pode digitar o lançamento."
             : "I couldn't capture your voice right now. You can type the entry instead.";
       }
 
@@ -1863,7 +1863,7 @@ export function HomeScreen() {
 
     setQuickAddError(null);
     setQuickAddInfo(
-      language === "pt" ? "Ouvindo voce..." : "Listening...",
+      language === "pt" ? "Ouvindo você..." : "Listening...",
     );
     setQuickAddListening(true);
     recognition.start();
@@ -1971,7 +1971,7 @@ export function HomeScreen() {
     if (!user) return;
     if (deletingCardId) return;
     const ok = window.confirm(
-      `Tem certeza que deseja remover o cartao "${cardName}"?`,
+      `Tem certeza que deseja remover o cartão "${cardName}"?`,
     );
     if (!ok) return;
 
@@ -2128,7 +2128,7 @@ export function HomeScreen() {
                 <span className="ui-badge ui-badge-accent">{t("cards.ownerBadgeFriend")}</span>
               ) : (
                 <span className="ui-badge ui-badge-neutral">
-                  {language === "pt" ? "Seu cartao" : "Your card"}
+                  {language === "pt" ? "Seu cartão" : "Your card"}
                 </span>
               )}
               <span
@@ -2246,7 +2246,7 @@ export function HomeScreen() {
         <div>
           <p className="page-kicker">{language === "pt" ? "Controle do painel" : "Dashboard controls"}</p>
           <p className="mt-1 text-xs text-[var(--text-3)]">
-            {language === "pt" ? "Escolha o mes ou registre uma entrada por voz." : "Choose the month or add an entry by voice."}
+            {language === "pt" ? "Escolha o mês ou registre uma entrada por voz." : "Choose the month or add an entry by voice."}
           </p>
         </div>
 
@@ -2907,7 +2907,7 @@ export function HomeScreen() {
               <p className="mt-1 text-sm font-semibold text-[var(--text-1)]">{cards.length}</p>
             </div>
             <div className="ui-card-inner p-3">
-              <p className="ui-eyebrow">{language === "pt" ? "Seus cartoes" : "Your cards"}</p>
+              <p className="ui-eyebrow">{language === "pt" ? "Seus cartões" : "Your cards"}</p>
               <p className="mt-1 text-sm font-semibold text-[var(--text-1)]">{selfCards.length}</p>
             </div>
             <div className="ui-card-inner p-3">

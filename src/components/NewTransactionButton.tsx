@@ -121,7 +121,7 @@ export function NewTransactionButton({ accounts }: Props) {
     const hasCard = Boolean(creditCardId);
 
     if (!hasBank && !hasCard) {
-      setErrorMsg("Escolha uma conta bancaria ou um cartao.");
+      setErrorMsg("Escolha uma conta bancária ou um cartão.");
       return;
     }
 
@@ -180,8 +180,8 @@ export function NewTransactionButton({ accounts }: Props) {
     setSaving(false);
 
     if (error) {
-      console.error("Erro ao guardar transacao:", error);
-      setErrorMsg(error.message || "Erro ao guardar transacao.");
+      console.error("Erro ao salvar transação:", error);
+      setErrorMsg(error.message || "Erro ao salvar transação.");
       return;
     }
 
@@ -195,7 +195,7 @@ export function NewTransactionButton({ accounts }: Props) {
         onClick={openModal}
         className="rounded-full bg-zinc-100 px-3 py-1.5 text-[11px] font-medium text-black hover:bg-zinc-200"
       >
-        Nova transacao
+        Nova transação
       </button>
 
       {open && (
@@ -207,7 +207,7 @@ export function NewTransactionButton({ accounts }: Props) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-medium text-zinc-100">Nova transacao</h2>
+              <h2 className="text-sm font-medium text-zinc-100">Nova transação</h2>
               <button
                 type="button"
                 onClick={closeModal}
@@ -251,7 +251,7 @@ export function NewTransactionButton({ accounts }: Props) {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
-                  placeholder="Ex: Mercado, salario, Netflix..."
+                  placeholder="Ex.: Mercado, salário, Netflix..."
                 />
               </div>
 
@@ -282,14 +282,14 @@ export function NewTransactionButton({ accounts }: Props) {
 
               {type === "income" ? (
                 <div className="space-y-1 text-sm">
-                  <label className="text-xs text-zinc-400">Conta bancaria (onde vai cair)</label>
+                  <label className="text-xs text-zinc-400">Conta bancária (onde vai cair)</label>
                   <select
                     value={bankAccountId}
                     onChange={(e) => setBankAccountId(e.target.value)}
                     className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
                   >
                     <option value="">
-                      {loadingAccounts ? "A carregar contas..." : "Selecione uma conta"}
+                      {loadingAccounts ? "Carregando contas..." : "Selecione uma conta"}
                     </option>
 
                     {accountList
@@ -304,14 +304,14 @@ export function NewTransactionButton({ accounts }: Props) {
               ) : (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-1 text-sm">
-                    <label className="text-xs text-zinc-400">Conta bancaria (opcional)</label>
+                    <label className="text-xs text-zinc-400">Conta bancária (opcional)</label>
                     <select
                       value={bankAccountId}
                       onChange={(e) => setBankAccountId(e.target.value)}
                       className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
                     >
                       <option value="">
-                        {loadingAccounts ? "A carregar contas..." : "Selecione uma conta"}
+                        {loadingAccounts ? "Carregando contas..." : "Selecione uma conta"}
                       </option>
 
                       {accountList
@@ -332,7 +332,7 @@ export function NewTransactionButton({ accounts }: Props) {
                       className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
                     >
                       <option value="">
-                        {loadingAccounts ? "A carregar cartoes..." : "Selecione um cartao"}
+                        {loadingAccounts ? "Carregando cartões..." : "Selecione um cartão"}
                       </option>
 
                       {accountList
@@ -372,7 +372,7 @@ export function NewTransactionButton({ accounts }: Props) {
                       onChange={(e) => setIsInstallment(e.target.checked)}
                       className="h-3 w-3 rounded border-zinc-600 bg-zinc-950 text-zinc-100"
                     />
-                    <span>Compra parcelada no cartao</span>
+                    <span>Compra parcelada no cartão</span>
                   </label>
 
                   {isInstallment && (
@@ -424,12 +424,12 @@ export function NewTransactionButton({ accounts }: Props) {
                       onChange={(e) => setIsFixedIncome(e.target.checked)}
                       className="h-3 w-3 rounded border-zinc-600 bg-zinc-950 text-zinc-100"
                     />
-                    <span>Receita fixa todo mes (ex: salario)</span>
+                    <span>Receita fixa todo mês (ex.: salário)</span>
                   </label>
                   {isFixedIncome && (
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
-                        <label className="text-xs text-zinc-400">Para quantos meses?</label>
+                        <label className="text-xs text-zinc-400">Por quantos meses?</label>
                         <input
                           type="number"
                           min={1}
@@ -440,7 +440,7 @@ export function NewTransactionButton({ accounts }: Props) {
                           placeholder="Ex: 12"
                         />
                         <p className="text-[10px] text-zinc-500">
-                          Cria a mesma receita neste dia pelos proximos meses.
+                          Cria a mesma receita neste dia pelos próximos meses.
                         </p>
                       </div>
                     </div>
@@ -455,7 +455,7 @@ export function NewTransactionButton({ accounts }: Props) {
                 disabled={saving}
                 className="mt-2 w-full rounded-full bg-zinc-100 px-3 py-1.5 text-[11px] font-medium text-black hover:bg-zinc-200 disabled:opacity-60"
               >
-                {saving ? "A guardar..." : "Guardar transacao"}
+                {saving ? "Salvando..." : "Salvar transação"}
               </button>
             </form>
           </div>

@@ -366,7 +366,7 @@ export function TransactionsScreen() {
       }
       setErrorMsg(
         isOversizedHeaderError(txError)
-          ? "Sua sessao do Supabase ficou grande demais para carregar as transacoes. Saia e entre novamente."
+          ? "Sua sessão do Supabase ficou grande demais para carregar as transações. Saia e entre novamente."
           : getLoadErrorMessage(txError),
       );
       setLoading(false);
@@ -379,7 +379,7 @@ export function TransactionsScreen() {
       }
       setErrorMsg(
         isOversizedHeaderError(accountsResult.error)
-          ? "Sua sessao do Supabase ficou grande demais para carregar as transacoes. Saia e entre novamente."
+          ? "Sua sessão do Supabase ficou grande demais para carregar as transações. Saia e entre novamente."
           : getLoadErrorMessage(accountsResult.error),
       );
       setLoading(false);
@@ -392,7 +392,7 @@ export function TransactionsScreen() {
       }
       setErrorMsg(
         isOversizedHeaderError(cardsResult.error)
-          ? "Sua sessao do Supabase ficou grande demais para carregar as transacoes. Saia e entre novamente."
+          ? "Sua sessão do Supabase ficou grande demais para carregar as transações. Saia e entre novamente."
           : getLoadErrorMessage(cardsResult.error),
       );
       setLoading(false);
@@ -664,7 +664,7 @@ export function TransactionsScreen() {
     if (installmentSavingId) return;
     if (
       !window.confirm(
-        "Registrar parcela? Voce pode desfazer em seguida.",
+        "Registrar parcela? Você pode desfazer em seguida.",
       )
     ) {
       return;
@@ -791,7 +791,7 @@ export function TransactionsScreen() {
       return;
     }
     if (editingTx.type === "card_expense" && !editCardId) {
-      setEditError("Selecione um cartao.");
+      setEditError("Selecione um cartão.");
       return;
     }
 
@@ -814,7 +814,7 @@ export function TransactionsScreen() {
 
     if (error) {
       console.error("Error updating transaction:", error);
-      setEditError("Erro ao editar transacao.");
+      setEditError("Erro ao editar transação.");
       return;
     }
 
@@ -975,7 +975,7 @@ export function TransactionsScreen() {
           </div>
           <div>
             <p className="ui-eyebrow">
-              {language === "pt" ? "Cartoes proprios no mes" : "Own card expenses this month"}
+              {language === "pt" ? "Cartões próprios no mês" : "Own card expenses this month"}
             </p>
             <p className="ui-amount text-sm text-[var(--text-1)]">
               {loading ? "—" : formatCurrency(ownCardMonthExpenses, language, currency)}
@@ -987,7 +987,7 @@ export function TransactionsScreen() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="ui-eyebrow">
-                {language === "pt" ? "Cartoes de amigos no mes" : "Friend card expenses this month"}
+                {language === "pt" ? "Cartões de amigos no mês" : "Friend card expenses this month"}
               </p>
               <p className="mt-1 text-sm font-semibold text-[var(--text-1)]">
                 {loading ? "—" : formatCurrency(totalFriendCardMonthExpenses, language, currency)}
@@ -1015,7 +1015,7 @@ export function TransactionsScreen() {
           ) : (
             <p className="mt-3 text-xs text-[var(--text-3)]">
               {language === "pt"
-                ? "Nenhuma despesa em cartoes de amigos neste mes."
+                ? "Nenhuma despesa em cartões de amigos neste mês."
                 : "No friend card expenses in this month."}
             </p>
           )}

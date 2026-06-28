@@ -124,7 +124,7 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
         setBudgets([]);
       } else {
         setErrorMsg(
-          language === "pt" ? "Falha ao carregar orcamentos." : "Failed to load budgets.",
+          language === "pt" ? "Falha ao carregar orçamentos." : "Failed to load budgets.",
         );
       }
     } else {
@@ -142,7 +142,7 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
         if (fallbackTxResult.error) {
           setTransactions([]);
           setErrorMsg(
-            language === "pt" ? "Falha ao carregar transacoes." : "Failed to load transactions.",
+            language === "pt" ? "Falha ao carregar transações." : "Failed to load transactions.",
           );
         } else {
           setTransactions((fallbackTxResult.data ?? []).map((item) => ({
@@ -153,7 +153,7 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
       } else {
         setTransactions([]);
         setErrorMsg(
-          language === "pt" ? "Falha ao carregar transacoes." : "Failed to load transactions.",
+          language === "pt" ? "Falha ao carregar transações." : "Failed to load transactions.",
         );
       }
     } else {
@@ -336,7 +336,7 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
 
     if (error) {
       setErrorMsg(
-        language === "pt" ? "Falha ao salvar orcamento." : "Failed to save budget.",
+        language === "pt" ? "Falha ao salvar orçamento." : "Failed to save budget.",
       );
       return;
     }
@@ -349,7 +349,7 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
   async function handleDeleteBudget(budget: BudgetRow) {
     const confirmed = window.confirm(
       language === "pt"
-        ? `Remover orcamento de ${budget.category}?`
+        ? `Remover orçamento de ${budget.category}?`
         : `Remove budget for ${budget.category}?`,
     );
     if (!confirmed) return;
@@ -357,7 +357,7 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
     const { error } = await supabase.from("category_budgets").delete().eq("id", budget.id);
     if (error) {
       setErrorMsg(
-        language === "pt" ? "Falha ao apagar orcamento." : "Failed to delete budget.",
+        language === "pt" ? "Falha ao apagar orçamento." : "Failed to delete budget.",
       );
       return;
     }
@@ -376,7 +376,7 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
             </p>
             <p className="mt-1 text-xs text-[#8A93A3]">
               {language === "pt"
-                ? "Orcamentos por categoria, contas fixas do mes e vencimentos."
+                ? "Orçamentos por categoria, contas fixas do mês e vencimentos."
                 : "Category budgets, monthly fixed bills, and due dates."}
             </p>
           </div>
@@ -412,7 +412,7 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
         {schemaMissing ? (
           <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
             {language === "pt"
-              ? "Atualize o banco com supabase/schema.sql para usar orcamentos por categoria."
+              ? "Atualize o banco com supabase/schema.sql para usar orçamentos por categoria."
               : "Update your database with supabase/schema.sql to use category budgets."}
           </div>
         ) : null}
@@ -422,7 +422,7 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
           <div className="rounded-2xl border border-[#1E232E] bg-[#101620] p-4">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm font-semibold text-[#E4E7EC]">
-                {language === "pt" ? "Orcamentos do mes" : "Monthly budgets"}
+                {language === "pt" ? "Orçamentos do mês" : "Monthly budgets"}
               </p>
               <button
                 type="button"
@@ -477,7 +477,7 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
               ) : budgetSummary.length === 0 ? (
                 <p className="text-xs text-[#8A93A3]">
                   {language === "pt"
-                    ? "Ainda nao ha orcamentos definidos para este mes."
+                    ? "Ainda não há orçamentos definidos para este mês."
                     : "No budgets defined for this month yet."}
                 </p>
               ) : (
@@ -531,7 +531,7 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
                         budget.remaining >= 0 ? "text-[#8A93A3]" : "text-rose-300"
                       }`}
                     >
-                      {language === "pt" ? "Saldo do orcamento" : "Budget remaining"}:{" "}
+                      {language === "pt" ? "Saldo do orçamento" : "Budget remaining"}:{" "}
                       {formatCurrency(budget.remaining)}
                     </p>
                   </div>
@@ -557,7 +557,7 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
               ) : fixedBills.length === 0 ? (
                 <p className="text-xs text-[#8A93A3]">
                   {language === "pt"
-                    ? "Nenhuma conta fixa registrada para este mes."
+                    ? "Nenhuma conta fixa registrada para este mês."
                     : "No fixed bills registered for this month."}
                 </p>
               ) : (

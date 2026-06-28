@@ -454,7 +454,7 @@ export function getSocialErrorMessage(
 
   if (hasMissingTableError(error, ["shared_transaction_requests"])) {
     return language === "pt"
-      ? "A tabela de atribuicoes compartilhadas nao existe no Supabase. Aplique o arquivo supabase/schema.sql mais recente."
+      ? "A tabela de atribuições compartilhadas não existe no Supabase. Aplique o arquivo supabase/schema.sql mais recente."
       : "The shared transaction requests table is missing in Supabase. Apply the latest supabase/schema.sql file.";
   }
 
@@ -481,7 +481,7 @@ export function getSocialErrorMessage(
     normalized.includes("card_expense")
   ) {
     return language === "pt"
-      ? "Seu banco ainda nao aceita despesa de cartao nas atribuicoes. Aplique o arquivo supabase/schema.sql mais recente."
+      ? "Seu banco ainda não aceita despesa de cartão nas atribuições. Aplique o arquivo supabase/schema.sql mais recente."
       : "Your database does not yet allow card expenses in shared attributions. Apply the latest supabase/schema.sql file.";
   }
 
@@ -491,7 +491,7 @@ export function getSocialErrorMessage(
     normalized.includes("violates row-level security policy")
   ) {
     return language === "pt"
-      ? "Nao foi possivel compartilhar essa atribuicao. Confirme que a amizade foi aceita pelos dois lados e que o Supabase esta com o schema atualizado."
+      ? "Não foi possível compartilhar essa atribuição. Confirme que a amizade foi aceita pelos dois lados e que o Supabase está com o schema atualizado."
       : "This attribution could not be shared. Confirm the friendship is accepted and that Supabase is using the latest schema.";
   }
 

@@ -43,7 +43,7 @@ function formatAuthFeedback(error: unknown): AuthFeedback {
     if (isEmailNotConfirmedError(authError)) {
       return {
         tone: "info",
-        message: "Por favor, confirme o seu endereco de e-mail.",
+        message: "Por favor, confirme o seu endereço de e-mail.",
       };
     }
     if (isEmailRateLimitError(authError)) {
@@ -153,7 +153,7 @@ export default function LoginPage() {
     clearForcedLogoutFlag();
     if (mode === "signup" && !username.trim()) {
       setSaving(false);
-      setErrorMsg("Informe um nome de usuario.");
+      setErrorMsg("Informe um nome de usuário.");
       return;
     }
 
@@ -310,7 +310,7 @@ export default function LoginPage() {
               <input
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
-                placeholder="Nome de usuario"
+                placeholder="Nome de usuário"
                 type="text"
                 className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
               />
