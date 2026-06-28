@@ -50,7 +50,7 @@ function formatAuthFeedback(error: unknown): AuthFeedback {
       return {
         tone: "error",
         message:
-          "Muitas tentativas de envio de e-mail. Aguarde alguns minutos e tente novamente. Se a conta ja existir, entre com seu e-mail e senha.",
+          "Muitas tentativas de envio de e-mail. Aguarde alguns minutos e tente novamente. Se a conta já existir, entre com seu e-mail e senha.",
       };
     }
     const message = authError.message ?? "Authentication failed.";
@@ -140,6 +140,14 @@ export default function LoginPage() {
     return false;
   }
 
+  function switchMode(nextMode: "login" | "signup") {
+    setShowRecovery(false);
+    setRecoveryMsg(null);
+    setErrorMsg(null);
+    setErrorTone("error");
+    setMode(nextMode);
+  }
+
   async function handleSubmit() {
     setErrorMsg(null);
     setErrorTone("error");
@@ -197,7 +205,7 @@ export default function LoginPage() {
     if (!mfaFactorId) return;
     const code = mfaCode.trim();
     if (!code) {
-      setErrorMsg("Digite o codigo de 6 digitos do Google Authenticator.");
+      setErrorMsg("Digite o código de 6 dígitos do Google Authenticator.");
       return;
     }
 
@@ -240,7 +248,7 @@ export default function LoginPage() {
     setRecoveryMsg(null);
     const targetEmail = recoveryEmail.trim() || email.trim();
     if (!targetEmail) {
-      setRecoveryMsg("Informe o email para recuperar a senha.");
+      setRecoveryMsg("Informe o e-mail para recuperar a senha.");
       return;
     }
 
@@ -252,7 +260,7 @@ export default function LoginPage() {
         setRecoveryMsg(formatAuthFeedback(error).message);
         return;
       }
-      setRecoveryMsg("Se o email existir, enviaremos um link para redefinir a senha.");
+      setRecoveryMsg("Se o e-mail existir, enviaremos um link para redefinir a senha.");
     } catch (error) {
       setRecoveryMsg(formatAuthFeedback(error).message);
     } finally {
@@ -261,161 +269,307 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0D0F14] px-6 py-10 text-slate-50">
-      <div className="mx-auto w-full max-w-sm space-y-6">
-        <div className="space-y-1">
-          <p className="text-[11px] uppercase tracking-[0.2em] text-[#7F8694]">GuimFinancial</p>
-          <p className="text-2xl font-semibold text-[#E5E8EF]">
-            {mfaFactorId ? "2FA" : mode === "login" ? "Entrar" : "Criar conta"}
-          </p>
-        </div>
+    <div className="relative min-h-screen overflow-hidden bg-[#050B10] text-[#EEF8F5]">
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(86,224,194,0.055)_1px,transparent_1px),linear-gradient(rgba(86,224,194,0.05)_1px,transparent_1px)] bg-[size:56px_56px]" />
+      <div className="absolute -left-28 top-16 h-96 w-96 rounded-full bg-[#56E0C2]/20 blur-3xl" />
+      <div className="absolute -right-20 bottom-0 h-[28rem] w-[28rem] rounded-full bg-[#FBBF24]/10 blur-3xl" />
 
-        {mfaFactorId ? (
-          <div className="space-y-3">
-            <p className="text-xs text-[#8B94A6]">
-              Digite o codigo de 6 digitos do Google Authenticator para concluir o login.
+      <main className="relative mx-auto grid min-h-screen w-full max-w-7xl grid-cols-1 items-center gap-10 px-5 py-8 lg:grid-cols-[1.1fr_0.9fr] lg:px-10">
+        <section className="hidden min-h-[760px] flex-col justify-between border border-white/10 bg-[#07151B]/75 p-8 shadow-[18px_18px_0_rgba(0,0,0,0.24)] backdrop-blur-xl lg:flex">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="grid h-14 w-14 place-items-center bg-[#56E0C2] font-black text-[#041016] shadow-[8px_8px_0_rgba(86,224,194,0.16)]">
+                GF
+              </div>
+              <div>
+                <p className="text-xl font-black uppercase tracking-[-0.04em]">Guimfinancial</p>
+                <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#7C97AA]">
+                  Painel financeiro
+                </p>
+              </div>
+            </div>
+            <span className="border border-[#56E0C2]/30 px-3 py-2 text-xs font-black uppercase tracking-[0.18em] text-[#56E0C2]">
+              Beta privado
+            </span>
+          </div>
+
+          <div className="max-w-2xl space-y-8">
+            <div className="space-y-4">
+              <p className="text-xs font-black uppercase tracking-[0.28em] text-[#56E0C2]">
+                Seu dinheiro, sem ruído
+              </p>
+              <h1 className="font-[var(--font-display)] text-6xl font-black leading-[0.92] tracking-[-0.08em] text-white xl:text-7xl">
+                Entre, registre e entenda seu mês.
+              </h1>
+              <p className="max-w-xl text-lg leading-8 text-[#99ADBC]">
+                Um painel direto para acompanhar contas, cartões, amigos, orçamento e investimentos
+                sem perder tempo procurando onde lançar cada coisa.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                ["01", "Registre receitas e despesas em poucos cliques."],
+                ["02", "Veja o impacto no mês antes de gastar mais."],
+                ["03", "Separe cartões próprios e dívidas com amigos."],
+              ].map(([step, text]) => (
+                <div key={step} className="border border-white/10 bg-white/[0.035] p-4">
+                  <p className="text-xs font-black text-[#56E0C2]">{step}</p>
+                  <p className="mt-3 text-sm leading-6 text-[#C1D0D9]">{text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="border border-white/10 bg-white/[0.035] p-5">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-[#7C97AA]">
+              Atalho
             </p>
-            <input
-              value={mfaCode}
-              onChange={(event) => setMfaCode(event.target.value)}
-              placeholder="Codigo 2FA"
-              inputMode="numeric"
-              className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
-            />
-            {errorMsg ? (
-              <p className={errorTone === "info" ? "text-xs text-[#8B94A6]" : "text-xs text-red-400"}>
-                {errorMsg}
-              </p>
-            ) : null}
-            <button
-              type="button"
-              onClick={handleVerifyMfa}
-              disabled={saving}
-              className="w-full rounded-xl bg-[#E6EDF3] py-3 text-sm font-semibold text-[#0C1018] disabled:opacity-60"
-            >
-              {saving ? "Aguarde..." : "Verificar 2FA"}
-            </button>
-            <button
-              type="button"
-              onClick={handleCancelMfa}
-              disabled={saving}
-              className="w-full rounded-xl border border-[#2A3140] bg-[#111827] py-3 text-sm font-semibold text-[#D6DBE6] disabled:opacity-60"
-            >
-              Cancelar
-            </button>
+            <p className="mt-4 max-w-xl text-sm leading-6 text-[#C1D0D9]">
+              Depois de entrar, use <span className="text-[#56E0C2]">Registrar</span> para lançar
+              receitas, despesas, cartões ou atribuições sem procurar por menus.
+            </p>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {mode === "signup" ? (
-              <input
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                placeholder="Nome de usuário"
-                type="text"
-                className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
-              />
-            ) : null}
-            <input
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="Email"
-              type="email"
-              className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
-            />
-            <input
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Senha"
-              type="password"
-              className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
-            />
-            {mode === "login" ? (
-              <div className="space-y-2">
-                <label className="flex cursor-pointer items-center gap-2 text-xs text-[#8B94A6]">
-                  <input
-                    type="checkbox"
-                    checked={rememberLogin}
-                    onChange={(event) => setRememberLogin(event.target.checked)}
-                    className="h-4 w-4 rounded border border-[#2A3140] bg-[#151A27]"
-                  />
-                  <span>Manter conectado</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowRecovery((value) => !value);
-                    setRecoveryMsg(null);
-                    setRecoveryEmail(email);
-                  }}
-                  className="text-xs text-[#8B94A6] underline underline-offset-2"
-                >
-                  Esqueci minha senha
-                </button>
-              </div>
-            ) : null}
-            {showRecovery && mode === "login" ? (
-              <div className="space-y-2 rounded-xl border border-[#1E232E] bg-[#111723] p-3">
-                <input
-                  value={recoveryEmail}
-                  onChange={(event) => setRecoveryEmail(event.target.value)}
-                  placeholder="Email para recuperar senha"
-                  type="email"
-                  className="w-full rounded-xl border border-[#2A3140] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
-                />
-                <button
-                  type="button"
-                  onClick={handlePasswordRecovery}
-                  disabled={recoveryLoading}
-                  className="w-full rounded-xl border border-[#2A3140] bg-[#151E2D] py-2 text-sm font-semibold text-[#E4E7EC] disabled:opacity-60"
-                >
-                  {recoveryLoading ? "Enviando..." : "Enviar link de recuperacao"}
-                </button>
-                {recoveryMsg ? <p className="text-xs text-[#8B94A6]">{recoveryMsg}</p> : null}
-              </div>
-            ) : null}
-            {errorMsg ? (
-              <p className={errorTone === "info" ? "text-xs text-[#8B94A6]" : "text-xs text-red-400"}>
-                {errorMsg}
-              </p>
-            ) : null}
-            {mode === "signup" && signupCooldown > 0 ? (
-              <p className="text-xs text-[#8B94A6]">
-                Proxima tentativa de cadastro em {signupCooldown}s.
-              </p>
-            ) : null}
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={saving || (mode === "signup" && signupCooldown > 0)}
-              className="w-full rounded-xl bg-[#E6EDF3] py-3 text-sm font-semibold text-[#0C1018] disabled:opacity-60"
-            >
-              {saving
-                ? "Aguarde..."
-                : mode === "signup" && signupCooldown > 0
-                  ? `Aguarde ${signupCooldown}s`
-                  : mode === "login"
-                    ? "Entrar"
-                    : "Criar conta"}
-            </button>
-          </div>
-        )}
+        </section>
 
-        {!mfaFactorId ? (
-          <button
-            type="button"
-            className="text-xs text-[#8B94A6]"
-            onClick={() => {
-              setShowRecovery(false);
-              setRecoveryMsg(null);
-              setErrorMsg(null);
-              setErrorTone("error");
-              setMode(mode === "login" ? "signup" : "login");
-            }}
-          >
-            {mode === "login" ? "Ainda nao tem conta? Criar agora" : "Ja tem conta? Entrar"}
-          </button>
-        ) : null}
-      </div>
+        <section className="mx-auto w-full max-w-xl">
+          <div className="mb-8 flex items-center gap-3 lg:hidden">
+            <div className="grid h-12 w-12 place-items-center bg-[#56E0C2] font-black text-[#041016]">
+              GF
+            </div>
+            <div>
+              <p className="font-black uppercase">Guimfinancial</p>
+              <p className="text-xs uppercase tracking-[0.22em] text-[#7C97AA]">Painel financeiro</p>
+            </div>
+          </div>
+
+          <div className="border border-white/10 bg-[#0B1721]/92 p-5 shadow-[14px_14px_0_rgba(0,0,0,0.22)] backdrop-blur-xl sm:p-7">
+            <div className="mb-7 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.24em] text-[#56E0C2]">
+                  {mfaFactorId ? "Segurança" : mode === "login" ? "Bem-vindo de volta" : "Comece agora"}
+                </p>
+                <h2 className="mt-3 font-[var(--font-display)] text-4xl font-black tracking-[-0.07em] text-white">
+                  {mfaFactorId ? "Confirme o acesso" : mode === "login" ? "Entrar na conta" : "Criar conta"}
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-[#8DA5B7]">
+                  {mfaFactorId
+                    ? "Use o código do seu app autenticador para concluir o login."
+                    : mode === "login"
+                      ? "Acesse seu painel financeiro com e-mail e senha."
+                      : "Crie seu perfil para começar a controlar o mês."}
+                </p>
+              </div>
+              {!mfaFactorId ? (
+                <div className="hidden border border-white/10 bg-white/[0.035] p-1 text-xs font-black sm:flex">
+                  <button
+                    type="button"
+                    onClick={() => switchMode("login")}
+                    className={`px-4 py-2 uppercase transition ${
+                      mode === "login" ? "bg-[#56E0C2] text-[#041016]" : "text-[#8DA5B7]"
+                    }`}
+                  >
+                    Entrar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => switchMode("signup")}
+                    className={`px-4 py-2 uppercase transition ${
+                      mode === "signup" ? "bg-[#56E0C2] text-[#041016]" : "text-[#8DA5B7]"
+                    }`}
+                  >
+                    Criar
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            {mfaFactorId ? (
+              <div className="space-y-4">
+                <label className="block">
+                  <span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-[#8DA5B7]">
+                    Código 2FA
+                  </span>
+                  <input
+                    value={mfaCode}
+                    onChange={(event) => setMfaCode(event.target.value)}
+                    placeholder="000000"
+                    inputMode="numeric"
+                    className="w-full border border-white/10 bg-[#101E2B] px-4 py-4 text-lg font-bold tracking-[0.28em] text-white outline-none transition placeholder:text-[#405A6D] focus:border-[#56E0C2]"
+                  />
+                </label>
+                {errorMsg ? (
+                  <p
+                    className={`border px-4 py-3 text-sm ${
+                      errorTone === "info"
+                        ? "border-[#56E0C2]/20 bg-[#56E0C2]/10 text-[#A8F5E6]"
+                        : "border-red-400/20 bg-red-400/10 text-red-200"
+                    }`}
+                  >
+                    {errorMsg}
+                  </p>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={handleVerifyMfa}
+                  disabled={saving}
+                  className="w-full bg-[#56E0C2] py-4 text-sm font-black uppercase tracking-[0.12em] text-[#041016] shadow-[8px_8px_0_rgba(86,224,194,0.16)] transition hover:-translate-y-0.5 disabled:opacity-60"
+                >
+                  {saving ? "Aguarde..." : "Verificar 2FA"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelMfa}
+                  disabled={saving}
+                  className="w-full border border-white/10 bg-white/[0.035] py-4 text-sm font-bold text-[#B8CAD7] transition hover:border-white/20 disabled:opacity-60"
+                >
+                  Cancelar e sair
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {mode === "signup" ? (
+                  <label className="block">
+                    <span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-[#8DA5B7]">
+                      Nome de usuário
+                    </span>
+                    <input
+                      value={username}
+                      onChange={(event) => setUsername(event.target.value)}
+                      placeholder="Ex.: claudiosgn"
+                      type="text"
+                      className="w-full border border-white/10 bg-[#101E2B] px-4 py-4 text-sm text-white outline-none transition placeholder:text-[#405A6D] focus:border-[#56E0C2]"
+                    />
+                  </label>
+                ) : null}
+
+                <label className="block">
+                  <span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-[#8DA5B7]">
+                    E-mail
+                  </span>
+                  <input
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="seu@email.com"
+                    type="email"
+                    className="w-full border border-white/10 bg-[#101E2B] px-4 py-4 text-sm text-white outline-none transition placeholder:text-[#405A6D] focus:border-[#56E0C2]"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-[#8DA5B7]">
+                    Senha
+                  </span>
+                  <input
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="Sua senha"
+                    type="password"
+                    className="w-full border border-white/10 bg-[#101E2B] px-4 py-4 text-sm text-white outline-none transition placeholder:text-[#405A6D] focus:border-[#56E0C2]"
+                  />
+                </label>
+
+                {mode === "login" ? (
+                  <div className="flex flex-col gap-3 border-y border-white/10 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <label className="flex cursor-pointer items-center gap-3 text-sm text-[#B8CAD7]">
+                      <input
+                        type="checkbox"
+                        checked={rememberLogin}
+                        onChange={(event) => setRememberLogin(event.target.checked)}
+                        className="h-4 w-4 accent-[#56E0C2]"
+                      />
+                      <span>Manter conectado</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowRecovery((value) => !value);
+                        setRecoveryMsg(null);
+                        setRecoveryEmail(email);
+                      }}
+                      className="text-left text-sm font-bold text-[#56E0C2] hover:underline sm:text-right"
+                    >
+                      Esqueci minha senha
+                    </button>
+                  </div>
+                ) : null}
+
+                {showRecovery && mode === "login" ? (
+                  <div className="space-y-3 border border-[#56E0C2]/20 bg-[#56E0C2]/[0.06] p-4">
+                    <div>
+                      <p className="text-sm font-bold text-white">Recuperar senha</p>
+                      <p className="mt-1 text-xs leading-5 text-[#8DA5B7]">
+                        Enviaremos um link para você criar uma nova senha.
+                      </p>
+                    </div>
+                    <input
+                      value={recoveryEmail}
+                      onChange={(event) => setRecoveryEmail(event.target.value)}
+                      placeholder="E-mail para recuperar senha"
+                      type="email"
+                      className="w-full border border-white/10 bg-[#101E2B] px-4 py-3 text-sm text-white outline-none transition placeholder:text-[#405A6D] focus:border-[#56E0C2]"
+                    />
+                    <button
+                      type="button"
+                      onClick={handlePasswordRecovery}
+                      disabled={recoveryLoading}
+                      className="w-full border border-[#56E0C2]/40 bg-[#07151B] py-3 text-sm font-black uppercase tracking-[0.1em] text-[#A8F5E6] disabled:opacity-60"
+                    >
+                      {recoveryLoading ? "Enviando..." : "Enviar link de recuperação"}
+                    </button>
+                    {recoveryMsg ? <p className="text-xs leading-5 text-[#A8F5E6]">{recoveryMsg}</p> : null}
+                  </div>
+                ) : null}
+
+                {errorMsg ? (
+                  <p
+                    className={`border px-4 py-3 text-sm ${
+                      errorTone === "info"
+                        ? "border-[#56E0C2]/20 bg-[#56E0C2]/10 text-[#A8F5E6]"
+                        : "border-red-400/20 bg-red-400/10 text-red-200"
+                    }`}
+                  >
+                    {errorMsg}
+                  </p>
+                ) : null}
+
+                {mode === "signup" && signupCooldown > 0 ? (
+                  <p className="text-sm text-[#8DA5B7]">
+                    Próxima tentativa de cadastro em {signupCooldown}s.
+                  </p>
+                ) : null}
+
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={saving || (mode === "signup" && signupCooldown > 0)}
+                  className="w-full bg-[#56E0C2] py-4 text-sm font-black uppercase tracking-[0.12em] text-[#041016] shadow-[8px_8px_0_rgba(86,224,194,0.16)] transition hover:-translate-y-0.5 disabled:opacity-60"
+                >
+                  {saving
+                    ? "Aguarde..."
+                    : mode === "signup" && signupCooldown > 0
+                      ? `Aguarde ${signupCooldown}s`
+                      : mode === "login"
+                        ? "Entrar"
+                        : "Criar conta"}
+                </button>
+
+                <button
+                  type="button"
+                  className="w-full border border-white/10 bg-white/[0.035] py-4 text-sm font-bold text-[#B8CAD7] transition hover:border-white/20 sm:hidden"
+                  onClick={() => switchMode(mode === "login" ? "signup" : "login")}
+                >
+                  {mode === "login" ? "Ainda não tem conta? Criar agora" : "Já tem conta? Entrar"}
+                </button>
+              </div>
+            )}
+          </div>
+
+          <p className="mt-5 text-center text-xs leading-5 text-[#627C91]">
+            Ao continuar, você acessa o painel Guimfinancial com conexão segura via Supabase.
+          </p>
+        </section>
+      </main>
     </div>
   );
 }

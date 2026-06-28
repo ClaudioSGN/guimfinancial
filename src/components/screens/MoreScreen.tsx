@@ -26,6 +26,16 @@ type TotpSetupState = {
   secret: string;
 };
 
+function getTotpQrCodeSrc(qrCode: string) {
+  const trimmed = qrCode.trim();
+  if (!trimmed) return "";
+  if (/^data:image\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("<svg")) {
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(trimmed)}`;
+  }
+  return trimmed;
+}
+
 export function MoreScreen() {
   const { language, setLanguage, t } = useLanguage();
   const { currency, setCurrency } = useCurrency();
@@ -473,7 +483,11 @@ export function MoreScreen() {
                 </p>
                 <div className="flex flex-wrap gap-4">
                   <div className="ui-card-inner p-2">
-                    <img src={`data:image/svg+xml;utf-8,${encodeURIComponent(totpSetup.qrCode)}`} alt="QR code 2FA" className="h-40 w-40 rounded-lg" />
+                    <img
+                      src={getTotpQrCodeSrc(totpSetup.qrCode)}
+                      alt="QR code 2FA"
+                      className="h-40 w-40 rounded-lg bg-white p-2"
+                    />
                   </div>
                   <div className="min-w-[220px] flex-1 flex flex-col gap-2">
                     <p className="text-xs text-[var(--text-3)]">{language === "pt" ? "Chave manual:" : "Manual key:"}</p>
