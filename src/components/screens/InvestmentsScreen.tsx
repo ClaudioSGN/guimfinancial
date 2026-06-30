@@ -132,6 +132,33 @@ type InvestmentFilterSettings = {
 
 type InvestmentOrganizer = "alphabetical" | "category";
 type InvestmentCategory = "fii" | "etf" | "stock" | "bdr" | "crypto" | "fixed" | "other";
+type DiscoveryMetric = "dy" | "pvp" | "roi";
+type DiscoveryOrder = "desc" | "asc";
+
+type B3DiscoveryAsset = {
+  symbol: string;
+  name: string;
+  price: number | null;
+  changePct: number | null;
+  dyPct: number | null;
+  pVp: number | null;
+  metricValue: number;
+  logoUrl: string | null;
+  sector: string | null;
+  type: string | null;
+  subType: string | null;
+  volume: number | null;
+  marketCap: number | null;
+};
+
+type B3DiscoveryResponse = {
+  assets?: B3DiscoveryAsset[];
+  source?: string;
+  updatedAt?: string;
+  scannedCount?: number;
+  totalCount?: number;
+  error?: string;
+};
 
 type FixedIncomeSnapshot = {
   principal: number;
@@ -722,6 +749,22 @@ function getInvestmentCategory(asset: Investment): InvestmentCategory {
   return "other";
 }
 
+function getDiscoveryAssetProfileType(asset: B3DiscoveryAsset): PortfolioAssetType {
+  const subType = (asset.subType ?? "").toLowerCase();
+  const type = (asset.type ?? "").toLowerCase();
+  const symbol = normalizeB3Symbol(asset.symbol);
+
+  if (subType === "fii" || /11$/.test(symbol)) return "fii";
+  if (subType === "etf") return "etf";
+  if (subType === "bdr" || type === "bdr" || /34$/.test(symbol)) return "international";
+  return "stock";
+}
+
+function getDiscoveryAssetTypeLabel(asset: B3DiscoveryAsset, language: "pt" | "en") {
+  const profileType = getDiscoveryAssetProfileType(asset);
+  return getPortfolioAssetTypeLabel(profileType, language);
+}
+
 function getPortfolioAssetType(asset: Investment): PortfolioAssetType {
   if (asset.asset_type) return asset.asset_type;
   const category = getInvestmentCategory(asset);
@@ -1103,7 +1146,10 @@ export function InvestmentsScreen() {
     {},
   );
   const historyFetchRef = useRef(0);
+  const quoteFetchInFlightRef = useRef(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [quotesRefreshing, setQuotesRefreshing] = useState(false);
+  const [quotesUpdatedAt, setQuotesUpdatedAt] = useState<number | null>(null);
 
   const [selectedAsset, setSelectedAsset] = useState<Investment | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -1148,11 +1194,28 @@ export function InvestmentsScreen() {
     DEFAULT_INVESTMENT_CURRENCY,
   );
   const [editSaving, setEditSaving] = useState(false);
+  const [editPurchaseMode, setEditPurchaseMode] = useState<"quantity" | "value">("quantity");
+  const [editPurchaseQuantity, setEditPurchaseQuantity] = useState("");
+  const [editPurchaseValue, setEditPurchaseValue] = useState("");
+  const [editPurchasePrice, setEditPurchasePrice] = useState("");
+  const [editPurchaseDate, setEditPurchaseDate] = useState(toDateString(new Date()));
+  const [editPurchaseSaving, setEditPurchaseSaving] = useState(false);
   const [organizeBy, setOrganizeBy] = useState<InvestmentOrganizer>("alphabetical");
   const [investmentFilter, setInvestmentFilter] = useState<InvestmentFilterSettings>(
     DEFAULT_INVESTMENT_FILTER,
   );
   const [filterOpen, setFilterOpen] = useState(false);
+  const [discoveryOpen, setDiscoveryOpen] = useState(false);
+  const [discoveryMetric, setDiscoveryMetric] = useState<DiscoveryMetric>("dy");
+  const [discoveryOrder, setDiscoveryOrder] = useState<DiscoveryOrder>("desc");
+  const [discoveryThreshold, setDiscoveryThreshold] = useState("");
+  const [discoveryRows, setDiscoveryRows] = useState<B3DiscoveryAsset[]>([]);
+  const [discoveryLoading, setDiscoveryLoading] = useState(false);
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
+  const [discoverySource, setDiscoverySource] = useState<string | null>(null);
+  const [discoveryScannedCount, setDiscoveryScannedCount] = useState<number | null>(null);
+  const [discoveryTotalCount, setDiscoveryTotalCount] = useState<number | null>(null);
+  const [portfolioAnalysisOpen, setPortfolioAnalysisOpen] = useState(false);
   const [liveNowMs, setLiveNowMs] = useState(() => Date.now());
   const preferredNewInvestmentCurrency = normalizeInvestmentCurrency(appCurrency, "crypto");
   const filterStorageKey = user?.id
@@ -1323,6 +1386,59 @@ export function InvestmentsScreen() {
   }, [filterStorageKey, investmentFilter]);
 
   useEffect(() => {
+    if (!discoveryOpen) return;
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setDiscoveryLoading(true);
+      setDiscoveryError(null);
+
+      try {
+        const params = new URLSearchParams({
+          metric: discoveryMetric,
+          order: discoveryOrder,
+        });
+        if (discoveryThreshold.trim()) {
+          params.set("threshold", discoveryThreshold.trim());
+        }
+
+        const response = await fetch(`/api/investments/b3-discovery?${params.toString()}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const data = (await response.json()) as B3DiscoveryResponse;
+
+        if (!response.ok) {
+          throw new Error(data.error ?? "b3_discovery_error");
+        }
+
+        setDiscoveryRows(Array.isArray(data.assets) ? data.assets : []);
+        setDiscoverySource(data.source ?? "brapi");
+        setDiscoveryScannedCount(data.scannedCount ?? null);
+        setDiscoveryTotalCount(data.totalCount ?? null);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.error(error);
+        setDiscoveryRows([]);
+        setDiscoveryError(
+          language === "pt"
+            ? "Não foi possível carregar os ativos da B3 agora."
+            : "B3 assets could not be loaded right now.",
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setDiscoveryLoading(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [discoveryMetric, discoveryOpen, discoveryOrder, discoveryThreshold, language]);
+
+  useEffect(() => {
     if (canSelectInvestmentCurrency(type)) return;
     if (currency === DEFAULT_INVESTMENT_CURRENCY) return;
     setCurrency(DEFAULT_INVESTMENT_CURRENCY);
@@ -1356,8 +1472,13 @@ export function InvestmentsScreen() {
     if (!assets.length) {
       setQuotes({});
       setQuoteError(null);
+      setQuotesUpdatedAt(null);
+      setQuotesRefreshing(false);
       return;
     }
+    if (quoteFetchInFlightRef.current) return;
+    quoteFetchInFlightRef.current = true;
+    setQuotesRefreshing(true);
     setQuoteError(null);
 
     const b3Assets = assets.filter((asset) => asset.type === "b3");
@@ -1438,14 +1559,25 @@ export function InvestmentsScreen() {
     }
 
     setQuotes(nextQuotes);
+    setQuotesUpdatedAt(Date.now());
+    setQuotesRefreshing(false);
+    quoteFetchInFlightRef.current = false;
     if (hadFailures) {
       setQuoteError(t("investments.quoteError"));
     }
   }, [assets, t]);
 
   useEffect(() => {
-    fetchQuotes();
-  }, [fetchQuotes]);
+    void fetchQuotes();
+    const hasLiveAssets = assets.some((asset) => asset.type === "b3" || asset.type === "crypto");
+    if (!hasLiveAssets) return;
+    const timer = window.setInterval(() => {
+      void fetchQuotes();
+    }, 60000);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [assets, fetchQuotes]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1632,6 +1764,57 @@ export function InvestmentsScreen() {
     );
     return { qty, total, newAvg };
   }, [isFixedIncome, priceBig, quantityBig, investedBig, mode, currentAvg, currentQty, decimals]);
+
+  const editPurchasePriceValue = parseCentsInput(editPurchasePrice);
+  const editPurchasePriceBig = editPurchasePriceValue > 0 ? new Big(editPurchasePriceValue) : null;
+  const editPurchaseQuantityBig = parseBig(editPurchaseQuantity);
+  const editPurchaseValueNumber = parseCentsInput(editPurchaseValue);
+  const editPurchaseValueBig = editPurchaseValueNumber > 0 ? new Big(editPurchaseValueNumber) : null;
+  const editPurchaseDecimals = activeAsset ? getQuantityDecimals(activeAsset.type) : 2;
+  const editPurchaseComputed = useMemo(() => {
+    if (!activeAsset) {
+      return { qty: new Big(0), total: new Big(0), newAvg: new Big(0) };
+    }
+
+    const activeQty = new Big(activeAsset.quantity || 0);
+    const activeAvg = new Big(activeAsset.average_price || 0);
+
+    if (activeAsset.type === "fixed_income") {
+      if (!editPurchaseValueBig) return { qty: new Big(0), total: new Big(0), newAvg: activeAvg };
+      const nextTotal = activeQty.plus(editPurchaseValueBig);
+      return { qty: editPurchaseValueBig, total: editPurchaseValueBig, newAvg: nextTotal };
+    }
+
+    if (!editPurchasePriceBig) return { qty: new Big(0), total: new Big(0), newAvg: activeAvg };
+
+    if (editPurchaseMode === "quantity") {
+      if (!editPurchaseQuantityBig) return { qty: new Big(0), total: new Big(0), newAvg: activeAvg };
+      const total = computeTotal(editPurchaseQuantityBig, editPurchasePriceBig);
+      const newAvg = computeNewAveragePrice(
+        activeQty,
+        activeAvg,
+        editPurchaseQuantityBig,
+        editPurchasePriceBig,
+      );
+      return { qty: editPurchaseQuantityBig, total, newAvg };
+    }
+
+    if (!editPurchaseValueBig) return { qty: new Big(0), total: new Big(0), newAvg: activeAvg };
+    const { quantity: qty, total } = computeQuantityFromValue(
+      editPurchaseValueBig,
+      editPurchasePriceBig,
+      editPurchaseDecimals,
+    );
+    const newAvg = computeNewAveragePrice(activeQty, activeAvg, qty, editPurchasePriceBig);
+    return { qty, total, newAvg };
+  }, [
+    activeAsset,
+    editPurchaseDecimals,
+    editPurchaseMode,
+    editPurchasePriceBig,
+    editPurchaseQuantityBig,
+    editPurchaseValueBig,
+  ]);
 
   const preview = previewQuote;
   const displayPrice = manualPriceBig
@@ -1913,11 +2096,74 @@ export function InvestmentsScreen() {
     setSelectedAsset(asset);
     setShowModal(true);
     setErrorMsg(null);
+    setPurchasesError(null);
     setEditSymbol(asset.symbol ?? "");
     setEditName(asset.name ?? "");
     setEditAssetProfileType(getPortfolioAssetType(asset));
     setEditSector(asset.sector ?? "");
     setEditCurrency(getAssetCurrency(asset));
+    setEditPurchaseMode(asset.type === "fixed_income" ? "value" : "quantity");
+    setEditPurchaseQuantity("");
+    setEditPurchaseValue("");
+    setEditPurchasePrice(
+      asset.type === "fixed_income"
+        ? ""
+        : formatCentsInputForCurrency(String(Math.round((Number(asset.current_price) || Number(asset.average_price) || 0) * 100)), getAssetCurrency(asset)),
+    );
+    setEditPurchaseDate(toDateString(new Date()));
+  }
+
+  function openDiscoveredAsset(asset: B3DiscoveryAsset) {
+    const normalizedSymbol = normalizeB3Symbol(asset.symbol);
+    const existingAsset = assets.find(
+      (item) => item.type === "b3" && normalizeB3Symbol(item.symbol) === normalizedSymbol,
+    );
+
+    setDiscoveryOpen(false);
+    if (existingAsset) {
+      openDetails(existingAsset);
+      return;
+    }
+
+    const nextPrice = Number(asset.price ?? 0);
+    setIsCreate(true);
+    setSelectedAsset(null);
+    setShowModal(true);
+    setType("b3");
+    setSymbol(normalizedSymbol);
+    setName(asset.name ?? normalizedSymbol);
+    setCurrency(DEFAULT_INVESTMENT_CURRENCY);
+    setMode("quantity");
+    setQuantity("");
+    setInvestedValue("");
+    setManualPrice(
+      nextPrice > 0
+        ? formatCentsInputForCurrency(String(Math.round(nextPrice * 100)), DEFAULT_INVESTMENT_CURRENCY)
+        : "",
+    );
+    setAssetProfileType(getDiscoveryAssetProfileType(asset));
+    setSector(asset.sector ?? "");
+    setFixedCdiRatePct("10.5");
+    setFixedCdiMultiplierPct("100");
+    setDate(toDateString(new Date()));
+    setPreviewQuote(
+      nextPrice > 0
+        ? {
+          price: nextPrice,
+          changePct: asset.changePct,
+          logoUrl: asset.logoUrl,
+          assetName: asset.name,
+          dyPct: asset.dyPct,
+          pVp: asset.pVp,
+        }
+        : null,
+    );
+    setSelectedCrypto(null);
+    setCryptoMarket(null);
+    setFeaturedCryptoOptions([]);
+    setFeaturedCryptoLoading(false);
+    setCryptoPickerOpen(false);
+    setErrorMsg(null);
   }
 
   useEffect(() => {
@@ -1955,6 +2201,112 @@ export function InvestmentsScreen() {
       cancelled = true;
     };
   }, [selectedAsset, user, t]);
+
+  async function handleRegisterEditPurchase() {
+    if (!user || !activeAsset) return;
+    setPurchasesError(null);
+    setErrorMsg(null);
+
+    const isActiveFixedIncome = activeAsset.type === "fixed_income";
+    if (isActiveFixedIncome && !editPurchaseValueBig) {
+      setPurchasesError(t("investments.valueRequired"));
+      return;
+    }
+    if (!isActiveFixedIncome && !editPurchasePriceBig) {
+      setPurchasesError(t("investments.priceRequired"));
+      return;
+    }
+    if (!isActiveFixedIncome && editPurchaseMode === "quantity" && !editPurchaseQuantityBig) {
+      setPurchasesError(t("investments.quantityRequired"));
+      return;
+    }
+    if (!isActiveFixedIncome && editPurchaseMode === "value" && !editPurchaseValueBig) {
+      setPurchasesError(t("investments.valueRequired"));
+      return;
+    }
+    if (editPurchaseComputed.qty.lte(0) || editPurchaseComputed.total.lte(0)) {
+      setPurchasesError(t("investments.addError"));
+      return;
+    }
+
+    setEditPurchaseSaving(true);
+
+    const nextQty = new Big(activeAsset.quantity || 0).plus(editPurchaseComputed.qty);
+    const nextAvg = isActiveFixedIncome ? nextQty : editPurchaseComputed.newAvg;
+    const baseUpdatePayload = {
+      quantity: nextQty.toString(),
+      average_price: nextAvg.toString(),
+    };
+    const portfolioUpdatePayload = {
+      ...baseUpdatePayload,
+      current_price: isActiveFixedIncome ? null : editPurchasePriceBig?.toString() ?? null,
+      updated_at: new Date().toISOString(),
+    };
+
+    let { error: updateError } = await supabase
+      .from("investments")
+      .update(portfolioUpdatePayload)
+      .eq("id", activeAsset.id)
+      .eq("user_id", user.id);
+
+    if (updateError && isPortfolioSchemaError(updateError)) {
+      const retry = await supabase
+        .from("investments")
+        .update(baseUpdatePayload)
+        .eq("id", activeAsset.id)
+        .eq("user_id", user.id);
+      updateError = retry.error;
+    }
+
+    if (updateError) {
+      console.error(updateError);
+      setEditPurchaseSaving(false);
+      setPurchasesError(t("investments.saveError"));
+      return;
+    }
+
+    const purchasePayload = {
+      user_id: user.id,
+      asset_id: activeAsset.id,
+      date: editPurchaseDate,
+      price_per_share: isActiveFixedIncome ? "1" : editPurchasePriceBig?.toString() ?? "0",
+      quantity: editPurchaseComputed.qty.toString(),
+      total_invested: editPurchaseComputed.total.toString(),
+      mode_used: isActiveFixedIncome ? "value" : editPurchaseMode,
+      input_value:
+        isActiveFixedIncome || editPurchaseMode === "value"
+          ? editPurchaseValueBig?.toString() ?? null
+          : null,
+    };
+    const { data: purchaseData, error: purchaseError } = await supabase
+      .from("investment_purchases")
+      .insert([purchasePayload])
+      .select("id,date,price_per_share,quantity,total_invested,mode_used,input_value")
+      .maybeSingle();
+
+    if (purchaseError) {
+      console.error(purchaseError);
+      setEditPurchaseSaving(false);
+      setPurchasesError(t("investments.saveError"));
+      return;
+    }
+
+    const updatedAsset: Investment = {
+      ...activeAsset,
+      quantity: Number(nextQty.toString()),
+      average_price: Number(nextAvg.toString()),
+      current_price: isActiveFixedIncome ? null : Number(editPurchasePriceBig?.toString() ?? 0),
+      updated_at: new Date().toISOString(),
+    };
+    setSelectedAsset(updatedAsset);
+    setActivePurchases((current) =>
+      purchaseData ? [purchaseData as Purchase, ...current] : current,
+    );
+    setEditPurchaseQuantity("");
+    setEditPurchaseValue("");
+    setEditPurchaseSaving(false);
+    await loadAssets();
+  }
 
 
   async function handleSave() {
@@ -2374,7 +2726,7 @@ export function InvestmentsScreen() {
           ? quantity > 0
             ? fallbackCurrentValue / quantity
             : 1
-          : Number(asset.current_price) || quote?.price || Number(asset.average_price) || 0;
+          : quote?.price ?? (Number(asset.current_price) || Number(asset.average_price) || 0);
 
       return {
         id: asset.id,
@@ -2420,6 +2772,23 @@ export function InvestmentsScreen() {
       tone: "text-[var(--text-1)]",
     },
   ];
+  const quoteStatusText = quotesRefreshing
+    ? language === "pt"
+      ? "Atualizando cotações..."
+      : "Updating quotes..."
+    : quotesUpdatedAt
+      ? `${language === "pt" ? "Cotações atualizadas às" : "Quotes updated at"} ${new Intl.DateTimeFormat(
+        language === "pt" ? "pt-BR" : "en-US",
+        { hour: "2-digit", minute: "2-digit" },
+      ).format(new Date(quotesUpdatedAt))}`
+      : language === "pt"
+        ? "Monitoramento em tempo real"
+        : "Real-time monitoring";
+  const discoveryMetricLabel = {
+    dy: language === "pt" ? "DY" : "DY",
+    pvp: language === "pt" ? "P/VP" : "P/B",
+    roi: "ROI",
+  } satisfies Record<DiscoveryMetric, string>;
 
   function translateRiskAlert(message: string) {
     if (language !== "pt") return message;
@@ -2450,10 +2819,16 @@ export function InvestmentsScreen() {
           <p className="text-xl font-semibold text-[var(--text-1)]">{t("investments.title")}</p>
           <p className="text-sm text-[var(--text-3)]">{t("investments.subtitle")}</p>
         </div>
-        <button type="button" onClick={() => setFilterOpen(true)} className="ui-btn ui-btn-secondary ui-btn-sm"
-          aria-label={t("investments.filterButton")} title={t("investments.filterButton")}>
-          <AppIcon name="filter" size={14} />
-        </button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <button type="button" onClick={() => setDiscoveryOpen(true)} className="ui-btn ui-btn-primary ui-btn-sm">
+            <AppIcon name="filter" size={14} />
+            {language === "pt" ? "Descobrir ativos" : "Discover assets"}
+          </button>
+          <button type="button" onClick={() => setFilterOpen(true)} className="ui-btn ui-btn-secondary ui-btn-sm"
+            aria-label={t("investments.filterButton")} title={t("investments.filterButton")}>
+            <AppIcon name="filter" size={14} />
+          </button>
+        </div>
       </div>
 
       {investmentFilter.enabled && assetsAboveLimit.length ? (
@@ -2478,11 +2853,21 @@ export function InvestmentsScreen() {
                 ? "Acompanhe seus ativos, alocação da carteira e nível de risco."
                 : "Track your assets, portfolio allocation, and risk level."}
             </p>
+            <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-[11px] font-semibold text-[var(--text-3)]">
+              <span className={`h-2 w-2 rounded-full ${quotesRefreshing ? "animate-pulse bg-[var(--amber)]" : "bg-[var(--green)]"}`} />
+              {quoteStatusText}
+            </div>
           </div>
-          <button type="button" onClick={openCreate} className="ui-btn ui-btn-primary">
-            <AppIcon name="plus" size={15} />
-            {language === "pt" ? "Adicionar ativo" : "Add asset"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => setPortfolioAnalysisOpen(true)} className="ui-btn ui-btn-secondary">
+              <AppIcon name="eye" size={15} />
+              {language === "pt" ? "Ver análise da carteira" : "View portfolio analysis"}
+            </button>
+            <button type="button" onClick={openCreate} className="ui-btn ui-btn-primary">
+              <AppIcon name="plus" size={15} />
+              {language === "pt" ? "Adicionar ativo" : "Add asset"}
+            </button>
+          </div>
         </div>
 
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -2493,6 +2878,51 @@ export function InvestmentsScreen() {
             </div>
           ))}
         </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+          <div>
+            <p className="text-sm font-semibold text-[var(--text-1)]">
+              {language === "pt" ? "Análise completa sob demanda" : "Full analysis on demand"}
+            </p>
+            <p className="mt-1 text-xs text-[var(--text-3)]">
+              {language === "pt"
+                ? "Abra a análise apenas quando quiser ver tabela, risco, alocação e maiores pesos."
+                : "Open the analysis only when you want to see table, risk, allocation, and largest weights."}
+            </p>
+          </div>
+          <button type="button" onClick={() => setPortfolioAnalysisOpen(true)} className="ui-btn ui-btn-primary ui-btn-sm">
+            {language === "pt" ? "Abrir análise" : "Open analysis"}
+          </button>
+        </div>
+
+        {portfolioAnalysisOpen ? (
+          <div
+            className="ui-modal-backdrop fixed inset-0 z-40 overflow-y-auto px-4 py-6 md:px-6"
+            onClick={() => setPortfolioAnalysisOpen(false)}
+          >
+            <div
+              className="ui-card-2 mx-auto w-full max-w-7xl rounded-2xl p-5"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xl font-semibold text-[var(--text-1)]">
+                    {language === "pt" ? "Análise da carteira" : "Portfolio analysis"}
+                  </p>
+                  <p className="mt-1 text-sm text-[var(--text-3)]">
+                    {language === "pt"
+                      ? "Tabela de ativos, risco, alocação e maiores pesos da sua carteira."
+                      : "Asset table, risk, allocation, and largest weights in your portfolio."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPortfolioAnalysisOpen(false)}
+                  className="ui-btn ui-btn-ghost ui-btn-sm"
+                >
+                  {language === "pt" ? "Fechar" : "Close"}
+                </button>
+              </div>
 
         {portfolioRisk.assets.length === 0 ? (
           <div className="mt-5 rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-6 text-sm text-[var(--text-3)]">
@@ -2707,6 +3137,9 @@ export function InvestmentsScreen() {
             ? "A análise de risco é educativa e não representa recomendação de investimento."
             : "The risk analysis is educational and does not represent investment advice."}
         </p>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <div className="grid gap-4 xl:grid-cols-[1.45fr_1fr]">
@@ -3006,6 +3439,158 @@ export function InvestmentsScreen() {
       </div>
 
       {quoteError ? <p className="text-xs text-[var(--red)]">{quoteError}</p> : null}
+
+      {discoveryOpen ? (
+        <div className="ui-modal-backdrop fixed inset-0 z-40 flex items-center justify-center px-4 md:px-6" onClick={() => setDiscoveryOpen(false)}>
+          <div className="ui-card-2 w-full max-w-4xl rounded-2xl p-5" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-base font-semibold text-[var(--text-1)]">
+                  {language === "pt" ? "Descobrir ativos por indicador" : "Discover assets by indicator"}
+                </p>
+                <p className="mt-1 text-xs text-[var(--text-3)]">
+                  {language === "pt"
+                    ? "Filtre ativos da B3 por DY, P/VP ou ROI. A busca não fica limitada à sua carteira."
+                    : "Filter B3 assets by DY, P/B, or ROI. The search is not limited to your portfolio."}
+                </p>
+              </div>
+              <button type="button" onClick={() => setDiscoveryOpen(false)} className="ui-btn ui-btn-ghost ui-btn-sm">
+                {t("common.cancel")}
+              </button>
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-[1.15fr_0.85fr_0.7fr]">
+              <div className="ui-card-inner p-3">
+                <p className="ui-eyebrow">{language === "pt" ? "Indicador" : "Indicator"}</p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                  {(["dy", "pvp", "roi"] as DiscoveryMetric[]).map((metric) => (
+                    <button
+                      key={metric}
+                      type="button"
+                      onClick={() => setDiscoveryMetric(metric)}
+                      className={`ui-btn ui-btn-sm ${discoveryMetric === metric ? "ui-btn-primary" : "ui-btn-secondary"}`}
+                    >
+                      {discoveryMetricLabel[metric]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="ui-card-inner p-3">
+                <p className="ui-eyebrow">{language === "pt" ? "Ordenação" : "Order"}</p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setDiscoveryOrder("desc")}
+                    className={`ui-btn ui-btn-sm ${discoveryOrder === "desc" ? "ui-btn-primary" : "ui-btn-secondary"}`}
+                  >
+                    {language === "pt" ? "Maiores" : "Highest"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDiscoveryOrder("asc")}
+                    className={`ui-btn ui-btn-sm ${discoveryOrder === "asc" ? "ui-btn-primary" : "ui-btn-secondary"}`}
+                  >
+                    {language === "pt" ? "Menores" : "Lowest"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="ui-card-inner p-3">
+                <p className="ui-eyebrow">{language === "pt" ? "Corte opcional" : "Optional cutoff"}</p>
+                <input
+                  value={discoveryThreshold}
+                  onChange={(event) => setDiscoveryThreshold(event.target.value)}
+                  placeholder={discoveryMetric === "roi" ? "100" : discoveryMetric === "dy" ? "10" : "1"}
+                  inputMode="decimal"
+                  className="ui-input mt-2 w-full"
+                />
+                <p className="mt-1 text-[10px] text-[var(--text-3)]">
+                  {language === "pt"
+                    ? discoveryOrder === "desc"
+                      ? "Mostra valores maiores ou iguais ao corte."
+                      : "Mostra valores menores ou iguais ao corte."
+                    : discoveryOrder === "desc"
+                      ? "Shows values greater than or equal to the cutoff."
+                      : "Shows values less than or equal to the cutoff."}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-[var(--text-1)]">
+                {language === "pt" ? "Resultado" : "Result"} · {discoveryLoading ? "--" : discoveryRows.length}
+              </p>
+              <p className="text-xs text-[var(--text-3)]">
+                {discoverySource
+                  ? `${language === "pt" ? "Fonte" : "Source"}: ${discoverySource}${
+                    discoveryScannedCount
+                      ? ` · ${language === "pt" ? "analisados" : "scanned"}: ${discoveryScannedCount}${
+                        discoveryTotalCount ? `/${discoveryTotalCount}` : ""
+                      }`
+                      : ""
+                  }`
+                  : language === "pt"
+                    ? "Os ativos sem dados para o indicador selecionado são ocultados."
+                    : "Assets without data for the selected indicator are hidden."}
+              </p>
+            </div>
+
+            {discoveryError ? (
+              <div className="mt-3 rounded-2xl border border-[var(--red)] bg-[var(--red-dim)] p-4 text-sm text-[var(--red)]">
+                {discoveryError}
+              </div>
+            ) : discoveryLoading ? (
+              <div className="mt-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 text-sm text-[var(--text-3)]">
+                {language === "pt" ? "Carregando ativos da B3..." : "Loading B3 assets..."}
+              </div>
+            ) : discoveryRows.length ? (
+              <div className="mt-3 max-h-[55vh] overflow-y-auto pr-1">
+                <div className="grid gap-2">
+                  {discoveryRows.map((row, index) => (
+                    <button
+                      key={`discovery-${row.symbol}`}
+                      type="button"
+                      onClick={() => openDiscoveredAsset(row)}
+                      className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 text-left transition hover:border-[var(--accent)]"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-[var(--text-1)]">
+                            {String(index + 1).padStart(2, "0")} · {row.name}
+                          </p>
+                          <p className="mt-1 text-xs text-[var(--text-3)]">
+                            {row.symbol} · {getDiscoveryAssetTypeLabel(row, language)} · {row.price != null ? formatCurrency(row.price, language, DEFAULT_INVESTMENT_CURRENCY) : "--"}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-3)] px-3 py-2 text-right">
+                          <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-3)]">
+                            {discoveryMetricLabel[discoveryMetric]}
+                          </p>
+                          <p className="mt-1 text-lg font-semibold text-[var(--text-1)]">
+                            {discoveryMetric === "pvp"
+                              ? new Intl.NumberFormat(language === "pt" ? "pt-BR" : "en-US", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              }).format(row.metricValue)
+                              : formatPlainPercent(row.metricValue, language)}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3 rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-6 text-sm text-[var(--text-3)]">
+                {language === "pt"
+                  ? "Nenhum ativo da B3 encontrado com esse filtro. Tente outra métrica, direção ou corte."
+                  : "No B3 assets found with this filter. Try another metric, order, or cutoff."}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       {filterOpen ? (
         <div className="ui-modal-backdrop fixed inset-0 z-40 flex items-center justify-center px-6" onClick={() => setFilterOpen(false)}>
@@ -3361,6 +3946,152 @@ export function InvestmentsScreen() {
                     </p>
                   </div>
                   <button type="button" onClick={() => setShowModal(false)} className="ui-btn ui-btn-ghost ui-btn-sm">{t("common.cancel")}</button>
+                </div>
+
+                <div className="space-y-3 ui-card-inner p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-semibold text-[var(--text-1)]">
+                        {language === "pt" ? "Registrar nova compra" : "Register new purchase"}
+                      </p>
+                      <p className="text-[11px] text-[var(--text-3)]">
+                        {language === "pt"
+                          ? "Use quando comprar mais desse investimento. A quantidade e o preço médio serão recalculados."
+                          : "Use this when buying more of this investment. Quantity and average price will be recalculated."}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-[var(--surface-3)] px-2 py-1 text-[10px] font-semibold text-[var(--text-3)]">
+                      {language === "pt" ? "Compra" : "Purchase"}
+                    </span>
+                  </div>
+
+                  <div className="grid min-w-0 gap-2 md:grid-cols-2">
+                    <label className="space-y-1.5">
+                      <span className="ui-eyebrow">{language === "pt" ? "Data da compra" : "Purchase date"}</span>
+                      <input
+                        type="date"
+                        value={editPurchaseDate}
+                        onChange={(event) => setEditPurchaseDate(event.target.value)}
+                        className="ui-input w-full"
+                      />
+                    </label>
+                    {activeAsset.type === "fixed_income" ? (
+                      <label className="space-y-1.5">
+                        <span className="ui-eyebrow">{language === "pt" ? "Valor aplicado" : "Invested value"}</span>
+                        <input
+                          value={editPurchaseValue}
+                          onChange={(event) =>
+                            setEditPurchaseValue(formatCentsInputForCurrency(event.target.value, activeAssetCurrency))
+                          }
+                          placeholder={t("investments.investedValue")}
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          className="ui-input w-full"
+                        />
+                      </label>
+                    ) : (
+                      <label className="space-y-1.5">
+                        <span className="ui-eyebrow">{language === "pt" ? "Preço por unidade" : "Unit price"}</span>
+                        <input
+                          value={editPurchasePrice}
+                          onChange={(event) =>
+                            setEditPurchasePrice(formatCentsInputForCurrency(event.target.value, activeAssetCurrency))
+                          }
+                          placeholder={t("investments.manualPrice")}
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          className="ui-input w-full"
+                        />
+                      </label>
+                    )}
+                  </div>
+
+                  {activeAsset.type !== "fixed_income" ? (
+                    <>
+                      <div className="flex min-w-0 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditPurchaseMode("quantity")}
+                          className={`min-w-0 flex-1 ui-btn ui-btn-sm ${editPurchaseMode === "quantity" ? "ui-btn-primary" : "ui-btn-secondary"}`}
+                        >
+                          {t("investments.modeQuantity")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditPurchaseMode("value")}
+                          className={`min-w-0 flex-1 ui-btn ui-btn-sm ${editPurchaseMode === "value" ? "ui-btn-primary" : "ui-btn-secondary"}`}
+                        >
+                          {t("investments.modeValue")}
+                        </button>
+                      </div>
+                      {editPurchaseMode === "quantity" ? (
+                        <input
+                          value={editPurchaseQuantity}
+                          onChange={(event) => setEditPurchaseQuantity(event.target.value)}
+                          placeholder={t("investments.quantity")}
+                          inputMode="decimal"
+                          className="ui-input w-full"
+                        />
+                      ) : (
+                        <input
+                          value={editPurchaseValue}
+                          onChange={(event) =>
+                            setEditPurchaseValue(formatCentsInputForCurrency(event.target.value, activeAssetCurrency))
+                          }
+                          placeholder={t("investments.investedValue")}
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          className="ui-input w-full"
+                        />
+                      )}
+                    </>
+                  ) : null}
+
+                  <div className="grid min-w-0 gap-2 md:grid-cols-3">
+                    <div className="ui-card-inner px-3 py-2">
+                      <p className="text-[11px] text-[var(--text-3)]">
+                        {language === "pt" ? "Quantidade adicionada" : "Added quantity"}
+                      </p>
+                      <p className="text-sm font-semibold text-[var(--text-1)]">
+                        {editPurchaseComputed.qty.gt(0) ? editPurchaseComputed.qty.toString() : "--"}
+                      </p>
+                    </div>
+                    <div className="ui-card-inner px-3 py-2">
+                      <p className="text-[11px] text-[var(--text-3)]">{t("investments.total")}</p>
+                      <p className="text-sm font-semibold text-[var(--text-1)]">
+                        {editPurchaseComputed.total.gt(0)
+                          ? formatCurrency(Number(editPurchaseComputed.total.toString()), language, activeAssetCurrency)
+                          : "--"}
+                      </p>
+                    </div>
+                    <div className="ui-card-inner px-3 py-2">
+                      <p className="text-[11px] text-[var(--text-3)]">
+                        {activeAsset.type === "fixed_income"
+                          ? language === "pt"
+                            ? "Total aplicado"
+                            : "Total invested"
+                          : t("investments.newAvg")}
+                      </p>
+                      <p className="text-sm font-semibold text-[var(--text-1)]">
+                        {editPurchaseComputed.newAvg.gt(0)
+                          ? formatCurrency(Number(editPurchaseComputed.newAvg.toString()), language, activeAssetCurrency)
+                          : "--"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleRegisterEditPurchase}
+                    disabled={editPurchaseSaving}
+                    className="ui-btn ui-btn-primary ui-btn-lg w-full"
+                  >
+                    {editPurchaseSaving
+                      ? t("common.saving")
+                      : language === "pt"
+                        ? "Registrar compra"
+                        : "Register purchase"}
+                  </button>
                 </div>
 
                 <div className="space-y-2">
