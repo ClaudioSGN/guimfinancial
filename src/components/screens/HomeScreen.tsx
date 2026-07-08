@@ -2282,6 +2282,7 @@ export function HomeScreen() {
             type="button"
             onClick={openQuickAddModal}
             className="site-action-button h-10"
+            data-tour="quick-add"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M12 4a3 3 0 013 3v5a3 3 0 01-6 0V7a3 3 0 013-3z" />
@@ -2470,7 +2471,7 @@ export function HomeScreen() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-12">
 
         {/* Balance hero */}
-        <div className="ui-card p-5 lg:col-span-4">
+        <div className="ui-card p-5 lg:col-span-4" data-tour="home-balance-card">
           <div className="flex items-center justify-between">
             <p className="ui-eyebrow">{t("home.balanceLabel")}</p>
             <button
@@ -2502,13 +2503,13 @@ export function HomeScreen() {
         </div>
 
         {/* Income vs Expenses stats */}
-        <div className="ui-card p-5 lg:col-span-8">
+        <div className="ui-card p-5 lg:col-span-8" data-tour="home-income-expenses-card">
           <div className="mb-4 flex items-center justify-between">
             <p className="text-sm font-semibold text-[var(--text-1)]">{t("home.inflowVsOutflow")}</p>
             <span className="text-xs text-[var(--text-3)]">{t("home.vsLastMonth")}</span>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="ui-card-inner p-3">
+            <div className="ui-card-inner p-3" data-tour="home-income-card">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--green-dim)]">
@@ -2539,7 +2540,7 @@ export function HomeScreen() {
               </div>
             </div>
 
-            <div className="ui-card-inner p-3">
+            <div className="ui-card-inner p-3" data-tour="home-expenses-card">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--red-dim)]">
@@ -2621,7 +2622,7 @@ export function HomeScreen() {
           </div>
         </div>
 
-        <div className="ui-card p-5 sm:col-span-2 lg:col-span-4">
+        <div className="ui-card p-5 sm:col-span-2 lg:col-span-4" data-tour="home-budget-card">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-[var(--text-1)]">{t("tabs.budget")}</p>
@@ -2692,7 +2693,7 @@ export function HomeScreen() {
         </div>
 
         {/* Category breakdown */}
-        <div className="ui-card p-5 sm:col-span-2 lg:col-span-8">
+        <div className="ui-card p-5 sm:col-span-2 lg:col-span-8" data-tour="home-categories-card">
           <div className="mb-3 flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-[var(--text-1)]">{t("home.categories")}</p>
@@ -2787,7 +2788,7 @@ export function HomeScreen() {
         </div>
 
         {/* Daily flow chart */}
-        <div className="ui-card p-5 sm:col-span-2 lg:col-span-12">
+        <div className="ui-card p-5 sm:col-span-2 lg:col-span-12" data-tour="home-flow-card">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-[var(--text-1)]">{t("home.monthlyFlow")}</p>
@@ -2833,7 +2834,7 @@ export function HomeScreen() {
         </div>
 
         {/* Accounts */}
-        <div className="ui-card p-5 sm:col-span-2 lg:col-span-3">
+        <div className="ui-card p-5 sm:col-span-2 lg:col-span-3" data-tour="home-accounts-card">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-sm font-semibold text-[var(--text-1)]">{t("home.accounts")}</p>
             <span className="text-xs text-[var(--text-3)]">
@@ -2896,7 +2897,7 @@ export function HomeScreen() {
         </div>
 
         {/* Credit cards */}
-        <div className="ui-card p-5 sm:col-span-2 lg:col-span-9">
+        <div className="ui-card p-5 sm:col-span-2 lg:col-span-9" data-tour="home-cards-card">
           <div className="mb-4 flex items-center justify-between">
             <p className="text-sm font-semibold text-[var(--text-1)]">{t("home.creditCards")}</p>
             <AppIcon name="credit-card" size={16} color="var(--text-3)" />

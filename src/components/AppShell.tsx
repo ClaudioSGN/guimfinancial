@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppIcon } from "@/components/AppIcon";
+import { GuidedTutorial } from "@/components/GuidedTutorial";
 import { NotificationsPanel } from "@/components/social/NotificationsPanel";
 import { NewEntryScreen } from "@/components/screens/NewEntryScreen";
 import { useAuth } from "@/lib/auth";
@@ -230,6 +231,7 @@ export function AppShell({ activeTab, children }: Props) {
                   key={item.key}
                   href={item.href}
                   aria-current={isActive ? "page" : undefined}
+                  data-tour={`nav-${item.key}`}
                   className={`site-nav-item ${isActive ? "site-nav-item-active" : ""}`}
                 >
                   <AppIcon name={item.icon} size={17} />
@@ -245,6 +247,7 @@ export function AppShell({ activeTab, children }: Props) {
               onClick={() => setNotificationsOpen(true)}
               className="site-action-button"
               title={notificationsLabel}
+              data-tour="notifications-button"
             >
               <AppIcon name="bell" size={17} />
               <span>{notificationsLabel}</span>
@@ -253,11 +256,12 @@ export function AppShell({ activeTab, children }: Props) {
               type="button"
               onClick={() => setMenuOpen((value) => !value)}
               className="site-primary-button"
+              data-tour="register-button"
             >
               <AppIcon name="plus" size={17} color="#041016" />
               <span>{language === "pt" ? "Registrar" : "Register"}</span>
             </button>
-            <Link href="/profile" className="ml-2 flex h-11 items-center gap-3 border-l border-[var(--border)] pl-4 transition-opacity hover:opacity-85">
+            <Link href="/profile" data-tour="profile-link" className="ml-2 flex h-11 items-center gap-3 border-l border-[var(--border)] pl-4 transition-opacity hover:opacity-85">
               <div className="text-right">
                 <p className="max-w-[150px] truncate text-xs font-bold text-[var(--text-1)]">{userName}</p>
                 <p className="max-w-[150px] truncate text-[11px] text-[var(--text-3)]">{user?.email}</p>
@@ -312,6 +316,7 @@ export function AppShell({ activeTab, children }: Props) {
                 key={item.key}
                 href={item.href}
                 aria-current={isActive ? "page" : undefined}
+                data-tour={`nav-${item.key}`}
                 className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition-all ${
                   isActive
                     ? "bg-[rgba(79,142,255,0.18)] text-[var(--text-1)]"
@@ -331,6 +336,7 @@ export function AppShell({ activeTab, children }: Props) {
             type="button"
             onClick={() => setMenuOpen((value) => !value)}
             className="mx-1 flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] shadow-[0_6px_20px_rgba(79,142,255,0.4)] transition-transform active:scale-95"
+            data-tour="register-button"
           >
             <div className={`transition-transform duration-200 ${menuOpen ? "rotate-45" : "rotate-0"}`}>
               <AppIcon name="plus" size={22} color="#fff" />
@@ -344,6 +350,7 @@ export function AppShell({ activeTab, children }: Props) {
                 key={item.key}
                 href={item.href}
                 aria-current={isActive ? "page" : undefined}
+                data-tour={`nav-${item.key}`}
                 className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition-all ${
                   isActive
                     ? "bg-[rgba(79,142,255,0.18)] text-[var(--text-1)]"
@@ -378,6 +385,7 @@ export function AppShell({ activeTab, children }: Props) {
               type="button"
               onClick={() => setActiveModalType(null)}
               className="absolute right-3 top-3 z-10 px-2.5 py-1.5 text-sm font-medium text-[var(--text-2)] transition-colors hover:bg-[var(--surface-3)] hover:text-[var(--text-1)] sm:right-4 sm:top-4"
+              data-tour="new-entry-close"
             >
               {language === "pt" ? "Fechar" : "Close"}
             </button>
@@ -403,7 +411,7 @@ export function AppShell({ activeTab, children }: Props) {
                   {language === "pt" ? "Caixa de entrada" : "Inbox"}
                   </p>
                 </div>
-                <button type="button" onClick={() => setNotificationsOpen(false)} className="ui-btn ui-btn-ghost ui-btn-sm">
+                <button type="button" onClick={() => setNotificationsOpen(false)} className="ui-btn ui-btn-ghost ui-btn-sm" data-tour="notifications-close">
                   {language === "pt" ? "Fechar" : "Close"}
                 </button>
               </div>
@@ -433,7 +441,7 @@ export function AppShell({ activeTab, children }: Props) {
             className="absolute right-8 top-24 hidden md:block"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="command-menu ui-slide-up w-[520px] overflow-hidden p-0 shadow-[0_26px_90px_rgba(0,0,0,0.45)]">
+            <div className="command-menu ui-slide-up w-[520px] overflow-hidden p-0 shadow-[0_26px_90px_rgba(0,0,0,0.45)]" data-tour="register-menu">
               <div className="command-menu-header">
                 <p className="page-kicker">{language === "pt" ? "Registrar" : "Register"}</p>
                 <h2>{language === "pt" ? "Escolha o próximo passo" : "Choose the next step"}</h2>
@@ -453,6 +461,7 @@ export function AppShell({ activeTab, children }: Props) {
                       openNewEntry(item.key);
                     }}
                     className="command-menu-item"
+                    data-tour={`register-${item.key}`}
                   >
                     <span className="command-menu-icon" style={{ color: item.color }}>
                       <AppIcon name={item.icon} size={18} />
@@ -473,7 +482,7 @@ export function AppShell({ activeTab, children }: Props) {
             ref={menuRef}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="relative h-[200px] w-[200px]">
+            <div className="relative h-[200px] w-[200px]" data-tour="register-menu">
               {menuItems.map((item, index) => {
                 const angles = [225, 180, 135, 45, 0, 315];
                 const angle = angles[index] ?? 0;
@@ -499,6 +508,7 @@ export function AppShell({ activeTab, children }: Props) {
                         : "translate(-50%, -50%) scale(0.3)",
                       transitionDelay: menuOpen ? `${index * 30}ms` : "0ms",
                     }}
+                    data-tour={`register-${item.key}`}
                   >
                     <span
                       className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--border-bright)] bg-[var(--surface-2)] shadow-[var(--shadow-md)]"
@@ -516,6 +526,7 @@ export function AppShell({ activeTab, children }: Props) {
           </div>
         </div>
       ) : null}
+      <GuidedTutorial />
     </div>
   );
 }

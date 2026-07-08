@@ -2820,7 +2820,7 @@ export function InvestmentsScreen() {
           <p className="text-sm text-[var(--text-3)]">{t("investments.subtitle")}</p>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
-          <button type="button" onClick={() => setDiscoveryOpen(true)} className="ui-btn ui-btn-primary ui-btn-sm">
+          <button type="button" onClick={() => setDiscoveryOpen(true)} className="ui-btn ui-btn-primary ui-btn-sm" data-tour="investments-discover">
             <AppIcon name="filter" size={14} />
             {language === "pt" ? "Descobrir ativos" : "Discover assets"}
           </button>
@@ -2859,7 +2859,7 @@ export function InvestmentsScreen() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => setPortfolioAnalysisOpen(true)} className="ui-btn ui-btn-secondary">
+            <button type="button" onClick={() => setPortfolioAnalysisOpen(true)} className="ui-btn ui-btn-secondary" data-tour="portfolio-analysis-shortcut">
               <AppIcon name="eye" size={15} />
               {language === "pt" ? "Ver análise da carteira" : "View portfolio analysis"}
             </button>
@@ -2890,7 +2890,7 @@ export function InvestmentsScreen() {
                 : "Open the analysis only when you want to see table, risk, allocation, and largest weights."}
             </p>
           </div>
-          <button type="button" onClick={() => setPortfolioAnalysisOpen(true)} className="ui-btn ui-btn-primary ui-btn-sm">
+          <button type="button" onClick={() => setPortfolioAnalysisOpen(true)} className="ui-btn ui-btn-primary ui-btn-sm" data-tour="portfolio-analysis-open">
             {language === "pt" ? "Abrir análise" : "Open analysis"}
           </button>
         </div>
@@ -2919,6 +2919,7 @@ export function InvestmentsScreen() {
                   type="button"
                   onClick={() => setPortfolioAnalysisOpen(false)}
                   className="ui-btn ui-btn-ghost ui-btn-sm"
+                  data-tour="portfolio-analysis-close"
                 >
                   {language === "pt" ? "Fechar" : "Close"}
                 </button>
@@ -3454,7 +3455,7 @@ export function InvestmentsScreen() {
                     : "Filter B3 assets by DY, P/B, or ROI. The search is not limited to your portfolio."}
                 </p>
               </div>
-              <button type="button" onClick={() => setDiscoveryOpen(false)} className="ui-btn ui-btn-ghost ui-btn-sm">
+              <button type="button" onClick={() => setDiscoveryOpen(false)} className="ui-btn ui-btn-ghost ui-btn-sm" data-tour="investments-discovery-close">
                 {t("common.cancel")}
               </button>
             </div>

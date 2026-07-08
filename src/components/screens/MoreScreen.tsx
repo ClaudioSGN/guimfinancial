@@ -236,6 +236,13 @@ export function MoreScreen() {
     setTimeout(() => setResetDataSuccess(false), 3000);
   }
 
+  function handleRestartTutorial() {
+    window.localStorage.removeItem("guimfinancial:tutorial:completed");
+    window.localStorage.setItem("guimfinancial:tutorial:active", "true");
+    window.localStorage.setItem("guimfinancial:tutorial:step", "0");
+    window.dispatchEvent(new Event("guimfinancial:restart-tutorial"));
+  }
+
   async function refreshMfaState() {
     if (!user) {
       setVerifiedTotpFactorId(null);
@@ -550,6 +557,22 @@ export function MoreScreen() {
 
         {user ? (
           <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={handleRestartTutorial}
+              data-tour="tutorial-reset"
+              className="w-full rounded-xl border border-[var(--border-bright)] bg-[var(--surface-2)] p-4 text-left transition-colors hover:bg-[var(--surface-3)]"
+            >
+              <p className="text-sm font-semibold text-[var(--text-1)]">
+                {language === "pt" ? "Reiniciar tutorial do app" : "Restart app tutorial"}
+              </p>
+              <p className="mt-0.5 text-xs text-[var(--text-3)]">
+                {language === "pt"
+                  ? "Veja novamente o guia interativo dos primeiros passos."
+                  : "See the interactive first-steps guide again."}
+              </p>
+            </button>
+
             <button type="button" onClick={handleResetAllData} disabled={resettingData}
               className="w-full rounded-xl border border-[var(--amber)] border-opacity-30 bg-[var(--amber-dim)] p-4 text-left transition-opacity disabled:opacity-60">
               <p className="text-sm font-semibold text-[var(--amber)]">
