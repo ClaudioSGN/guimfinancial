@@ -379,37 +379,37 @@ export default function ExportPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0D0F14] px-6 py-6 text-slate-50">
-      <div className="mx-auto flex w-full max-w-[720px] flex-col gap-5">
-        <Link href="/more" className="flex items-center gap-2 text-xs text-[#9CA3AF]">
+    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-1)] sm:px-6 lg:px-10">
+      <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6">
+        <Link href="/more" className="ui-btn ui-btn-secondary ui-btn-sm w-fit">
           <AppIcon name="arrow-left" size={14} />
           {t("tabs.more")}
         </Link>
 
-        <div className="space-y-1">
-          <p className="text-[11px] uppercase tracking-[0.2em] text-[#7F8694]">
+        <div className="space-y-2">
+          <p className="text-xs uppercase tracking-[0.05em] text-[var(--text-3)]">
             {t("export.reports")}
           </p>
-          <p className="text-2xl font-semibold text-[#E5E8EF]">
+          <p className="text-3xl font-semibold tracking-[-0.025em] text-[var(--text-1)] sm:text-4xl">
             {t("export.title")}
           </p>
-          <p className="text-sm text-[#9CA3AF]">{copy.subtitle}</p>
+          <p className="text-sm text-[var(--text-3)]">{copy.subtitle}</p>
         </div>
 
-        <div className="rounded-3xl border border-[#1B2230] bg-[#111723] p-5">
+        <div className="ui-card w-full max-w-[720px] p-5">
           <div className="flex flex-col gap-4">
             <div className="space-y-2">
-              <p className="text-xs uppercase tracking-[0.16em] text-[#7F8694]">{copy.month}</p>
+              <p className="text-xs uppercase tracking-[0.05em] text-[var(--text-3)]">{copy.month}</p>
               <button
                 type="button"
                 onClick={() => setMonthOpen((value) => !value)}
-                className="flex w-full items-center justify-between rounded-2xl border border-[#2A3140] bg-[#141A25] px-4 py-3 text-left text-sm font-semibold text-[#C7CEDA]"
+                className="ui-input flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium"
               >
                 <span>{monthLabel}</span>
                 <AppIcon name="chevron-down" size={16} />
               </button>
               {monthOpen ? (
-                <div className="grid gap-2 rounded-2xl border border-[#1B2230] bg-[#0F141E] p-2 sm:grid-cols-3">
+                <div className="grid gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-2 sm:grid-cols-3">
                   {monthOptions.map((option) => (
                     <button
                       key={option.label}
@@ -418,7 +418,7 @@ export default function ExportPage() {
                         setSelectedMonth(option.value);
                         setMonthOpen(false);
                       }}
-                      className="rounded-xl px-3 py-2 text-left text-sm text-[#C7CEDA] hover:bg-[#151A27]"
+                      className="rounded-full px-3 py-2 text-left text-sm text-[var(--text-1)] hover:bg-[var(--surface-2)]"
                     >
                       {option.label}
                     </button>
@@ -431,14 +431,14 @@ export default function ExportPage() {
               type="button"
               onClick={handleExportCsv}
               disabled={loading || !user}
-              className="flex items-center justify-center gap-2 rounded-2xl bg-[#E6EDF3] px-4 py-3 text-sm font-semibold text-[#0C1018] disabled:opacity-60"
+              className="ui-btn ui-btn-primary flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium disabled:opacity-60"
             >
               <AppIcon name="download" size={16} />
               {loading ? copy.exporting : copy.button}
             </button>
 
-            {errorMsg ? <p className="text-sm text-red-400">{errorMsg}</p> : null}
-            {successMsg ? <p className="text-sm text-[#5DD6C7]">{successMsg}</p> : null}
+            {errorMsg ? <p className="text-sm text-[var(--red)]">{errorMsg}</p> : null}
+            {successMsg ? <p className="text-sm text-[var(--text-1)]">{successMsg}</p> : null}
           </div>
         </div>
       </div>

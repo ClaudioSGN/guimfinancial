@@ -197,17 +197,17 @@ export default function AccountsPage() {
   }
 
   return (
-    <div className="app-shell min-h-screen px-6 py-6 text-slate-50 lg:px-10">
-      <div className="mx-auto flex w-full max-w-[1320px] flex-col gap-6">
+    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-1)] sm:px-6 lg:px-10">
+      <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6">
         <Link href="/more" className="ui-btn ui-btn-secondary ui-btn-sm w-fit">
           ← {t("tabs.more")}
         </Link>
 
-        <div className="ui-card-2 p-6">
+        <div className="py-2">
           <p className="ui-eyebrow">
             {t("accounts.title")}
           </p>
-          <p className="mt-2 font-[var(--font-display)] text-3xl font-black tracking-[-0.05em] text-[#E5E8EF]">
+          <p className="mt-2 font-[var(--font-display)] text-3xl font-semibold tracking-[-0.025em] sm:text-4xl text-[var(--text-1)]">
             {t("accounts.subtitle")}
           </p>
           <p className="mt-2 max-w-2xl text-sm text-[var(--text-2)]">
@@ -219,7 +219,7 @@ export default function AccountsPage() {
 
         <div className="grid gap-5 lg:grid-cols-[minmax(360px,0.85fr)_minmax(0,1.15fr)]">
         <div className="ui-card space-y-3 p-5">
-          <p className="text-sm font-bold text-[var(--text-1)]">
+          <p className="text-sm font-semibold text-[var(--text-1)]">
             {language === "pt" ? "Nova conta" : "New account"}
           </p>
           <BankBrandPicker selected={bankCode} onSelect={setBankCode} />
@@ -227,16 +227,16 @@ export default function AccountsPage() {
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder={t("accounts.namePlaceholder")}
-            className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
+            className="ui-input w-full px-4 py-3 text-sm"
           />
           <div className="grid gap-3 sm:grid-cols-2">
             {typeOptions.map((option) => (
               <label
                 key={option.value}
-                className={`flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-3 text-sm ${
+                className={`flex cursor-pointer items-center gap-2 rounded-full border px-4 py-3 text-sm ${
                   type === option.value
-                    ? "border-[#5DD6C7] bg-[#0F141E] text-[#E4E7EC]"
-                    : "border-[#1E232E] bg-[#121621] text-[#8B94A6]"
+                    ? "border-[var(--text-1)] bg-[var(--surface-2)] text-[var(--text-1)]"
+                    : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)]"
                 }`}
               >
                 <input
@@ -245,7 +245,7 @@ export default function AccountsPage() {
                   value={option.value}
                   checked={type === option.value}
                   onChange={(event) => setType(event.target.value)}
-                  className="h-4 w-4 accent-[#5DD6C7]"
+                  className="h-4 w-4 accent-[var(--text-1)]"
                 />
                 <span>{option.label}</span>
               </label>
@@ -257,9 +257,9 @@ export default function AccountsPage() {
             placeholder={t("accounts.balancePlaceholder")}
             inputMode="decimal"
             pattern="[0-9.,]*"
-            className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
+            className="ui-input w-full px-4 py-3 text-sm"
           />
-          {errorMsg ? <p className="text-xs text-red-400">{errorMsg}</p> : null}
+          {errorMsg ? <p className="text-xs text-[var(--red)]">{errorMsg}</p> : null}
           <button
             type="button"
             onClick={handleAdd}
@@ -273,7 +273,7 @@ export default function AccountsPage() {
         <div className="ui-card p-5">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <p className="text-sm font-bold text-[var(--text-1)]">{language === "pt" ? "Contas cadastradas" : "Registered accounts"}</p>
+              <p className="text-sm font-semibold text-[var(--text-1)]">{language === "pt" ? "Contas cadastradas" : "Registered accounts"}</p>
               <p className="text-xs text-[var(--text-3)]">{accounts.length} {language === "pt" ? "contas" : "accounts"}</p>
             </div>
           </div>
@@ -281,17 +281,17 @@ export default function AccountsPage() {
           {accounts.map((item) => (
             <div
               key={item.id}
-              className="flex items-center justify-between border border-[#1E232E] bg-[#121621]/80 p-4 transition-colors hover:border-[var(--border-bright)]"
+              className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4 transition-colors hover:border-[var(--border-bright)]"
             >
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-3">
                 <BankBrandBadge bankCode={item.bank_code} />
                 <div className="space-y-1">
-                  <p className="text-sm font-semibold text-[#E4E7EC]">{item.name}</p>
-                  <p className="text-xs text-[#8A93A3]">{item.type}</p>
+                  <p className="text-sm font-semibold text-[var(--text-1)]">{item.name}</p>
+                  <p className="text-xs text-[var(--text-3)]">{item.type}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <p className="text-sm font-semibold text-[#C7CEDA]">
+              <div className="flex min-w-0 flex-wrap items-center gap-3">
+                <p className="text-sm font-semibold text-[var(--text-1)]">
                   {new Intl.NumberFormat(language === "pt" ? "pt-BR" : "en-US", {
                     style: "currency",
                     currency,
@@ -300,7 +300,7 @@ export default function AccountsPage() {
                 <button
                   type="button"
                   onClick={() => openEdit(item)}
-                  className="border border-[#2A3140] bg-[#0F141E] px-3 py-1 text-xs text-[#8B94A6] hover:border-[#5DD6C7]/60 hover:text-[#5DD6C7]"
+                  className="ui-btn ui-btn-secondary ui-btn-sm"
                 >
                   {t("common.edit")}
                 </button>
@@ -314,18 +314,18 @@ export default function AccountsPage() {
 
       {editing ? (
         <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4"
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/25 px-4"
         >
           <div
-            className="w-full max-w-md border border-[#1E232E] bg-[#121621] p-5"
+            className="ui-card w-full max-w-md p-5"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm font-semibold text-[#E5E8EF]">{t("accounts.title")}</p>
+              <p className="text-sm font-semibold text-[var(--text-1)]">{t("accounts.title")}</p>
               <button
                 type="button"
                 onClick={closeEdit}
-                className="text-xs text-[#8B94A6]"
+                className="text-xs text-[var(--text-3)]"
               >
                 {t("common.cancel")}
               </button>
@@ -336,16 +336,16 @@ export default function AccountsPage() {
                 value={editName}
                 onChange={(event) => setEditName(event.target.value)}
                 placeholder={t("accounts.namePlaceholder")}
-                className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
+                className="ui-input w-full px-4 py-3 text-sm"
               />
               <div className="grid gap-3 sm:grid-cols-2">
                 {typeOptions.map((option) => (
                   <label
                     key={option.value}
-                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-3 text-sm ${
+                    className={`flex cursor-pointer items-center gap-2 rounded-full border px-4 py-3 text-sm ${
                       editType === option.value
-                        ? "border-[#5DD6C7] bg-[#0F141E] text-[#E4E7EC]"
-                        : "border-[#1E232E] bg-[#121621] text-[#8B94A6]"
+                        ? "border-[var(--text-1)] bg-[var(--surface-2)] text-[var(--text-1)]"
+                        : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)]"
                     }`}
                   >
                     <input
@@ -354,7 +354,7 @@ export default function AccountsPage() {
                       value={option.value}
                       checked={editType === option.value}
                       onChange={(event) => setEditType(event.target.value)}
-                      className="h-4 w-4 accent-[#5DD6C7]"
+                      className="h-4 w-4 accent-[var(--text-1)]"
                     />
                     <span>{option.label}</span>
                   </label>
@@ -366,14 +366,14 @@ export default function AccountsPage() {
                 placeholder={t("accounts.balancePlaceholder")}
                 inputMode="numeric"
                 pattern="[0-9]*"
-                className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]"
+                className="ui-input w-full px-4 py-3 text-sm"
               />
-              {errorMsg ? <p className="text-xs text-red-400">{errorMsg}</p> : null}
+              {errorMsg ? <p className="text-xs text-[var(--red)]">{errorMsg}</p> : null}
               <button
                 type="button"
                 onClick={handleEditSave}
                 disabled={editSaving}
-                className="w-full rounded-xl bg-[#E6EDF3] py-3 text-sm font-semibold text-[#0C1018] disabled:opacity-60"
+                className="ui-btn ui-btn-primary w-full py-3 text-sm font-medium disabled:opacity-60"
               >
                 {editSaving ? t("common.saving") : t("common.save")}
               </button>

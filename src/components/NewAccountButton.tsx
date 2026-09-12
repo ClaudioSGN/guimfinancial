@@ -118,7 +118,7 @@ export function NewAccountButton() {
       <button
         type="button"
         onClick={() => setChooserOpen((v) => !v)}
-        className="fixed bottom-4 right-4 flex h-12 w-12 items-center justify-center rounded-full bg-white text-2xl font-bold text-black shadow-lg shadow-black/30 transition duration-200 hover:scale-105 hover:shadow-black/40 sm:bottom-6 sm:right-6"
+        className="fixed bottom-4 right-4 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--accent)] text-2xl font-medium text-white transition duration-200 hover:bg-[var(--surface)] sm:bottom-6 sm:right-6"
       >
         +
       </button>
@@ -132,14 +132,14 @@ export function NewAccountButton() {
           <button
             type="button"
             onClick={() => openModal("bank")}
-            className="pointer-events-auto rounded-full bg-white px-4 py-2 text-black shadow-lg shadow-black/20 transition duration-150 ease-out hover:translate-y-[-1px] hover:shadow-black/30"
+            className="ui-btn ui-btn-secondary pointer-events-auto px-4 py-2 shadow-sm"
           >
             Cadastrar um banco
           </button>
           <button
             type="button"
             onClick={() => openModal("card")}
-            className="pointer-events-auto rounded-full bg-white px-4 py-2 text-black shadow-lg shadow-black/20 transition duration-150 ease-out hover:translate-y-[-1px] hover:shadow-black/30"
+            className="ui-btn ui-btn-secondary pointer-events-auto px-4 py-2 shadow-sm"
           >
             Cadastrar um cartão
           </button>
@@ -148,14 +148,14 @@ export function NewAccountButton() {
 
       {open && (
         <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4"
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/25 px-4"
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 p-5 shadow-xl"
+            className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-medium text-zinc-100">
+              <h2 className="text-sm font-medium text-[var(--text-1)]">
                 {accountType === "card"
                   ? "Novo cartão"
                   : "Nova conta bancária"}
@@ -166,7 +166,7 @@ export function NewAccountButton() {
                   setOpen(false);
                   resetForm();
                 }}
-                className="text-xs text-zinc-500 hover:text-zinc-300"
+                className="text-sm text-[var(--text-3)] hover:text-[var(--text-2)]"
               >
                 Fechar
               </button>
@@ -174,14 +174,14 @@ export function NewAccountButton() {
 
             <form className="space-y-4" onSubmit={handleSubmit}>
               <div className="space-y-1 text-sm">
-                <label className="text-xs text-zinc-400">
+                <label className="text-sm text-[var(--text-3)]">
                   Nome da conta / banco
                 </label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                  className="ui-input w-full px-3 py-2 text-sm"
                   placeholder="Nubank, Itaú..."
                   required
                 />
@@ -189,7 +189,7 @@ export function NewAccountButton() {
 
               {accountType === "bank" && (
                 <div className="space-y-1 text-sm">
-                  <label className="text-xs text-zinc-400">
+                  <label className="text-sm text-[var(--text-3)]">
                     Saldo inicial ({currency})
                   </label>
                   <input
@@ -197,7 +197,7 @@ export function NewAccountButton() {
                     step="0.01"
                     value={initialBalance}
                     onChange={(e) => setInitialBalance(e.target.value)}
-                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                    className="ui-input w-full px-3 py-2 text-sm"
                     placeholder="Ex: 1500,00"
                   />
                 </div>
@@ -206,7 +206,7 @@ export function NewAccountButton() {
               {accountType === "card" && (
                 <>
                   <div className="space-y-1 text-sm">
-                    <label className="text-xs text-zinc-400">
+                    <label className="text-sm text-[var(--text-3)]">
                       Limite total do cartão
                     </label>
                     <input
@@ -214,14 +214,14 @@ export function NewAccountButton() {
                       step="0.01"
                       value={cardLimit}
                       onChange={(e) => setCardLimit(e.target.value)}
-                      className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                      className="ui-input w-full px-3 py-2 text-sm"
                       placeholder="Ex: 2000,00"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div className="space-y-1">
-                      <label className="text-xs text-zinc-400">
+                      <label className="text-sm text-[var(--text-3)]">
                         Dia de fechamento (cartão)
                       </label>
                       <input
@@ -230,13 +230,13 @@ export function NewAccountButton() {
                         max={31}
                         value={closingDay}
                         onChange={(e) => setClosingDay(e.target.value)}
-                        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                        className="ui-input w-full px-3 py-2 text-sm"
                         placeholder="10"
                       />
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-xs text-zinc-400">
+                      <label className="text-sm text-[var(--text-3)]">
                         Dia de vencimento (fatura)
                       </label>
                       <input
@@ -245,7 +245,7 @@ export function NewAccountButton() {
                         max={31}
                         value={dueDay}
                         onChange={(e) => setDueDay(e.target.value)}
-                        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                        className="ui-input w-full px-3 py-2 text-sm"
                         placeholder="22"
                       />
                     </div>
@@ -253,12 +253,12 @@ export function NewAccountButton() {
                 </>
               )}
 
-              {errorMsg && <p className="text-xs text-red-400">{errorMsg}</p>}
+              {errorMsg && <p className="text-xs text-[var(--red)]">{errorMsg}</p>}
 
               <button
                 type="submit"
                 disabled={saving}
-                className="mt-2 w-full rounded-xl bg-zinc-100 py-2 text-sm font-medium text-black hover:bg-zinc-300 disabled:opacity-60"
+                className="mt-2 w-full rounded-full bg-[var(--accent)] py-2 text-sm font-medium text-white hover:bg-[var(--surface)] disabled:opacity-60"
               >
                 {saving ? "A criar..." : "Criar"}
               </button>

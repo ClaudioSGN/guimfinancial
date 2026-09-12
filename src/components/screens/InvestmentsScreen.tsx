@@ -817,8 +817,8 @@ function getRiskText(classification: PortfolioRiskClassification, language: "pt"
 function getRiskTone(classification: PortfolioRiskClassification) {
   if (classification === "low") return "border-[var(--green)] bg-[var(--green-dim)] text-[var(--green)]";
   if (classification === "moderate") return "border-[var(--amber)] bg-[var(--amber-dim)] text-[var(--amber)]";
-  if (classification === "high") return "border-[var(--red)] bg-[var(--red-dim)] text-[var(--red)]";
-  if (classification === "very_high") return "border-[var(--red)] bg-[var(--red-dim)] text-[var(--red)]";
+  if (classification === "high") return "border-[var(--border-bright)] bg-[var(--surface-2)] text-[var(--text-2)]";
+  if (classification === "very_high") return "border-[var(--border-bright)] bg-[var(--surface-2)] text-[var(--text-2)]";
   return "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)]";
 }
 
@@ -2759,12 +2759,12 @@ export function InvestmentsScreen() {
     {
       label: language === "pt" ? "Lucro/prejuízo" : "Profit/loss",
       value: `${portfolioRisk.totals.result >= 0 ? "+" : "-"}${formatCurrency(Math.abs(portfolioRisk.totals.result), language, portfolioDisplayCurrency)}`,
-      tone: portfolioRisk.totals.result >= 0 ? "text-[var(--green)]" : "text-[var(--red)]",
+      tone: portfolioRisk.totals.result >= 0 ? "text-[var(--text-1)]" : "text-[var(--text-2)]",
     },
     {
       label: language === "pt" ? "Retorno total" : "Total return",
       value: formatPercent(portfolioRisk.totals.resultPercentage, language),
-      tone: portfolioRisk.totals.resultPercentage >= 0 ? "text-[var(--green)]" : "text-[var(--red)]",
+      tone: portfolioRisk.totals.resultPercentage >= 0 ? "text-[var(--text-1)]" : "text-[var(--text-2)]",
     },
     {
       label: language === "pt" ? "Número de ativos" : "Number of assets",
@@ -2816,7 +2816,7 @@ export function InvestmentsScreen() {
       <div className="flex items-start justify-between">
         <div>
           <p className="ui-eyebrow">{t("investments.title")}</p>
-          <p className="text-xl font-semibold text-[var(--text-1)]">{t("investments.title")}</p>
+          <p className="text-2xl font-semibold tracking-[-0.025em] text-[var(--text-1)]">{t("investments.title")}</p>
           <p className="text-sm text-[var(--text-3)]">{t("investments.subtitle")}</p>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
@@ -2832,9 +2832,9 @@ export function InvestmentsScreen() {
       </div>
 
       {investmentFilter.enabled && assetsAboveLimit.length ? (
-        <div className="rounded-xl border border-[var(--red)] border-opacity-30 bg-[var(--red-dim)] px-4 py-3">
-          <p className="text-sm font-semibold text-[var(--red)]">{t("investments.warningAboveTitle")}</p>
-          <p className="mt-1 text-xs text-[var(--red)]">
+        <div className="rounded-xl border border-[var(--border-bright)] border-opacity-30 bg-[var(--surface-2)] px-4 py-3">
+          <p className="text-sm font-semibold text-[var(--text-2)]">{t("investments.warningAboveTitle")}</p>
+          <p className="mt-1 text-sm text-[var(--text-2)]">
             {t("investments.warningAbovePrefix")}{" "}
             {assetsAboveLimit.map((asset) => asset.name || asset.symbol.toUpperCase()).slice(0, 4).join(", ")}
             {assetsAboveLimit.length > 4 ? "..." : ""}.
@@ -2845,7 +2845,7 @@ export function InvestmentsScreen() {
       <section className="ui-card p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-xl font-semibold text-[var(--text-1)]">
+            <p className="text-2xl font-semibold tracking-[-0.025em] text-[var(--text-1)]">
               {language === "pt" ? "Minha carteira" : "My Portfolio"}
             </p>
             <p className="mt-1 text-sm text-[var(--text-3)]">
@@ -2853,7 +2853,7 @@ export function InvestmentsScreen() {
                 ? "Acompanhe seus ativos, alocação da carteira e nível de risco."
                 : "Track your assets, portfolio allocation, and risk level."}
             </p>
-            <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-[11px] font-semibold text-[var(--text-3)]">
+            <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-sm font-semibold text-[var(--text-3)]">
               <span className={`h-2 w-2 rounded-full ${quotesRefreshing ? "animate-pulse bg-[var(--amber)]" : "bg-[var(--green)]"}`} />
               {quoteStatusText}
             </div>
@@ -2879,12 +2879,12 @@ export function InvestmentsScreen() {
           ))}
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <div>
             <p className="text-sm font-semibold text-[var(--text-1)]">
               {language === "pt" ? "Análise completa sob demanda" : "Full analysis on demand"}
             </p>
-            <p className="mt-1 text-xs text-[var(--text-3)]">
+            <p className="mt-1 text-sm text-[var(--text-3)]">
               {language === "pt"
                 ? "Abra a análise apenas quando quiser ver tabela, risco, alocação e maiores pesos."
                 : "Open the analysis only when you want to see table, risk, allocation, and largest weights."}
@@ -2901,12 +2901,12 @@ export function InvestmentsScreen() {
             onClick={() => setPortfolioAnalysisOpen(false)}
           >
             <div
-              className="ui-card-2 mx-auto w-full max-w-7xl rounded-2xl p-5"
+              className="ui-card-2 mx-auto w-full max-w-7xl rounded-3xl p-5"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-xl font-semibold text-[var(--text-1)]">
+                  <p className="text-2xl font-semibold tracking-[-0.025em] text-[var(--text-1)]">
                     {language === "pt" ? "Análise da carteira" : "Portfolio analysis"}
                   </p>
                   <p className="mt-1 text-sm text-[var(--text-3)]">
@@ -2932,9 +2932,9 @@ export function InvestmentsScreen() {
               : "Your portfolio is still empty. Add your first investment to start the analysis."}
           </div>
         ) : (
-          <div className="mt-5 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+          <div className="mt-5 overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface)]">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[980px] text-left text-xs">
+              <table className="w-full min-w-[980px] text-left text-sm">
                 <thead className="bg-[var(--surface-3)] text-[var(--text-3)]">
                   <tr>
                     <th className="px-4 py-3 font-semibold">{language === "pt" ? "Ativo" : "Ticker or asset name"}</th>
@@ -2957,7 +2957,7 @@ export function InvestmentsScreen() {
                       <tr key={`portfolio-row-${asset.id}`} className="border-t border-[var(--border)]">
                         <td className="px-4 py-3">
                           <p className="font-semibold text-[var(--text-1)]">{asset.name}</p>
-                          <p className="text-[11px] text-[var(--text-3)]">{asset.ticker} · {asset.sector}</p>
+                          <p className="text-sm text-[var(--text-3)]">{asset.ticker} · {asset.sector}</p>
                         </td>
                         <td className="px-4 py-3 text-[var(--text-2)]">
                           {getPortfolioAssetTypeLabel(asset.assetType, language)}
@@ -2979,10 +2979,10 @@ export function InvestmentsScreen() {
                         <td className="px-4 py-3 font-semibold text-[var(--text-1)]">
                           {formatCurrency(asset.currentValue, language, rowCurrency)}
                         </td>
-                        <td className={`px-4 py-3 font-semibold ${asset.result >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                        <td className={`px-4 py-3 font-semibold ${asset.result >= 0 ? "text-[var(--text-1)]" : "text-[var(--text-2)]"}`}>
                           {asset.result >= 0 ? "+" : "-"}{formatCurrency(Math.abs(asset.result), language, rowCurrency)}
                         </td>
-                        <td className={`px-4 py-3 font-semibold ${asset.resultPercentage >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                        <td className={`px-4 py-3 font-semibold ${asset.resultPercentage >= 0 ? "text-[var(--text-1)]" : "text-[var(--text-2)]"}`}>
                           {formatPercent(asset.resultPercentage, language)}
                         </td>
                         <td className="px-4 py-3">
@@ -3026,13 +3026,13 @@ export function InvestmentsScreen() {
                 <p className="text-sm font-semibold text-[var(--text-1)]">
                   {language === "pt" ? "Análise de risco da carteira" : "Portfolio Risk Analysis"}
                 </p>
-                <p className="mt-1 text-xs text-[var(--text-3)]">
+                <p className="mt-1 text-sm text-[var(--text-3)]">
                   {language === "pt"
                     ? "Pontuação simples baseada em concentração, diversificação e tipo de ativo."
                     : "Simple score based on concentration, diversification, and asset type."}
                 </p>
               </div>
-              <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${portfolioRiskTone}`}>
+              <span className={`rounded-full border px-3 py-1 text-sm font-semibold ${portfolioRiskTone}`}>
                 {getRiskText(portfolioRisk.classification, language)}
               </span>
             </div>
@@ -3040,7 +3040,7 @@ export function InvestmentsScreen() {
             <div className="mt-5">
               <div className="flex items-end justify-between">
                 <p className="text-4xl font-semibold text-[var(--text-1)]">{portfolioRisk.score}</p>
-                <p className="text-xs text-[var(--text-3)]">0 - 100</p>
+                <p className="text-sm text-[var(--text-3)]">0 - 100</p>
               </div>
               <div className="mt-3 h-3 overflow-hidden rounded-full bg-[var(--surface)]">
                 <div
@@ -3056,12 +3056,12 @@ export function InvestmentsScreen() {
                   alert.kind === "success"
                     ? "border-[var(--green)] bg-[var(--green-dim)] text-[var(--green)]"
                     : alert.kind === "danger"
-                      ? "border-[var(--red)] bg-[var(--red-dim)] text-[var(--red)]"
+                      ? "border-[var(--border-bright)] bg-[var(--surface-2)] text-[var(--text-2)]"
                       : alert.kind === "warning"
                         ? "border-[var(--amber)] bg-[var(--amber-dim)] text-[var(--amber)]"
                         : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)]";
                 return (
-                  <div key={alert.message} className={`rounded-xl border border-opacity-30 px-3 py-2 text-xs ${tone}`}>
+                  <div key={alert.message} className={`rounded-xl border border-opacity-30 px-3 py-2 text-sm ${tone}`}>
                     {translateRiskAlert(alert.message)}
                   </div>
                 );
@@ -3079,7 +3079,7 @@ export function InvestmentsScreen() {
                   <p className="text-sm text-[var(--text-3)]">--</p>
                 ) : portfolioRisk.allocationByType.map((row) => (
                   <div key={`type-risk-${row.key}`} className="space-y-1.5">
-                    <div className="flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center justify-between gap-3 text-sm">
                       <span className="font-medium text-[var(--text-1)]">
                         {getPortfolioAssetTypeLabel(row.key as PortfolioAssetType, language)}
                       </span>
@@ -3102,7 +3102,7 @@ export function InvestmentsScreen() {
                   <p className="text-sm text-[var(--text-3)]">--</p>
                 ) : portfolioRisk.allocationBySector.map((row) => (
                   <div key={`sector-risk-${row.key}`} className="space-y-1.5">
-                    <div className="flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center justify-between gap-3 text-sm">
                       <span className="font-medium text-[var(--text-1)]">{row.label}</span>
                       <span className="text-[var(--text-3)]">{formatPercent(row.weight, language)}</span>
                     </div>
@@ -3126,14 +3126,14 @@ export function InvestmentsScreen() {
             ) : portfolioRisk.largestWeights.map((asset) => (
               <div key={`weight-${asset.id}`} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
                 <p className="text-sm font-semibold text-[var(--text-1)]">{asset.name}</p>
-                <p className="mt-1 text-xs text-[var(--text-3)]">{asset.ticker}</p>
+                <p className="mt-1 text-sm text-[var(--text-3)]">{asset.ticker}</p>
                 <p className="mt-3 text-lg font-semibold text-[var(--text-1)]">{formatPercent(asset.weight, language)}</p>
               </div>
             ))}
           </div>
         </div>
 
-        <p className="mt-4 text-[11px] text-[var(--text-3)]">
+        <p className="mt-4 text-sm text-[var(--text-3)]">
           {language === "pt"
             ? "A análise de risco é educativa e não representa recomendação de investimento."
             : "The risk analysis is educational and does not represent investment advice."}
@@ -3150,11 +3150,11 @@ export function InvestmentsScreen() {
               <p className="text-sm font-semibold text-[var(--text-1)]">
                 {language === "pt" ? "Resumo da carteira" : "Portfolio summary"}
               </p>
-              <p className="text-xs text-[var(--text-3)]">
+              <p className="text-sm text-[var(--text-3)]">
                 {language === "pt" ? "Visão consolidada por moeda dos seus investimentos." : "Consolidated view by currency of your investments."}
               </p>
             </div>
-            <div className="flex flex-wrap gap-2 text-[11px]">
+            <div className="flex flex-wrap gap-2 text-sm">
               <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-0.5 text-[var(--text-3)]">
                 {portfolioTotals.assets} {language === "pt" ? "ativos" : "assets"}
               </span>
@@ -3176,12 +3176,12 @@ export function InvestmentsScreen() {
               {portfolioSummaryByCurrency.map((bucket) => {
                 const profitTone = bucket.profit >= 0
                   ? "border-[var(--green)] border-opacity-20 bg-[var(--green-dim)] text-[var(--green)]"
-                  : "border-[var(--red)] border-opacity-20 bg-[var(--red-dim)] text-[var(--red)]";
+                  : "border-[var(--border-bright)] border-opacity-20 bg-[var(--surface-2)] text-[var(--text-2)]";
                 return (
                   <div key={`summary-${bucket.currency}`} className="ui-card-inner p-4">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-semibold text-[var(--text-1)]">{bucket.currency}</p>
-                      <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-0.5 text-[11px] text-[var(--text-3)]">
+                      <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-0.5 text-sm text-[var(--text-3)]">
                         {bucket.assets} {language === "pt" ? "ativos" : "assets"}
                       </span>
                     </div>
@@ -3196,7 +3196,7 @@ export function InvestmentsScreen() {
                       </div>
                     </div>
                     <div className={`mt-3 rounded-xl border p-3 ${profitTone}`}>
-                      <p className="text-[11px] uppercase tracking-[0.18em] opacity-80">{language === "pt" ? "Resultado" : "Result"}</p>
+                      <p className="text-sm uppercase tracking-[0.05em] opacity-80">{language === "pt" ? "Resultado" : "Result"}</p>
                       <p className="mt-1 text-sm font-semibold">
                         {bucket.profit >= 0 ? "+" : "-"}
                         {formatCurrency(Math.abs(bucket.profit), language, bucket.currency)}
@@ -3213,7 +3213,7 @@ export function InvestmentsScreen() {
           <p className="text-sm font-semibold text-[var(--text-1)]">
             {language === "pt" ? "Distribuição por categoria" : "Allocation by category"}
           </p>
-          <p className="text-xs text-[var(--text-3)]">
+          <p className="text-sm text-[var(--text-3)]">
             {language === "pt" ? "Onde a carteira está mais concentrada agora." : "Where the portfolio is most concentrated right now."}
           </p>
 
@@ -3223,7 +3223,7 @@ export function InvestmentsScreen() {
             <div className="mt-4 space-y-3">
               {categoryAllocation.slice(0, 6).map((row) => (
                 <div key={`allocation-${row.key}`} className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center justify-between gap-3 text-sm">
                     <span className="font-medium text-[var(--text-1)]">{row.label}</span>
                     <span className="text-[var(--text-3)]">{formatPercent(row.share, language)}</span>
                   </div>
@@ -3243,7 +3243,7 @@ export function InvestmentsScreen() {
             <p className="text-sm font-semibold text-[var(--text-1)]">
               {language === "pt" ? "Maiores posições" : "Top holdings"}
             </p>
-            <p className="text-xs text-[var(--text-3)]">
+            <p className="text-sm text-[var(--text-3)]">
               {language === "pt" ? "Os ativos com maior peso dentro da carteira." : "Assets with the biggest weight in the portfolio."}
             </p>
           </div>
@@ -3257,10 +3257,10 @@ export function InvestmentsScreen() {
                 <p className="ui-eyebrow">{asset.typeLabel}</p>
                 <p className="mt-2 text-sm font-semibold text-[var(--text-1)]">{asset.name}</p>
                 <p className="mt-3 text-lg font-semibold text-[var(--text-1)]">{formatCurrency(asset.current, language, asset.currency)}</p>
-                <p className="mt-1 text-xs text-[var(--text-3)]">
+                <p className="mt-1 text-sm text-[var(--text-3)]">
                   {language === "pt" ? "Investido" : "Invested"}: {formatCurrency(asset.invested, language, asset.currency)}
                 </p>
-                <p className={`mt-2 text-xs font-semibold ${asset.profit >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                <p className={`mt-2 text-sm font-semibold ${asset.profit >= 0 ? "text-[var(--text-1)]" : "text-[var(--text-2)]"}`}>
                   {language === "pt" ? "Resultado" : "Result"}: {asset.profit >= 0 ? "+" : "-"}{formatCurrency(Math.abs(asset.profit), language, asset.currency)}
                 </p>
               </div>
@@ -3270,7 +3270,7 @@ export function InvestmentsScreen() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <p className="text-xs text-[var(--text-3)]">{t("investments.organizeByLabel")}</p>
+        <p className="text-sm text-[var(--text-3)]">{t("investments.organizeByLabel")}</p>
         <button type="button" onClick={() => setOrganizeBy("alphabetical")}
           className={`ui-btn ui-btn-sm ${organizeBy === "alphabetical" ? "ui-btn-primary" : "ui-btn-secondary"}`}>
           {t("investments.organizeAlphabetical")}
@@ -3324,21 +3324,21 @@ export function InvestmentsScreen() {
                   ) : null}
                   <p className="text-sm font-semibold text-[var(--text-1)]">{asset.name || asset.symbol.toUpperCase()}</p>
                 </div>
-                <p className="text-[10px] text-[var(--text-3)]">{categoryLabel}</p>
+                <p className="text-sm text-[var(--text-3)]">{categoryLabel}</p>
                 {hasExceededMetrics ? (
                   <div className="mt-1 space-y-1">
-                    <span className="inline-flex rounded-full border border-[var(--red)] border-opacity-50 px-2 py-0.5 text-[10px] font-semibold text-[var(--red)]">
+                    <span className="inline-flex rounded-full border border-[var(--border-bright)] border-opacity-50 px-2 py-0.5 text-sm font-semibold text-[var(--text-2)]">
                       {t("investments.aboveLimitTag")}
                     </span>
-                    <p className="text-[10px] text-[var(--red)]">{exceededLabelText}</p>
+                    <p className="text-sm text-[var(--text-2)]">{exceededLabelText}</p>
                   </div>
                 ) : null}
                 <div className="flex items-baseline gap-2">
-                  <span className="text-xl font-semibold text-[var(--text-1)]">
+                  <span className="text-2xl font-semibold tracking-[-0.025em] text-[var(--text-1)]">
                     {displayCurrent != null ? formatCurrency(displayCurrent, language, assetCurrency) : "--"}
                   </span>
                   {displayChangePct != null ? (
-                    <span className={`text-xs font-semibold ${displayChangePct >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                    <span className={`text-sm font-semibold ${displayChangePct >= 0 ? "text-[var(--text-1)]" : "text-[var(--text-2)]"}`}>
                       {formatPercent(displayChangePct, language)}{" "}
                       {asset.type === "fixed_income" ? (language === "pt" ? "(desde o início)" : "(since start)") : (language === "pt" ? "(1 ano)" : "(1 year)")}
                     </span>
@@ -3347,20 +3347,20 @@ export function InvestmentsScreen() {
                 {asset.type === "fixed_income" ? (
                   <div className="mt-2 grid grid-cols-2 gap-1.5">
                     <div className="ui-card-inner px-2 py-1">
-                      <p className="text-[10px] text-[var(--text-3)]">{language === "pt" ? "CDI anual" : "Annual CDI"}</p>
-                      <p className="text-[11px] font-semibold text-[var(--text-1)]">{fixedSnapshot ? formatPlainPercent(fixedSnapshot.annualCdiPct, language) : "--"}</p>
+                      <p className="text-sm text-[var(--text-3)]">{language === "pt" ? "CDI anual" : "Annual CDI"}</p>
+                      <p className="text-sm font-semibold text-[var(--text-1)]">{fixedSnapshot ? formatPlainPercent(fixedSnapshot.annualCdiPct, language) : "--"}</p>
                     </div>
                     <div className="ui-card-inner px-2 py-1">
-                      <p className="text-[10px] text-[var(--text-3)]">{language === "pt" ? "% do CDI" : "% of CDI"}</p>
-                      <p className="text-[11px] font-semibold text-[var(--text-1)]">{fixedSnapshot ? formatPlainPercent(fixedSnapshot.cdiMultiplierPct, language) : "--"}</p>
+                      <p className="text-sm text-[var(--text-3)]">{language === "pt" ? "% do CDI" : "% of CDI"}</p>
+                      <p className="text-sm font-semibold text-[var(--text-1)]">{fixedSnapshot ? formatPlainPercent(fixedSnapshot.cdiMultiplierPct, language) : "--"}</p>
                     </div>
                     <div className="ui-card-inner px-2 py-1">
-                      <p className="text-[10px] text-[var(--text-3)]">{language === "pt" ? "Taxa efetiva" : "Effective rate"}</p>
-                      <p className="text-[11px] font-semibold text-[var(--text-1)]">{fixedSnapshot ? formatPlainPercent(fixedSnapshot.effectiveAnnualPct, language) : "--"}</p>
+                      <p className="text-sm text-[var(--text-3)]">{language === "pt" ? "Taxa efetiva" : "Effective rate"}</p>
+                      <p className="text-sm font-semibold text-[var(--text-1)]">{fixedSnapshot ? formatPlainPercent(fixedSnapshot.effectiveAnnualPct, language) : "--"}</p>
                     </div>
                     <div className="ui-card-inner px-2 py-1">
-                      <p className="text-[10px] text-[var(--text-3)]">{language === "pt" ? "Rendimento" : "Profit"}</p>
-                      <p className="text-[11px] font-semibold text-[var(--green)]">{fixedSnapshot ? formatCurrency(fixedSnapshot.profit, language, assetCurrency) : "--"}</p>
+                      <p className="text-sm text-[var(--text-3)]">{language === "pt" ? "Rendimento" : "Profit"}</p>
+                      <p className="text-sm font-semibold text-[var(--green)]">{fixedSnapshot ? formatCurrency(fixedSnapshot.profit, language, assetCurrency) : "--"}</p>
                     </div>
                   </div>
                 ) : (
@@ -3382,9 +3382,9 @@ export function InvestmentsScreen() {
                       }
                       return (
                         <div key={`${asset.id}-${metric.key}`}
-                          className={`rounded-md border px-2 py-1 ${isExceeded ? "border-[var(--red)] border-opacity-40 bg-[var(--red-dim)]" : "border-[var(--border)] bg-[var(--surface)]"}`}>
-                          <p className="text-[10px] text-[var(--text-3)]">{metric.label}</p>
-                          <p className={`text-[11px] font-semibold ${isExceeded ? "text-[var(--red)]" : "text-[var(--text-1)]"}`}>{display}</p>
+                          className={`rounded-md border px-2 py-1 ${isExceeded ? "border-[var(--border-bright)] border-opacity-40 bg-[var(--surface-2)]" : "border-[var(--border)] bg-[var(--surface)]"}`}>
+                          <p className="text-sm text-[var(--text-3)]">{metric.label}</p>
+                          <p className={`text-sm font-semibold ${isExceeded ? "text-[var(--text-2)]" : "text-[var(--text-1)]"}`}>{display}</p>
                         </div>
                       );
                     })}
@@ -3395,43 +3395,37 @@ export function InvestmentsScreen() {
                 {history.length ? (
                   <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={120}>
                     <AreaChart data={history}>
-                      <defs>
-                        <linearGradient id={`asset-${asset.id}`} x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#4f8eff" stopOpacity={0.35} />
-                          <stop offset="100%" stopColor="#4f8eff" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.055)" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
                       <XAxis dataKey="time" type="number" domain={["dataMin", "dataMax"]}
                         tickFormatter={(value) => formatChartDate(value, language)}
-                        tick={{ fill: "#4a6278", fontSize: 10 }}
-                        axisLine={{ stroke: "rgba(255,255,255,0.055)" }}
-                        tickLine={{ stroke: "rgba(255,255,255,0.055)" }}
+                        tick={{ fill: "#868f97", fontSize: 12 }}
+                        axisLine={{ stroke: "#ffffff10" }}
+                        tickLine={{ stroke: "#ffffff10" }}
                       />
                       <YAxis tickFormatter={(value) => formatAxisCurrency(value, language, assetCurrency)}
-                        tick={{ fill: "#4a6278", fontSize: 10 }}
-                        axisLine={{ stroke: "rgba(255,255,255,0.055)" }}
-                        tickLine={{ stroke: "rgba(255,255,255,0.055)" }}
+                        tick={{ fill: "#868f97", fontSize: 12 }}
+                        axisLine={{ stroke: "#ffffff10" }}
+                        tickLine={{ stroke: "#ffffff10" }}
                         width={50}
                       />
                       {summary.current != null ? (
-                        <ReferenceLine y={summary.current} stroke="rgba(255,255,255,0.12)" strokeDasharray="3 3" />
+                        <ReferenceLine y={summary.current} stroke="#a3a3a3" strokeDasharray="3 3" />
                       ) : null}
                       <Tooltip
                         formatter={(value) => formatCurrency(Number(value ?? 0), language, assetCurrency)}
                         labelFormatter={(label) => formatShortDate(String(label), language)}
-                        contentStyle={{ background: "#131e30", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 8, color: "#edf3fc", fontSize: 12 }}
-                        labelStyle={{ color: "#4a6278" }}
+                        contentStyle={{ background: "#191919", border: "1px solid #ffffff30", borderRadius: 10, color: "#ffffff", fontSize: 12 }}
+                        labelStyle={{ color: "#868f97" }}
                       />
-                      <Area type="monotone" dataKey="price" stroke="#4f8eff" fill={`url(#asset-${asset.id})`} strokeWidth={2} dot={false} isAnimationActive={false} />
+                      <Area type="monotone" dataKey="price" stroke="#cccccc" fill="#ffffff08" strokeWidth={2} dot={false} isAnimationActive={false} />
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="flex h-full items-center justify-center text-[11px] text-[var(--text-3)]">--</div>
+                  <div className="flex h-full items-center justify-center text-sm text-[var(--text-3)]">--</div>
                 )}
               </div>
               <div>
-                <p className="text-xs text-[var(--text-3)]">{t("investments.totalValue")}</p>
+                <p className="text-sm text-[var(--text-3)]">{t("investments.totalValue")}</p>
                 <p className="text-sm font-semibold text-[var(--text-1)]">{value != null ? formatCurrency(value, language, assetCurrency) : "--"}</p>
               </div>
             </button>
@@ -3439,17 +3433,17 @@ export function InvestmentsScreen() {
         })}
       </div>
 
-      {quoteError ? <p className="text-xs text-[var(--red)]">{quoteError}</p> : null}
+      {quoteError ? <p className="text-sm text-[var(--red)]">{quoteError}</p> : null}
 
       {discoveryOpen ? (
         <div className="ui-modal-backdrop fixed inset-0 z-40 flex items-center justify-center px-4 md:px-6" onClick={() => setDiscoveryOpen(false)}>
-          <div className="ui-card-2 w-full max-w-4xl rounded-2xl p-5" onClick={(event) => event.stopPropagation()}>
+          <div className="ui-card-2 w-full max-w-4xl rounded-3xl p-5" onClick={(event) => event.stopPropagation()}>
             <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-base font-semibold text-[var(--text-1)]">
                   {language === "pt" ? "Descobrir ativos por indicador" : "Discover assets by indicator"}
                 </p>
-                <p className="mt-1 text-xs text-[var(--text-3)]">
+                <p className="mt-1 text-sm text-[var(--text-3)]">
                   {language === "pt"
                     ? "Filtre ativos da B3 por DY, P/VP ou ROI. A busca não fica limitada à sua carteira."
                     : "Filter B3 assets by DY, P/B, or ROI. The search is not limited to your portfolio."}
@@ -3506,7 +3500,7 @@ export function InvestmentsScreen() {
                   inputMode="decimal"
                   className="ui-input mt-2 w-full"
                 />
-                <p className="mt-1 text-[10px] text-[var(--text-3)]">
+                <p className="mt-1 text-sm text-[var(--text-3)]">
                   {language === "pt"
                     ? discoveryOrder === "desc"
                       ? "Mostra valores maiores ou iguais ao corte."
@@ -3522,7 +3516,7 @@ export function InvestmentsScreen() {
               <p className="text-sm font-semibold text-[var(--text-1)]">
                 {language === "pt" ? "Resultado" : "Result"} · {discoveryLoading ? "--" : discoveryRows.length}
               </p>
-              <p className="text-xs text-[var(--text-3)]">
+              <p className="text-sm text-[var(--text-3)]">
                 {discoverySource
                   ? `${language === "pt" ? "Fonte" : "Source"}: ${discoverySource}${
                     discoveryScannedCount
@@ -3538,11 +3532,11 @@ export function InvestmentsScreen() {
             </div>
 
             {discoveryError ? (
-              <div className="mt-3 rounded-2xl border border-[var(--red)] bg-[var(--red-dim)] p-4 text-sm text-[var(--red)]">
+              <div className="mt-3 rounded-3xl border border-[var(--red)] bg-[var(--red-dim)] p-4 text-sm text-[var(--red)]">
                 {discoveryError}
               </div>
             ) : discoveryLoading ? (
-              <div className="mt-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 text-sm text-[var(--text-3)]">
+              <div className="mt-3 rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6 text-sm text-[var(--text-3)]">
                 {language === "pt" ? "Carregando ativos da B3..." : "Loading B3 assets..."}
               </div>
             ) : discoveryRows.length ? (
@@ -3553,19 +3547,19 @@ export function InvestmentsScreen() {
                       key={`discovery-${row.symbol}`}
                       type="button"
                       onClick={() => openDiscoveredAsset(row)}
-                      className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 text-left transition hover:border-[var(--accent)]"
+                      className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-3 text-left transition hover:border-[var(--accent)]"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-[var(--text-1)]">
                             {String(index + 1).padStart(2, "0")} · {row.name}
                           </p>
-                          <p className="mt-1 text-xs text-[var(--text-3)]">
+                          <p className="mt-1 text-sm text-[var(--text-3)]">
                             {row.symbol} · {getDiscoveryAssetTypeLabel(row, language)} · {row.price != null ? formatCurrency(row.price, language, DEFAULT_INVESTMENT_CURRENCY) : "--"}
                           </p>
                         </div>
                         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-3)] px-3 py-2 text-right">
-                          <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-3)]">
+                          <p className="text-sm uppercase tracking-[0.05em] text-[var(--text-3)]">
                             {discoveryMetricLabel[discoveryMetric]}
                           </p>
                           <p className="mt-1 text-lg font-semibold text-[var(--text-1)]">
@@ -3583,7 +3577,7 @@ export function InvestmentsScreen() {
                 </div>
               </div>
             ) : (
-              <div className="mt-3 rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-6 text-sm text-[var(--text-3)]">
+              <div className="mt-3 rounded-3xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-6 text-sm text-[var(--text-3)]">
                 {language === "pt"
                   ? "Nenhum ativo da B3 encontrado com esse filtro. Tente outra métrica, direção ou corte."
                   : "No B3 assets found with this filter. Try another metric, order, or cutoff."}
@@ -3595,11 +3589,11 @@ export function InvestmentsScreen() {
 
       {filterOpen ? (
         <div className="ui-modal-backdrop fixed inset-0 z-40 flex items-center justify-center px-6" onClick={() => setFilterOpen(false)}>
-          <div className="ui-card-2 w-full max-w-2xl rounded-2xl p-5" onClick={(event) => event.stopPropagation()}>
+          <div className="ui-card-2 w-full max-w-2xl rounded-3xl p-5" onClick={(event) => event.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-[var(--text-1)]">{t("investments.filterModalTitle")}</p>
-                <p className="text-xs text-[var(--text-3)]">{t("investments.filterModalSubtitle")}</p>
+                <p className="text-sm text-[var(--text-3)]">{t("investments.filterModalSubtitle")}</p>
               </div>
               <button type="button" onClick={() => setFilterOpen(false)} className="ui-btn ui-btn-ghost ui-btn-sm">
                 {t("common.cancel")}
@@ -3612,7 +3606,7 @@ export function InvestmentsScreen() {
                   className={`ui-btn ui-btn-sm ${investmentFilter.enabled ? "ui-btn-primary" : "ui-btn-secondary"}`}>
                   {investmentFilter.enabled ? t("investments.filterEnabled") : t("investments.filterDisabled")}
                 </button>
-                <label className="flex items-center gap-2 text-xs text-[var(--text-3)]">
+                <label className="flex items-center gap-2 text-sm text-[var(--text-3)]">
                   <input type="checkbox"
                     checked={investmentFilter.showOnlyAbove}
                     onChange={(event) => setInvestmentFilter((current) => ({ ...current, showOnlyAbove: event.target.checked }))}
@@ -3624,7 +3618,7 @@ export function InvestmentsScreen() {
               <div className="grid min-w-0 gap-3 md:grid-cols-2">
                 {metricConfig.map((metric) => (
                   <div key={`filter-${metric.key}`} className="ui-card-inner px-3 py-2">
-                    <p className="text-[11px] text-[var(--text-3)]">{metric.label}</p>
+                    <p className="text-sm text-[var(--text-3)]">{metric.label}</p>
                     <input
                       value={investmentFilter.limits[metric.key]}
                       onChange={(event) => setInvestmentFilter((current) => ({ ...current, limits: { ...current.limits, [metric.key]: event.target.value } }))}
@@ -3643,7 +3637,7 @@ export function InvestmentsScreen() {
         <div className="ui-modal-backdrop fixed inset-0 z-40 overflow-x-hidden overflow-y-auto px-4 md:flex md:items-center md:justify-center md:px-6"
           style={{ paddingTop: "max(1rem, env(safe-area-inset-top))", paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
           onClick={() => setShowModal(false)}>
-          <div className="ui-card-2 mx-auto w-full max-w-lg overflow-x-hidden overflow-y-auto rounded-2xl p-4 sm:p-5"
+          <div className="ui-card-2 mx-auto w-full max-w-lg overflow-x-hidden overflow-y-auto rounded-3xl p-4 sm:p-5"
             style={{ maxHeight: "calc(100dvh - 2rem)" }}
             onClick={(e) => e.stopPropagation()}>
             {isCreate ? (
@@ -3679,15 +3673,15 @@ export function InvestmentsScreen() {
                           <span className="min-w-0 truncate text-left">
                             {selectedCrypto ? `${selectedCrypto.symbol.toUpperCase()} - ${selectedCrypto.name}` : language === "pt" ? "Selecionar cripto" : "Select crypto"}
                           </span>
-                          <AppIcon name="chevron-down" size={16} color="#4a6278" />
+                          <AppIcon name="chevron-down" size={16} color="#737373" />
                         </button>
-                        <p className="mt-1 text-[11px] text-[var(--text-3)]">
+                        <p className="mt-1 text-sm text-[var(--text-3)]">
                           {language === "pt" ? "Selecione uma cripto da lista de destaque." : "Select a crypto from the featured list."}
                         </p>
                         {cryptoPickerOpen ? (
                           <div className="mt-2 max-h-44 space-y-1 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2">
                             {featuredCryptoLoading ? (
-                              <p className="px-2 py-1 text-[11px] text-[var(--text-3)]">{language === "pt" ? "Carregando criptos..." : "Loading cryptos..."}</p>
+                              <p className="px-2 py-1 text-sm text-[var(--text-3)]">{language === "pt" ? "Carregando criptos..." : "Loading cryptos..."}</p>
                             ) : featuredCryptoOptions.length ? (
                               featuredCryptoOptions.map((item) => (
                                 <button key={item.id} type="button"
@@ -3701,15 +3695,15 @@ export function InvestmentsScreen() {
                                       <span className="h-5 w-5 rounded-full bg-[var(--surface-3)]" />
                                     )}
                                     <span className="min-w-0">
-                                      <span className="block truncate text-xs font-semibold">{item.name}</span>
-                                      <span className="block truncate text-[11px] text-[var(--text-3)]">{item.symbol.toUpperCase()} - {item.id}</span>
+                                      <span className="block truncate text-sm font-semibold">{item.name}</span>
+                                      <span className="block truncate text-sm text-[var(--text-3)]">{item.symbol.toUpperCase()} - {item.id}</span>
                                     </span>
                                   </span>
-                                  {item.rank ? <span className="text-[10px] text-[var(--text-3)]">#{item.rank}</span> : null}
+                                  {item.rank ? <span className="text-sm text-[var(--text-3)]">#{item.rank}</span> : null}
                                 </button>
                               ))
                             ) : (
-                              <p className="px-2 py-1 text-[11px] text-[var(--text-3)]">{language === "pt" ? "Sem criptos disponíveis no momento." : "No cryptos available right now."}</p>
+                              <p className="px-2 py-1 text-sm text-[var(--text-3)]">{language === "pt" ? "Sem criptos disponíveis no momento." : "No cryptos available right now."}</p>
                             )}
                           </div>
                         ) : null}
@@ -3717,13 +3711,13 @@ export function InvestmentsScreen() {
                     ) : type === "fixed_income" ? (
                       <div className="ui-card-inner px-3 py-2">
                         <p className="text-sm font-semibold text-[var(--text-1)]">{t("investments.fixedIncome")}</p>
-                        <p className="mt-1 text-[11px] text-[var(--text-3)]">{t("investments.fixedIncomeHint")}</p>
-                        <p className="mt-1 text-[11px] text-[var(--text-3)]">CDI</p>
+                        <p className="mt-1 text-sm text-[var(--text-3)]">{t("investments.fixedIncomeHint")}</p>
+                        <p className="mt-1 text-sm text-[var(--text-3)]">CDI</p>
                       </div>
                     ) : (
                       <div>
                         <input value={symbol} onChange={(event) => setSymbol(event.target.value)} placeholder={t("investments.symbol")} className="ui-input w-full" />
-                        <p className="mt-1 text-[11px] text-[var(--text-3)]">{t("investments.symbolHint")}</p>
+                        <p className="mt-1 text-sm text-[var(--text-3)]">{t("investments.symbolHint")}</p>
                       </div>
                     )}
                   </div>
@@ -3767,13 +3761,13 @@ export function InvestmentsScreen() {
                         <button key={option} type="button" onClick={() => setCurrency(option)} disabled={disabled}
                           className={`flex-1 ui-btn ui-btn-sm text-left ${active ? "ui-btn-primary" : "ui-btn-secondary"} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}>
                           <span className="block font-semibold">{option}</span>
-                          <span className="block text-[10px] opacity-70">{option === "BRL" ? t("investments.currencyBrl") : t("investments.currencyEur")}</span>
+                          <span className="block text-sm opacity-70">{option === "BRL" ? t("investments.currencyBrl") : t("investments.currencyEur")}</span>
                         </button>
                       );
                     })}
                   </div>
                   {!canSelectInvestmentCurrency(type) ? (
-                    <p className="text-[11px] text-[var(--text-3)]">{t("investments.currencyLockedB3")}</p>
+                    <p className="text-sm text-[var(--text-3)]">{t("investments.currencyLockedB3")}</p>
                   ) : null}
                 </div>
 
@@ -3797,7 +3791,7 @@ export function InvestmentsScreen() {
                       <input value={fixedCdiRatePct} onChange={(event) => setFixedCdiRatePct(event.target.value)} placeholder={t("investments.fixedCdiRate")} inputMode="decimal" className="ui-input w-full" />
                       <input value={fixedCdiMultiplierPct} onChange={(event) => setFixedCdiMultiplierPct(event.target.value)} placeholder={t("investments.fixedCdiMultiplier")} inputMode="decimal" className="ui-input w-full" />
                       <div className="ui-card-inner px-3 py-2">
-                        <p className="text-[11px] text-[var(--text-3)]">{t("investments.fixedEffectiveRate")}</p>
+                        <p className="text-sm text-[var(--text-3)]">{t("investments.fixedEffectiveRate")}</p>
                         <p className="text-sm font-semibold text-[var(--text-1)]">{fixedPreviewSnapshot ? formatPlainPercent(fixedPreviewSnapshot.effectiveAnnualPct, language) : "--"}</p>
                       </div>
                     </>
@@ -3810,7 +3804,7 @@ export function InvestmentsScreen() {
                       )}
                       <div>
                         <input value={manualPrice} onChange={(event) => setManualPrice(formatCentsInputForCurrency(event.target.value, formCurrency))} placeholder={t("investments.manualPrice")} inputMode="numeric" pattern="[0-9]*" className="ui-input w-full" />
-                        <p className="mt-1 text-[11px] text-[var(--text-3)]">{t("investments.manualPriceHint")}</p>
+                        <p className="mt-1 text-sm text-[var(--text-3)]">{t("investments.manualPriceHint")}</p>
                       </div>
                     </>
                   )}
@@ -3818,7 +3812,7 @@ export function InvestmentsScreen() {
 
                 <div className="grid min-w-0 gap-3 md:grid-cols-2">
                   <div className="ui-card-inner px-3 py-2">
-                    <p className="text-[11px] text-[var(--text-3)]">{t("investments.total")}</p>
+                    <p className="text-sm text-[var(--text-3)]">{t("investments.total")}</p>
                     <p className="text-sm font-semibold text-[var(--text-1)]">
                       {(type === "fixed_income" || priceBig) && computed.qty.gt(0) ? formatCurrency(Number(computed.total.toString()), language, formCurrency) : "--"}
                     </p>
@@ -3826,30 +3820,30 @@ export function InvestmentsScreen() {
                   {type === "fixed_income" ? (
                     <>
                       <div className="ui-card-inner px-3 py-2">
-                        <p className="text-[11px] text-[var(--text-3)]">{t("investments.fixedLiveValue")}</p>
+                        <p className="text-sm text-[var(--text-3)]">{t("investments.fixedLiveValue")}</p>
                         <p className="text-sm font-semibold text-[var(--text-1)]">{fixedPreviewSnapshot ? formatCurrency(fixedPreviewSnapshot.currentValue, language, formCurrency) : "--"}</p>
                       </div>
                       <div className="ui-card-inner px-3 py-2">
-                        <p className="text-[11px] text-[var(--text-3)]">{t("investments.fixedProfit")}</p>
+                        <p className="text-sm text-[var(--text-3)]">{t("investments.fixedProfit")}</p>
                         <p className="text-sm font-semibold text-[var(--green)]">{fixedPreviewSnapshot ? formatCurrency(fixedPreviewSnapshot.profit, language, formCurrency) : "--"}</p>
                       </div>
                       <div className="ui-card-inner px-3 py-2">
-                        <p className="text-[11px] text-[var(--text-3)]">{t("investments.fixedDailyEstimate")}</p>
+                        <p className="text-sm text-[var(--text-3)]">{t("investments.fixedDailyEstimate")}</p>
                         <p className="text-sm font-semibold text-[var(--text-1)]">{fixedPreviewSnapshot ? formatCurrency(fixedPreviewSnapshot.estimatedDailyProfit, language, formCurrency) : "--"}</p>
                       </div>
                     </>
                   ) : (
                     <>
                       <div className="ui-card-inner px-3 py-2">
-                        <p className="text-[11px] text-[var(--text-3)]">{t("investments.currentPrice")}</p>
+                        <p className="text-sm text-[var(--text-3)]">{t("investments.currentPrice")}</p>
                         <p className="text-sm font-semibold text-[var(--text-1)]">{displayPrice != null ? formatCurrency(displayPrice, language, formCurrency) : "--"}</p>
                       </div>
                       <div className="ui-card-inner px-3 py-2">
-                        <p className="text-[11px] text-[var(--text-3)]">{t("investments.currentAvg")}</p>
+                        <p className="text-sm text-[var(--text-3)]">{t("investments.currentAvg")}</p>
                         <p className="text-sm font-semibold text-[var(--text-1)]">{currentAvg.gt(0) ? formatCurrency(Number(currentAvg.toString()), language, formCurrency) : "--"}</p>
                       </div>
                       <div className="ui-card-inner px-3 py-2">
-                        <p className="text-[11px] text-[var(--text-3)]">{t("investments.newAvg")}</p>
+                        <p className="text-sm text-[var(--text-3)]">{t("investments.newAvg")}</p>
                         <p className="text-sm font-semibold text-[var(--text-1)]">{computed.newAvg.gt(0) ? formatCurrency(Number(computed.newAvg.toString()), language, formCurrency) : "--"}</p>
                       </div>
                     </>
@@ -3858,7 +3852,7 @@ export function InvestmentsScreen() {
 
                 {type === "b3" ? (
                   <div className="ui-card-inner px-3 py-2">
-                    <p className="text-[11px] text-[var(--text-3)]">{language === "pt" ? "Ativo selecionado" : "Selected asset"}</p>
+                    <p className="text-sm text-[var(--text-3)]">{language === "pt" ? "Ativo selecionado" : "Selected asset"}</p>
                     <div className="mt-1 flex items-center gap-2">
                       {preview?.logoUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -3868,14 +3862,14 @@ export function InvestmentsScreen() {
                       )}
                       <p className="text-sm font-semibold text-[var(--text-1)]">{name.trim() || symbol.toUpperCase() || "--"}</p>
                     </div>
-                    <p className="text-[11px] text-[var(--text-3)]">{symbol ? `B3 - ${normalizeB3Symbol(symbol)}` : "--"}</p>
+                    <p className="text-sm text-[var(--text-3)]">{symbol ? `B3 - ${normalizeB3Symbol(symbol)}` : "--"}</p>
                   </div>
                 ) : null}
 
                 {type === "crypto" ? (
                   <div className="grid min-w-0 gap-3 md:grid-cols-2">
                     <div className="ui-card-inner px-3 py-2">
-                      <p className="text-[11px] text-[var(--text-3)]">{language === "pt" ? "Cripto selecionada" : "Selected crypto"}</p>
+                      <p className="text-sm text-[var(--text-3)]">{language === "pt" ? "Cripto selecionada" : "Selected crypto"}</p>
                       <div className="mt-1 flex items-center gap-2">
                         {cryptoMarket?.image || selectedCrypto?.thumb ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -3885,19 +3879,19 @@ export function InvestmentsScreen() {
                         )}
                         <p className="text-sm font-semibold text-[var(--text-1)]">{cryptoMarket?.name ?? selectedCrypto?.name ?? "--"}</p>
                       </div>
-                      <p className="text-[11px] text-[var(--text-3)]">
+                      <p className="text-sm text-[var(--text-3)]">
                         {cryptoMarket?.symbol ? `${cryptoMarket.symbol.toUpperCase()} - ${cryptoMarket.id}` : selectedCrypto ? `${selectedCrypto.symbol.toUpperCase()} - ${selectedCrypto.id}` : "--"}
                       </p>
                     </div>
                     <div className="ui-card-inner px-3 py-2">
-                      <p className="text-[11px] text-[var(--text-3)]">{language === "pt" ? "Ranking de mercado" : "Market rank"}</p>
+                      <p className="text-sm text-[var(--text-3)]">{language === "pt" ? "Ranking de mercado" : "Market rank"}</p>
                       <p className="text-sm font-semibold text-[var(--text-1)]">{cryptoMarket?.rank ? `#${cryptoMarket.rank}` : "--"}</p>
-                      <p className="text-[11px] text-[var(--text-3)]">{language === "pt" ? "Atualizacao em tempo real" : "Live market update"}</p>
+                      <p className="text-sm text-[var(--text-3)]">{language === "pt" ? "Atualizacao em tempo real" : "Live market update"}</p>
                     </div>
                     <div className="ui-card-inner px-3 py-2">
-                      <p className="text-[11px] text-[var(--text-3)]">{language === "pt" ? "Market cap" : "Market cap"}</p>
+                      <p className="text-sm text-[var(--text-3)]">{language === "pt" ? "Market cap" : "Market cap"}</p>
                       <p className="text-sm font-semibold text-[var(--text-1)]">{cryptoMarket?.marketCap != null ? formatCurrency(cryptoMarket.marketCap, language, formCurrency) : "--"}</p>
-                      <p className="text-[11px] text-[var(--text-3)]">
+                      <p className="text-sm text-[var(--text-3)]">
                         {language === "pt" ? "Volume 24h" : "24h volume"}:{" "}
                         {cryptoMarket?.volume24h != null
                           ? formatCompactNumber(cryptoMarket.volume24h, language)
@@ -3905,12 +3899,12 @@ export function InvestmentsScreen() {
                       </p>
                     </div>
                     <div className="ui-card-inner px-3 py-2">
-                      <p className="text-[11px] text-[var(--text-3)]">{language === "pt" ? "Faixa 24h" : "24h range"}</p>
+                      <p className="text-sm text-[var(--text-3)]">{language === "pt" ? "Faixa 24h" : "24h range"}</p>
                       <p className="text-sm font-semibold text-[var(--text-1)]">
                         {cryptoMarket?.low24h != null ? formatCurrency(cryptoMarket.low24h, language, formCurrency) : "--"}{" "}-{" "}
                         {cryptoMarket?.high24h != null ? formatCurrency(cryptoMarket.high24h, language, formCurrency) : "--"}
                       </p>
-                      <p className={`text-[11px] ${(cryptoMarket?.changePct24h ?? 0) >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                      <p className={`text-sm ${(cryptoMarket?.changePct24h ?? 0) >= 0 ? "text-[var(--text-1)]" : "text-[var(--text-2)]"}`}>
                         {language === "pt" ? "Variação 24h" : "24h change"}:{" "}
                         {cryptoMarket?.changePct24h != null ? formatPercent(cryptoMarket.changePct24h, language) : "--"}
                       </p>
@@ -3920,17 +3914,17 @@ export function InvestmentsScreen() {
 
                 {type === "fixed_income" ? (
                   <div className="ui-card-inner px-3 py-2">
-                    <p className="text-[11px] text-[var(--text-3)]">{t("investments.fixedRealtimeNote")}</p>
+                    <p className="text-sm text-[var(--text-3)]">{t("investments.fixedRealtimeNote")}</p>
                     <p className="mt-1 text-sm font-semibold text-[var(--text-1)]">
                       {fixedPreviewSnapshot ? `${formatCurrency(fixedPreviewSnapshot.currentValue, language, formCurrency)} · ${formatPlainPercent(fixedPreviewSnapshot.effectiveAnnualPct, language)}` : "--"}
                     </p>
-                    <p className="mt-1 text-[11px] text-[var(--text-3)]">
+                    <p className="mt-1 text-sm text-[var(--text-3)]">
                       {fixedPreviewSnapshot ? `${language === "pt" ? "Dias corridos" : "Elapsed days"}: ${Math.floor(fixedPreviewSnapshot.elapsedDays)}` : "--"}
                     </p>
                   </div>
                 ) : null}
 
-                {errorMsg ? <p className="text-xs text-[var(--red)]">{errorMsg}</p> : null}
+                {errorMsg ? <p className="text-sm text-[var(--red)]">{errorMsg}</p> : null}
 
                 <button type="button" onClick={handleSave} disabled={saving} className="ui-btn ui-btn-primary ui-btn-lg w-full">
                   {saving ? t("common.saving") : t("common.save")}
@@ -3941,7 +3935,7 @@ export function InvestmentsScreen() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-semibold text-[var(--text-1)]">{activeAsset.name || activeAsset.symbol.toUpperCase()}</p>
-                    <p className="text-xs text-[var(--text-3)]">
+                    <p className="text-sm text-[var(--text-3)]">
                       {activeAsset.type === "b3" ? "B3" : activeAsset.type === "crypto" ? "Cripto" : language === "pt" ? "Renda fixa" : "Fixed income"} -{" "}
                       {activeAsset.symbol} · {activeAssetCurrency}
                     </p>
@@ -3952,16 +3946,16 @@ export function InvestmentsScreen() {
                 <div className="space-y-3 ui-card-inner p-3">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
-                      <p className="text-xs font-semibold text-[var(--text-1)]">
+                      <p className="text-sm font-semibold text-[var(--text-1)]">
                         {language === "pt" ? "Registrar nova compra" : "Register new purchase"}
                       </p>
-                      <p className="text-[11px] text-[var(--text-3)]">
+                      <p className="text-sm text-[var(--text-3)]">
                         {language === "pt"
                           ? "Use quando comprar mais desse investimento. A quantidade e o preço médio serão recalculados."
                           : "Use this when buying more of this investment. Quantity and average price will be recalculated."}
                       </p>
                     </div>
-                    <span className="rounded-full bg-[var(--surface-3)] px-2 py-1 text-[10px] font-semibold text-[var(--text-3)]">
+                    <span className="rounded-full bg-[var(--surface-3)] px-2 py-1 text-sm font-semibold text-[var(--text-3)]">
                       {language === "pt" ? "Compra" : "Purchase"}
                     </span>
                   </div>
@@ -4050,7 +4044,7 @@ export function InvestmentsScreen() {
 
                   <div className="grid min-w-0 gap-2 md:grid-cols-3">
                     <div className="ui-card-inner px-3 py-2">
-                      <p className="text-[11px] text-[var(--text-3)]">
+                      <p className="text-sm text-[var(--text-3)]">
                         {language === "pt" ? "Quantidade adicionada" : "Added quantity"}
                       </p>
                       <p className="text-sm font-semibold text-[var(--text-1)]">
@@ -4058,7 +4052,7 @@ export function InvestmentsScreen() {
                       </p>
                     </div>
                     <div className="ui-card-inner px-3 py-2">
-                      <p className="text-[11px] text-[var(--text-3)]">{t("investments.total")}</p>
+                      <p className="text-sm text-[var(--text-3)]">{t("investments.total")}</p>
                       <p className="text-sm font-semibold text-[var(--text-1)]">
                         {editPurchaseComputed.total.gt(0)
                           ? formatCurrency(Number(editPurchaseComputed.total.toString()), language, activeAssetCurrency)
@@ -4066,7 +4060,7 @@ export function InvestmentsScreen() {
                       </p>
                     </div>
                     <div className="ui-card-inner px-3 py-2">
-                      <p className="text-[11px] text-[var(--text-3)]">
+                      <p className="text-sm text-[var(--text-3)]">
                         {activeAsset.type === "fixed_income"
                           ? language === "pt"
                             ? "Total aplicado"
@@ -4096,15 +4090,15 @@ export function InvestmentsScreen() {
                 </div>
 
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold text-[var(--text-1)]">{t("investments.purchaseTitle")}</p>
+                  <p className="text-sm font-semibold text-[var(--text-1)]">{t("investments.purchaseTitle")}</p>
                   {purchasesLoading ? (
-                    <p className="text-xs text-[var(--text-3)]">{t("common.loading")}</p>
+                    <p className="text-sm text-[var(--text-3)]">{t("common.loading")}</p>
                   ) : purchasesError ? (
-                    <p className="text-xs text-[var(--red)]">{purchasesError}</p>
+                    <p className="text-sm text-[var(--red)]">{purchasesError}</p>
                   ) : activePurchases.length ? (
                     <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
                       {activePurchases.map((purchase) => (
-                        <div key={purchase.id} className="ui-card-inner px-3 py-2 text-xs">
+                        <div key={purchase.id} className="ui-card-inner px-3 py-2 text-sm">
                           <div className="flex items-center justify-between text-[var(--text-3)]">
                             <span>{formatShortDate(purchase.date, language)}</span>
                             <span>{purchase.mode_used === "quantity" ? t("investments.modeQuantity") : t("investments.modeValue")}</span>
@@ -4121,12 +4115,12 @@ export function InvestmentsScreen() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-[var(--text-3)]">--</p>
+                    <p className="text-sm text-[var(--text-3)]">--</p>
                   )}
                 </div>
 
                 <div className="space-y-2 ui-card-inner p-3">
-                  <p className="text-xs font-semibold text-[var(--text-1)]">{t("investments.title")}</p>
+                  <p className="text-sm font-semibold text-[var(--text-1)]">{t("investments.title")}</p>
                   <div className="grid gap-2 md:grid-cols-2">
                     <input value={editSymbol} onChange={(event) => setEditSymbol(event.target.value)} placeholder={t("investments.symbol")} className="ui-input w-full" />
                     <input value={editName} onChange={(event) => setEditName(event.target.value)} placeholder={t("investments.name")} className="ui-input w-full" />
@@ -4166,13 +4160,13 @@ export function InvestmentsScreen() {
                           <button key={`${activeAsset.id}-${option}`} type="button" onClick={() => setEditCurrency(option)} disabled={disabled}
                             className={`flex-1 ui-btn ui-btn-sm text-left ${active ? "ui-btn-primary" : "ui-btn-secondary"} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}>
                             <span className="block font-semibold">{option}</span>
-                            <span className="block text-[10px] opacity-70">{option === "BRL" ? t("investments.currencyBrl") : t("investments.currencyEur")}</span>
+                            <span className="block text-sm opacity-70">{option === "BRL" ? t("investments.currencyBrl") : t("investments.currencyEur")}</span>
                           </button>
                         );
                       })}
                     </div>
                     {!canSelectInvestmentCurrency(activeAsset.type) ? (
-                      <p className="text-[11px] text-[var(--text-3)]">{t("investments.currencyLockedB3")}</p>
+                      <p className="text-sm text-[var(--text-3)]">{t("investments.currencyLockedB3")}</p>
                     ) : null}
                   </div>
                   <button type="button" onClick={handleUpdateAsset} disabled={editSaving} className="ui-btn ui-btn-primary ui-btn-lg w-full">

@@ -1,4 +1,4 @@
-import { isResponsibleForInstallment } from "@/lib/installmentResponsibility";
+import { getMonthInstallment } from "./installmentSchedule";
 
 export type BudgetRow = {
   id: string;
@@ -133,22 +133,16 @@ export function buildBudgetMonthEntries(
     const title = tx.description?.trim() || tx.category?.trim() || entry;
 
     if (isInstallment) {
-      const perInstallment = amount / totalInstallments;
-      const entries: BudgetDisplayEntry[] = [];
-      for (let index = 0; index < totalInstallments; index += 1) {
-        if (!isResponsibleForInstallment(tx, index + 1)) continue;
-        const installmentDate = addMonthsClamped(txDate, index);
-        if (installmentDate < monthStart || installmentDate > monthEnd) continue;
-        entries.push({
-          id: `${tx.id}-i${index + 1}`,
-          type: tx.type,
-          category,
-          title,
-          amount: perInstallment,
-          effectiveDate: toDateString(installmentDate),
-        });
-      }
-      return entries;
+      const installment = getMonthInstallment(tx, month);
+      if (!installment) return [];
+      return [{
+        id: `${tx.id}-i${installment.index}`,
+        type: tx.type,
+        category,
+        title,
+        amount: installment.amount,
+        effectiveDate: installment.date,
+      }];
     }
 
     if (isFixedExpense) {

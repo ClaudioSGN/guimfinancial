@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { ReactNode } from "react";
-import { Manrope, Sora } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { PwaRegister } from "@/components/PwaRegister";
 import { DailyReminderWatcher } from "@/components/DailyReminderWatcher";
@@ -9,14 +9,9 @@ import { AuthProvider } from "@/lib/auth";
 import { CurrencyProvider } from "@/lib/currency";
 import { AuthGate } from "@/components/AuthGate";
 
-const bodyFont = Manrope({
+const interfaceFont = Inter({
   subsets: ["latin"],
-  variable: "--font-body",
-});
-
-const displayFont = Sora({
-  subsets: ["latin"],
-  variable: "--font-display",
+  variable: "--font-inter",
 });
 
 export const metadata: Metadata = {
@@ -34,7 +29,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <body
-        className={`${bodyFont.variable} ${displayFont.variable} min-h-screen text-slate-950 antialiased`}
+        className={`${interfaceFont.variable} min-h-screen antialiased`}
         suppressHydrationWarning
       >
         <LanguageProvider>

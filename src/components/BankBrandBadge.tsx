@@ -26,7 +26,7 @@ export function BankBrandBadge({ bankCode, size = "md" }: BadgeProps) {
   const hasImageLogo = Boolean(brand.logoUrl);
   const hasRealLogo = Boolean(simpleIcon || hasImageLogo);
   const fallbackDimensions =
-    size === "sm" ? "h-8 w-8 text-[10px]" : size === "lg" ? "h-12 w-12 text-sm" : "h-10 w-10 text-xs";
+    size === "sm" ? "h-8 w-8 text-xs" : size === "lg" ? "h-12 w-12 text-sm" : "h-10 w-10 text-xs";
   const logoDimensions =
     size === "sm"
       ? "h-8 min-w-[2.75rem] max-w-[2.75rem]"
@@ -36,13 +36,13 @@ export function BankBrandBadge({ bankCode, size = "md" }: BadgeProps) {
 
   return (
     <div
-      className={`flex shrink-0 items-center justify-center font-semibold uppercase tracking-[0.12em] ${
+      className={`flex shrink-0 items-center justify-center font-semibold uppercase tracking-[0.05em] ${
         hasRealLogo ? logoDimensions : `overflow-hidden rounded-full ${fallbackDimensions}`
       }`}
       style={{
-        color: brand.textColor,
-        background: hasRealLogo ? "transparent" : brand.background,
-        border: hasRealLogo ? "none" : `1px solid ${brand.border}`,
+        color: "var(--text-1)",
+        background: hasRealLogo ? "transparent" : "var(--surface-3)",
+        border: hasRealLogo ? "none" : "1px solid var(--border)",
       }}
       aria-label={brand.label}
       title={brand.label}
@@ -52,7 +52,7 @@ export function BankBrandBadge({ bankCode, size = "md" }: BadgeProps) {
           viewBox="0 0 24 24"
           aria-hidden="true"
           className="block h-full w-full"
-          fill={simpleIcon.hex ? `#${simpleIcon.hex}` : "currentColor"}
+          fill="currentColor"
         >
           <path d={simpleIcon.path} />
         </svg>
@@ -62,7 +62,7 @@ export function BankBrandBadge({ bankCode, size = "md" }: BadgeProps) {
         <img
           src={brand.logoUrl}
           alt={brand.label}
-          className="block h-full w-auto max-w-full object-contain"
+          className="block h-full w-auto max-w-full object-contain grayscale"
           referrerPolicy="no-referrer"
           onError={(event) => {
             event.currentTarget.style.display = "none";
@@ -74,7 +74,7 @@ export function BankBrandBadge({ bankCode, size = "md" }: BadgeProps) {
       <span
         className={`${hasRealLogo ? "hidden" : "flex"} h-full w-full items-center justify-center`}
       >
-        <span className="text-[9px] font-semibold uppercase tracking-[0.08em] text-[#111827]">
+        <span className="text-xs font-semibold uppercase tracking-[0.05em] text-[var(--text-1)]">
           {brand.shortLabel}
         </span>
       </span>
@@ -108,16 +108,16 @@ export function BankBrandPicker({ selected, onSelect }: PickerProps) {
 
   return (
     <div ref={containerRef} className="space-y-2">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8B94A6]">
+      <p className="text-xs font-semibold uppercase tracking-[0.05em] text-[var(--text-3)]">
         Banco
       </p>
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition ${
+        className={`flex w-full items-center justify-between rounded-full border px-4 py-3 text-left transition ${
           open
-            ? "border-[#5DD6C7] bg-[#0F141E]"
-            : "border-[#1E232E] bg-[#121621] hover:border-[#2E3B50]"
+            ? "border-[var(--text-1)] bg-[var(--surface-2)]"
+            : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--border)]"
         }`}
         aria-expanded={open}
         aria-haspopup="listbox"
@@ -125,8 +125,8 @@ export function BankBrandPicker({ selected, onSelect }: PickerProps) {
         <span className="flex items-center gap-4">
           <BankBrandBadge bankCode={selectedBrand.code} size="sm" />
           <span className="space-y-0.5">
-            <span className="block text-sm font-medium text-[#E4E7EC]">{selectedBrand.label}</span>
-            <span className="block text-xs text-[#8B94A6]">
+            <span className="block text-sm font-medium text-[var(--text-1)]">{selectedBrand.label}</span>
+            <span className="block text-xs text-[var(--text-3)]">
               {open ? "Escolha um banco" : "Banco selecionado"}
             </span>
           </span>
@@ -134,7 +134,7 @@ export function BankBrandPicker({ selected, onSelect }: PickerProps) {
         <motion.span
           animate={{ rotate: open ? 180 : 0 }}
           transition={{ duration: 0.22, ease: "easeOut" }}
-          className="text-lg leading-none text-[#8B94A6]"
+          className="text-lg leading-none text-[var(--text-3)]"
           aria-hidden="true"
         >
           ▾
@@ -186,16 +186,16 @@ export function BankBrandPicker({ selected, onSelect }: PickerProps) {
                       closed: { opacity: 0, y: -8, scale: 0.98 },
                     }}
                     transition={{ duration: 0.18, ease: "easeOut" }}
-                    className={`flex items-center gap-4 rounded-xl border px-4 py-3 text-left transition ${
+                    className={`flex items-center gap-4 rounded-full border px-4 py-3 text-left transition ${
                       active
-                        ? "border-[#5DD6C7] bg-[#0F141E]"
-                        : "border-[#1E232E] bg-[#121621] hover:border-[#2E3B50]"
+                        ? "border-[var(--text-1)] bg-[var(--surface-2)]"
+                        : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--border)]"
                     }`}
                     role="option"
                     aria-selected={active}
                   >
                     <BankBrandBadge bankCode={brand.code} size="sm" />
-                    <span className={`text-sm ${active ? "text-[#E4E7EC]" : "text-[#A8B2C3]"}`}>
+                    <span className={`text-sm ${active ? "text-[var(--text-1)]" : "text-[var(--text-3)]"}`}>
                       {brand.label}
                     </span>
                   </motion.button>

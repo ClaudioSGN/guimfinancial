@@ -1,5 +1,7 @@
 "use client";
 
+import { parseCalendarDate, shiftCalendarMonth } from "@/lib/installmentSchedule";
+
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
@@ -788,8 +790,8 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
   }
 
   const displayDate = useMemo(() => {
-    const value = new Date(date);
-    return value.toLocaleDateString(language === "pt" ? "pt-BR" : "en-US");
+    const value = parseCalendarDate(date);
+    return value?.toLocaleDateString(language === "pt" ? "pt-BR" : "en-US") ?? "";
   }, [date, language]);
 
   return (
@@ -805,7 +807,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
 
       <div>
         <p className="ui-eyebrow">{t("newEntry.title")}</p>
-        <p className="mt-1 text-xl font-semibold text-[var(--text-1)]">
+        <p className="mt-1 text-2xl font-semibold tracking-[-0.025em] text-[var(--text-1)]">
           {isShareEntry
             ? language === "pt"
               ? "Atribuir a amigos"
@@ -859,7 +861,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
         <div className="flex flex-col gap-1.5">
           <label className="ui-label">{t("newEntry.date")}</label>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="ui-input" />
-          <p className="text-xs text-[var(--text-3)]">{displayDate}</p>
+          <p className="text-sm text-[var(--text-3)]">{displayDate}</p>
         </div>
 
         {senderNeedsCard ? (
@@ -867,7 +869,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
             <label className="ui-label">{t("newEntry.card")}</label>
             <div className="flex flex-wrap gap-2">
               {cards.length === 0 ? (
-                <span className="text-xs text-[var(--text-3)]">{language === "pt" ? "Nenhum cartão cadastrado." : "No cards registered."}</span>
+                <span className="text-sm text-[var(--text-3)]">{language === "pt" ? "Nenhum cartão cadastrado." : "No cards registered."}</span>
               ) : cards.map((card) => (
                 <button key={card.id} type="button" onClick={() => setCardId(card.id)}
                   className={`ui-btn ui-btn-sm gap-2 ${cardId === card.id ? "ui-btn-primary" : "ui-btn-secondary"}`}>
@@ -889,7 +891,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
             </span>
             <button type="button" onClick={() => setIsFixed((v) => !v)}
               className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isFixed ? "bg-[var(--accent)]" : "bg-[var(--surface-3)] border border-[var(--border-bright)]"}`}>
-              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${isFixed ? "translate-x-4" : "translate-x-0.5"}`} />
+              <span className={`inline-block h-3.5 w-3.5 transform rounded-full transition-transform ${isFixed ? "translate-x-4 bg-white" : "translate-x-0.5 bg-[var(--text-3)]"}`} />
             </button>
           </div>
         ) : null}
@@ -900,12 +902,25 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
               <span className="text-sm text-[var(--text-2)]">{language === "pt" ? "Compra parcelada" : "Installments"}</span>
               <button type="button" onClick={handleInstallmentToggle}
                 className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isInstallment ? "bg-[var(--accent)]" : "bg-[var(--surface-3)] border border-[var(--border-bright)]"}`}>
-                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${isInstallment ? "translate-x-4" : "translate-x-0.5"}`} />
+                <span className={`inline-block h-3.5 w-3.5 transform rounded-full transition-transform ${isInstallment ? "translate-x-4 bg-white" : "translate-x-0.5 bg-[var(--text-3)]"}`} />
               </button>
             </div>
             {isInstallment ? (
               <div className="flex flex-col gap-3">
                 <input value={installmentTotal} onChange={(e) => handleInstallmentTotalChange(e.target.value)} placeholder={language === "pt" ? "Número de parcelas" : "Installment count"} inputMode="numeric" pattern="[0-9]*" className="ui-input" />
+
+                {parsedInstallmentTotal && parseCalendarDate(date) ? (
+                  <div className="ui-card-inner p-4 text-sm text-[var(--text-3)]">
+                    <p>{language === "pt" ? "Informe o valor total da compra. A primeira parcela pertence ao mês da data acima." : "Enter the total purchase amount. The first installment belongs to the month of the date above."}</p>
+                    <div className="mt-3 flex max-h-32 flex-wrap gap-2 overflow-y-auto" aria-label={language === "pt" ? "Calendário de parcelas" : "Installment schedule"}>
+                      {installmentOptions.map((index) => (
+                        <span key={index} className="ui-badge ui-badge-neutral">
+                          {shiftCalendarMonth(parseCalendarDate(date)!, index - 1).toLocaleDateString(language === "pt" ? "pt-BR" : "en-US", { month: "short", year: "numeric" })} · {index}/{parsedInstallmentTotal}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
 
                 {parsedInstallmentTotal && parsedInstallmentTotal > 1 ? (
                   <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-3)] px-4 py-4">
@@ -914,7 +929,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
                         <p className="text-sm font-semibold text-[var(--text-1)]">
                           {language === "pt" ? "Parcelas que eu pago" : "Installments I pay"}
                         </p>
-                        <p className="mt-1 text-xs text-[var(--text-3)]">
+                        <p className="mt-1 text-sm text-[var(--text-3)]">
                           {language === "pt"
                             ? "Cadastre o valor total e deixe marcadas so as parcelas que saem do seu bolso."
                             : "Register the full amount and keep selected only the installments that come out of your pocket."}
@@ -922,7 +937,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
                       </div>
                       <button type="button" onClick={handleCustomInstallmentResponsibilityToggle}
                         className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${customInstallmentResponsibility ? "bg-[var(--accent)]" : "bg-[var(--surface-3)] border border-[var(--border-bright)]"}`}>
-                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${customInstallmentResponsibility ? "translate-x-4" : "translate-x-0.5"}`} />
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full transition-transform ${customInstallmentResponsibility ? "translate-x-4 bg-white" : "translate-x-0.5 bg-[var(--text-3)]"}`} />
                       </button>
                     </div>
 
@@ -978,7 +993,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
                           })}
                         </div>
 
-                        <p className="text-xs text-[var(--text-3)]">
+                        <p className="text-sm text-[var(--text-3)]">
                           {language === "pt"
                             ? "As parcelas desmarcadas ficam por conta do amigo ou de outro acordo."
                             : "Unselected installments stay with your friend or another agreement."}
@@ -997,7 +1012,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
             <label className="ui-label">{isTransfer ? t("newEntry.fromAccount") : t("newEntry.account")}</label>
             <div className="flex flex-wrap gap-2">
               {accounts.length === 0 ? (
-                <span className="text-xs text-[var(--text-3)]">{language === "pt" ? "Nenhuma conta cadastrada." : "No accounts registered."}</span>
+                <span className="text-sm text-[var(--text-3)]">{language === "pt" ? "Nenhuma conta cadastrada." : "No accounts registered."}</span>
               ) : accounts.map((account) => (
                 <button key={account.id} type="button" onClick={() => setAccountId(account.id)}
                   className={`ui-btn ui-btn-sm ${accountId === account.id ? "ui-btn-primary" : "ui-btn-secondary"}`}>
@@ -1013,7 +1028,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
             <label className="ui-label">{t("newEntry.toAccount")}</label>
             <div className="flex flex-wrap gap-2">
               {accounts.length === 0 ? (
-                <span className="text-xs text-[var(--text-3)]">{language === "pt" ? "Nenhuma conta cadastrada." : "No accounts registered."}</span>
+                <span className="text-sm text-[var(--text-3)]">{language === "pt" ? "Nenhuma conta cadastrada." : "No accounts registered."}</span>
               ) : accounts.map((account) => (
                 <button key={account.id} type="button" onClick={() => setToAccountId(account.id)}
                   className={`ui-btn ui-btn-sm ${toAccountId === account.id ? "ui-btn-primary" : "ui-btn-secondary"}`}>
@@ -1031,7 +1046,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
                 <p className="text-sm font-semibold text-[var(--text-1)]">
                   {language === "pt" ? "Enviar para um amigo" : "Send to a friend"}
                 </p>
-                <p className="text-xs text-[var(--text-3)]">
+                <p className="text-sm text-[var(--text-3)]">
                   {language === "pt"
                     ? "Sua transação será salva agora. O amigo escolhe a conta ou cartão dele ao aceitar."
                     : "Your transaction will be saved now. Your friend will choose their own account or card when accepting."}
@@ -1040,7 +1055,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
             </div>
 
             {!friends.length ? (
-              <p className="text-xs text-[var(--text-3)]">
+              <p className="text-sm text-[var(--text-3)]">
                 {language === "pt"
                   ? "Adicione amigos na aba Mais para usar atribuições compartilhadas."
                   : "Add friends in the More tab to use shared attributions."}
@@ -1062,7 +1077,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
                     </button>
                   ))}
                 </div>
-                <p className="text-xs text-[var(--text-3)]">
+                <p className="text-sm text-[var(--text-3)]">
                   {language === "pt"
                     ? "O amigo poderá aceitar ou recusar na aba Notificações."
                     : "Your friend will be able to accept or decline it in Notifications."}
@@ -1073,9 +1088,9 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
         ) : null}
       </div>
 
-      {errorMsg ? <p className="text-xs text-[var(--red)]">{errorMsg}</p> : null}
-      {shareWarning ? <p className="text-xs text-[var(--amber)]">{shareWarning}</p> : null}
-      {saved ? <p className="text-xs text-[var(--green)]">{t("newEntry.saved")}</p> : null}
+      {errorMsg ? <p className="text-sm text-[var(--red)]">{errorMsg}</p> : null}
+      {shareWarning ? <p className="text-sm text-[var(--amber)]">{shareWarning}</p> : null}
+      {saved ? <p className="text-sm text-[var(--green)]">{t("newEntry.saved")}</p> : null}
 
       <button type="button" onClick={handleSave} disabled={saving} className="ui-btn ui-btn-primary ui-btn-lg w-full">
         {saving ? t("common.saving") : t("common.save")}
@@ -1084,7 +1099,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
       {/* Create card modal */}
       {createCardOpen ? (
         <div className="ui-modal-backdrop fixed inset-0 z-40 flex items-end justify-center sm:items-center" onClick={closeCreateCardModal}>
-          <div className="ui-card-2 ui-slide-up w-full max-w-md rounded-t-2xl p-5 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="ui-card-2 ui-slide-up w-full max-w-md rounded-t-3xl p-5 sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-5 flex items-center justify-between">
               <p className="text-sm font-semibold text-[var(--text-1)]">{t("newEntry.createCardTitle")}</p>
               <button type="button" onClick={closeCreateCardModal} className="ui-btn ui-btn-ghost ui-btn-sm">{t("common.cancel")}</button>
@@ -1112,7 +1127,7 @@ export function NewEntryScreen({ entryType, onClose }: Props) {
                 <input value={newCardClosingDay} onChange={(e) => setNewCardClosingDay(e.target.value)} placeholder={t("cards.closingDayPlaceholder")} inputMode="numeric" pattern="[0-9]*" className="ui-input" />
                 <input value={newCardDueDay} onChange={(e) => setNewCardDueDay(e.target.value)} placeholder={t("cards.dueDayPlaceholder")} inputMode="numeric" pattern="[0-9]*" className="ui-input" />
               </div>
-              {createCardError ? <p className="text-xs text-[var(--red)]">{createCardError}</p> : null}
+              {createCardError ? <p className="text-sm text-[var(--red)]">{createCardError}</p> : null}
               <button type="button" onClick={handleCreateCard} disabled={createCardSaving} className="ui-btn ui-btn-primary ui-btn-lg w-full">
                 {createCardSaving ? t("common.saving") : t("newEntry.createCardSubmit")}
               </button>

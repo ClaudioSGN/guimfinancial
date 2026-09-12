@@ -120,7 +120,7 @@ export function ProfileScreen() {
       <div className="ui-card p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-4">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-[var(--border-bright)] bg-[var(--surface-3)] text-base font-semibold text-[var(--text-1)]">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-3xl border border-[var(--border-bright)] bg-[var(--surface-3)] text-base font-semibold text-[var(--text-1)]">
               {profileAvatar ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={profileAvatar} alt={displayName} className="h-full w-full object-cover" />
@@ -129,7 +129,7 @@ export function ProfileScreen() {
             <div className="min-w-0">
               <p className="ui-eyebrow">{t("profile.yourProfile")}</p>
               <h1 className="truncate text-lg font-semibold text-[var(--text-1)]">{displayName}</h1>
-              <p className="truncate text-xs text-[var(--text-3)]">{user?.email || "--"}</p>
+              <p className="truncate text-sm text-[var(--text-3)]">{user?.email || "--"}</p>
             </div>
           </div>
           <button type="button" onClick={() => { setErrorMsg(null); setIsEditOpen(true); }} className="ui-btn ui-btn-secondary shrink-0">
@@ -139,7 +139,7 @@ export function ProfileScreen() {
       </div>
 
       {saved ? (
-        <div className="rounded-xl border border-[var(--green)] border-opacity-30 bg-[var(--green-dim)] px-4 py-3 text-xs text-[var(--green)]">
+        <div className="rounded-xl border border-[var(--green)] border-opacity-30 bg-[var(--green-dim)] px-4 py-3 text-sm text-[var(--green)]">
           {t("profile.saved")}
         </div>
       ) : null}
@@ -180,11 +180,11 @@ export function ProfileScreen() {
       {/* Edit modal */}
       {isEditOpen ? (
         <div className="ui-modal-backdrop fixed inset-0 z-50 flex items-end justify-center sm:items-center" onClick={() => { setIsEditOpen(false); setErrorMsg(null); }}>
-          <div className="ui-card-2 ui-slide-up w-full max-w-md rounded-t-2xl p-5 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="ui-card-2 ui-slide-up w-full max-w-md rounded-t-3xl p-5 sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-[var(--text-1)]">{t("profile.sectionBasic")}</p>
-                <p className="mt-0.5 text-xs text-[var(--text-3)]">
+                <p className="mt-0.5 text-sm text-[var(--text-3)]">
                   {language === "pt" ? "Atualize os dados do seu perfil." : "Update your profile details."}
                 </p>
               </div>
@@ -195,7 +195,7 @@ export function ProfileScreen() {
 
             <div className="flex flex-col gap-4">
               <label className="flex w-fit cursor-pointer items-center gap-3">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--border-bright)] bg-[var(--surface-3)] text-xs font-semibold text-[var(--text-1)]">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--border-bright)] bg-[var(--surface-3)] text-sm font-semibold text-[var(--text-1)]">
                   {profileAvatar ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={profileAvatar} alt={displayName} className="h-full w-full object-cover" />
@@ -210,7 +210,7 @@ export function ProfileScreen() {
                 <input type="text" value={profileName} onChange={(e) => setProfileName(e.target.value)} placeholder={t("more.profileNamePlaceholder")} className="ui-input" />
               </div>
 
-              {errorMsg ? <p className="text-xs text-[var(--red)]">{errorMsg}</p> : null}
+              {errorMsg ? <p className="text-sm text-[var(--red)]">{errorMsg}</p> : null}
 
               <div className="flex gap-2 sm:justify-end">
                 <button type="button" onClick={() => { setIsEditOpen(false); setErrorMsg(null); }} className="ui-btn ui-btn-secondary flex-1 sm:flex-none">

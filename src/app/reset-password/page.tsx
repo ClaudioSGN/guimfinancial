@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import styles from "@/components/AuthPages.module.css";
 
 type AuthErrorLike = {
   message?: string;
@@ -94,51 +95,57 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0D0F14] px-6 py-10 text-slate-50">
-      <div className="mx-auto w-full max-w-sm space-y-4 rounded-2xl border border-[#1E232E] bg-[#121621] p-6">
-        <p className="text-xl font-semibold text-[#E5E8EF]">Redefinir senha</p>
-        <p className="text-xs text-[#8B94A6]">
+    <div className={`${styles.page} ${styles.resetPage}`}>
+      <div className={`${styles.formCard} ${styles.resetCard}`}>
+        <div className={styles.resetIcon} aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="5" y="10" width="14" height="11" rx="3" />
+            <path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3" />
+          </svg>
+        </div>
+        <p className={styles.formTitle}>Redefinir senha</p>
+        <p className={styles.formDescription}>
           Use o link do email de recuperacao para abrir esta tela e definir uma nova senha.
         </p>
 
         {loadingSession ? (
-          <p className="text-sm text-[#A8B0C2]">Carregando...</p>
+          <p className={styles.helperText}>Carregando...</p>
         ) : !hasSession ? (
-          <div className="space-y-3">
-            <p className="text-sm text-[#E4A6A6]">
+          <div className={styles.fields}>
+            <p className={`${styles.notice} ${styles.errorNotice}`}>
               Não encontramos uma sessão de recuperação válida. Abra novamente o link enviado por e-mail.
             </p>
             <button
               type="button"
               onClick={() => router.replace("/login")}
-              className="w-full rounded-xl border border-[#2A3140] bg-[#151E2D] py-2 text-sm font-semibold text-[#E4E7EC]"
+              className={styles.secondaryButton}
             >
               Voltar ao login
             </button>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className={styles.fields}>
             <input
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               placeholder="Nova senha"
               type="password"
-              className="w-full rounded-xl border border-[#1E232E] bg-[#0F121A] px-4 py-3 text-sm text-[#E4E7EC]"
+              className={styles.input}
             />
             <input
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
               placeholder="Confirmar nova senha"
               type="password"
-              className="w-full rounded-xl border border-[#1E232E] bg-[#0F121A] px-4 py-3 text-sm text-[#E4E7EC]"
+              className={styles.input}
             />
-            {errorMsg ? <p className="text-xs text-red-400">{errorMsg}</p> : null}
-            {successMsg ? <p className="text-xs text-[#5DD6C7]">{successMsg}</p> : null}
+            {errorMsg ? <p className={`${styles.notice} ${styles.errorNotice}`}>{errorMsg}</p> : null}
+            {successMsg ? <p className={`${styles.notice} ${styles.infoNotice}`}>{successMsg}</p> : null}
             <button
               type="button"
               onClick={handleUpdatePassword}
               disabled={saving}
-              className="w-full rounded-xl bg-[#E6EDF3] py-3 text-sm font-semibold text-[#0C1018] disabled:opacity-60"
+              className={styles.primaryButton}
             >
               {saving ? "Salvando..." : "Salvar nova senha"}
             </button>

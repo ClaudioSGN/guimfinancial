@@ -10,22 +10,22 @@ function getBankVisual(name: string) {
   const normalized = name.toLowerCase();
 
   if (normalized.includes("nubank") || normalized.includes("nu")) {
-    return { label: "Nubank", tone: "bg-[#ece7ff] text-[#6753ce]" };
+    return { label: "Nubank", tone: "bg-[var(--surface-2)] text-[var(--text-1)]" };
   }
   if (normalized.includes("inter")) {
-    return { label: "Banco Inter", tone: "bg-[#fff0e4] text-[#d47124]" };
+    return { label: "Banco Inter", tone: "bg-[var(--surface-2)] text-[var(--text-1)]" };
   }
   if (normalized.includes("itau") || normalized.includes("itaú")) {
-    return { label: "Itau", tone: "bg-[#e7f1ff] text-[#2d6dd9]" };
+    return { label: "Itau", tone: "bg-[var(--surface-2)] text-[var(--text-1)]" };
   }
   if (normalized.includes("caixa")) {
-    return { label: "Caixa", tone: "bg-[#e5f6ff] text-[#2c88b5]" };
+    return { label: "Caixa", tone: "bg-[var(--surface-2)] text-[var(--text-1)]" };
   }
   if (normalized.includes("santander")) {
-    return { label: "Santander", tone: "bg-[#ffe8ea] text-[#cf5b67]" };
+    return { label: "Santander", tone: "bg-[var(--surface-2)] text-[var(--text-1)]" };
   }
 
-  return { label: "Outro banco", tone: "bg-white/65 text-[#546377]" };
+  return { label: "Outro banco", tone: "bg-[var(--surface-2)] text-[var(--text-3)]" };
 }
 
 type Props = {
@@ -160,20 +160,20 @@ export function AccountsList({ accounts }: Props) {
             <div key={acc.id} className="app-surface app-card-soft flex flex-col justify-between p-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <span className={`inline-flex rounded-full px-3 py-1 text-[10px] font-semibold ${visual.tone}`}>
+                  <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${visual.tone}`}>
                     {visual.label}
                   </span>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <span className="min-w-0 break-words text-sm font-semibold text-[#122033]">{acc.name}</span>
-                    <span className="app-pill px-2.5 py-1 text-[10px]">
+                    <span className="min-w-0 break-words text-sm font-semibold text-[var(--text-1)]">{acc.name}</span>
+                    <span className="app-pill px-2.5 py-1 text-xs">
                       {acc.accountType === "card" ? "Cartao" : "Conta"}
                     </span>
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <p className="text-[11px] text-[#6d7c92]">Saldo atual</p>
-                  <p className="mt-1 text-lg font-semibold tracking-[-0.03em] text-[#122033]">
+                  <p className="text-xs text-[var(--text-3)]">Saldo atual</p>
+                  <p className="mt-1 text-lg font-semibold tracking-[-0.03em] text-[var(--text-1)]">
                     {formatCurrency(acc.balance)}
                   </p>
                 </div>
@@ -183,7 +183,7 @@ export function AccountsList({ accounts }: Props) {
                 {acc.accountType !== "card" ? (
                   <div className="app-surface app-card-soft p-3">
                     <p className="app-eyebrow">Saldo inicial</p>
-                    <p className="mt-2 text-sm font-semibold text-[#122033]">
+                    <p className="mt-2 text-sm font-semibold text-[var(--text-1)]">
                       {formatCurrency(acc.initialBalance)}
                     </p>
                   </div>
@@ -192,9 +192,9 @@ export function AccountsList({ accounts }: Props) {
                 {acc.cardLimit ? (
                   <div className="app-surface app-card-soft p-3">
                     <p className="app-eyebrow">Limite</p>
-                    <p className="mt-2 text-sm font-semibold text-[#122033]">{formatCurrency(acc.cardLimit)}</p>
+                    <p className="mt-2 text-sm font-semibold text-[var(--text-1)]">{formatCurrency(acc.cardLimit)}</p>
                     {acc.invoiceCurrent !== null ? (
-                      <p className="mt-1 text-xs text-[#6d7c92]">Fatura atual {formatCurrency(acc.invoiceCurrent)}</p>
+                      <p className="mt-1 text-xs text-[var(--text-3)]">Fatura atual {formatCurrency(acc.invoiceCurrent)}</p>
                     ) : null}
                   </div>
                 ) : null}
@@ -202,28 +202,28 @@ export function AccountsList({ accounts }: Props) {
 
               {usedPercent !== null ? (
                 <div className="mt-4">
-                  <div className="mb-2 flex items-center justify-between text-[11px] text-[#6d7c92]">
+                  <div className="mb-2 flex items-center justify-between text-xs text-[var(--text-3)]">
                     <span>Utilizacao do limite</span>
                     <span>{usedPercent}%</span>
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-white/45">
-                    <div className="h-full rounded-full bg-[linear-gradient(90deg,#6aa3ff,#86d2ff)]" style={{ width: `${usedPercent}%` }} />
+                  <div className="h-2 overflow-hidden rounded-full bg-[var(--surface-3)]">
+                    <div className="h-full rounded-full bg-[var(--text-1)]" style={{ width: `${usedPercent}%` }} />
                   </div>
                 </div>
               ) : null}
 
-              <div className="mt-4 flex flex-wrap items-end justify-between gap-3 text-[11px] text-[#6d7c92]">
+              <div className="mt-4 flex flex-wrap items-end justify-between gap-3 text-xs text-[var(--text-3)]">
                 <div className="flex flex-col gap-1">
                   {acc.closingDay ? <span>Fecha dia {acc.closingDay}</span> : null}
                   {acc.dueDay ? <span>Vence dia {acc.dueDay}</span> : null}
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => openEdit(acc)} className="app-button app-button-secondary px-3 py-1.5 text-[11px]">
+                  <button onClick={() => openEdit(acc)} className="app-button app-button-secondary px-3 py-1.5 text-xs">
                     Editar
                   </button>
                   <button
                     onClick={() => handleDeleteAccount(acc.id, acc.name)}
-                    className="app-button app-button-secondary px-3 py-1.5 text-[11px] text-[#b45f68]"
+                    className="app-button app-button-secondary px-3 py-1.5 text-xs text-[var(--red)]"
                   >
                     Apagar
                   </button>
@@ -238,15 +238,15 @@ export function AccountsList({ accounts }: Props) {
         <div className="app-modal-backdrop fixed inset-0 z-40 flex items-center justify-center px-4">
           <div className="app-surface app-card w-full max-w-md p-5" onClick={(event) => event.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-[#122033]">Editar conta / banco</h2>
-              <button type="button" onClick={resetEditState} className="text-xs text-[#69798e]">
+              <h2 className="text-base font-semibold text-[var(--text-1)]">Editar conta / banco</h2>
+              <button type="button" onClick={resetEditState} className="text-xs text-[var(--text-3)]">
                 Fechar
               </button>
             </div>
 
             <form className="space-y-4" onSubmit={handleEditSubmit}>
               <div className="space-y-1 text-sm">
-                <label className="text-xs text-[#69798e]">Nome da conta / banco</label>
+                <label className="text-xs text-[var(--text-3)]">Nome da conta / banco</label>
                 <input
                   type="text"
                   value={name}
@@ -259,7 +259,7 @@ export function AccountsList({ accounts }: Props) {
 
               {editing.accountType !== "card" ? (
                 <div className="space-y-1 text-sm">
-                  <label className="text-xs text-[#69798e]">Saldo inicial / ajuste ({currency})</label>
+                  <label className="text-xs text-[var(--text-3)]">Saldo inicial / ajuste ({currency})</label>
                   <input
                     type="number"
                     step="0.01"
@@ -272,7 +272,7 @@ export function AccountsList({ accounts }: Props) {
               ) : null}
 
               <div className="space-y-1 text-sm">
-                <label className="text-xs text-[#69798e]">Limite total do cartão (opcional)</label>
+                <label className="text-xs text-[var(--text-3)]">Limite total do cartão (opcional)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -285,7 +285,7 @@ export function AccountsList({ accounts }: Props) {
 
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="space-y-1">
-                  <label className="text-xs text-[#69798e]">Dia de fechamento</label>
+                  <label className="text-xs text-[var(--text-3)]">Dia de fechamento</label>
                   <input
                     type="number"
                     min={1}
@@ -297,7 +297,7 @@ export function AccountsList({ accounts }: Props) {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-[#69798e]">Dia de vencimento</label>
+                  <label className="text-xs text-[var(--text-3)]">Dia de vencimento</label>
                   <input
                     type="number"
                     min={1}
@@ -310,7 +310,7 @@ export function AccountsList({ accounts }: Props) {
                 </div>
               </div>
 
-              {errorMsg ? <p className="text-xs text-red-500">{errorMsg}</p> : null}
+              {errorMsg ? <p className="text-xs text-[var(--red)]">{errorMsg}</p> : null}
 
               <button type="submit" disabled={saving} className="app-button app-button-primary w-full px-4 py-3 text-sm font-semibold">
                 {saving ? "A guardar..." : "Guardar alteracoes"}

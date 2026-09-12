@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { AppIcon } from "@/components/AppIcon";
 import { GuidedTutorial } from "@/components/GuidedTutorial";
 import { NotificationsPanel } from "@/components/social/NotificationsPanel";
@@ -23,6 +23,7 @@ export function AppShell({ activeTab, children }: Props) {
   const { language, t } = useLanguage();
   const { user } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [activeModalType, setActiveModalType] = useState<string | null>(null);
@@ -62,42 +63,42 @@ export function AppShell({ activeTab, children }: Props) {
           label: t("newEntry.income"),
           description: language === "pt" ? "Dinheiro entrando em uma conta" : "Money entering an account",
           icon: "arrow-up",
-          color: "#19d28f",
+          color: "#cccccc",
         },
         {
           key: "expense",
           label: t("newEntry.expense"),
           description: language === "pt" ? "Despesa paga direto da conta" : "Expense paid from an account",
           icon: "arrow-down",
-          color: "#ff5d5d",
+          color: "#cccccc",
         },
         {
           key: "card_expense",
           label: t("newEntry.cardExpense"),
           description: language === "pt" ? "Compra em cartão próprio ou de amigo" : "Purchase on your card or a friend's",
           icon: "credit-card",
-          color: "#f5b51b",
+          color: "#cccccc",
         },
         {
           key: "share_with_friend",
           label: language === "en" ? "Assign to friends" : "Atribuir a amigos",
           description: language === "pt" ? "Envie uma cobrança para outro usuário" : "Send a charge to another user",
           icon: "arrow-right",
-          color: "#38bdf8",
+          color: "#cccccc",
         },
         {
           key: "transfer",
           label: t("newEntry.transfer"),
           description: language === "pt" ? "Mover saldo entre contas" : "Move balance between accounts",
           icon: "transfer",
-          color: "#9b8cff",
+          color: "#cccccc",
         },
         {
           key: "investment",
           label: t("investments.newInvestment"),
           description: language === "pt" ? "Registrar ativo na carteira" : "Register an asset in the portfolio",
           icon: "wallet",
-          color: "#7dd3fc",
+          color: "#cccccc",
         },
       ] as const,
     [language, t],
@@ -143,6 +144,17 @@ export function AppShell({ activeTab, children }: Props) {
         ? "Ajustes, contas, cartões, amigos e preferências do produto."
         : "Settings, accounts, cards, friends, and product preferences.",
   };
+
+  const pageTitle = pathname === "/profile"
+    ? (language === "pt" ? "Perfil" : "Profile")
+    : pathname === "/reports"
+      ? (language === "pt" ? "Relatórios" : "Reports")
+      : activeNavItem.label;
+  const pageSubtitle = pathname === "/profile"
+    ? (language === "pt" ? "Seus dados e preferências, em um só lugar." : "Your details and preferences, in one place.")
+    : pathname === "/reports"
+      ? (language === "pt" ? "Entenda os movimentos e resultados do seu dinheiro." : "Understand the movement and performance of your money.")
+      : pageSubtitles[activeTab];
 
   useEffect(() => {
     let timeoutId: number | undefined;
@@ -207,23 +219,23 @@ export function AppShell({ activeTab, children }: Props) {
 
   return (
     <div className="app-shell min-h-screen overflow-hidden md:overflow-visible">
-      <header className="site-topbar fixed left-0 right-0 top-0 z-40 hidden border-b border-[var(--border)] md:block">
-        <div className="mx-auto grid h-[76px] max-w-[1880px] grid-cols-[260px_1fr_auto] items-center gap-5 px-6 xl:px-8">
-          <Link href="/" className="group flex items-center gap-3">
-            <span className="grid h-11 w-11 place-items-center border border-[var(--border-bright)] bg-[var(--accent)] text-sm font-black text-white shadow-[6px_6px_0_rgba(20,184,166,0.24)]">
+      <header className="site-topbar z-40 hidden md:block">
+        <div className="site-topbar-inner">
+          <Link href="/" className="site-brand flex items-center gap-3">
+            <span className="site-brand-mark grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--accent)] text-sm font-semibold text-white">
               GF
             </span>
             <span className="min-w-0">
-              <span className="block font-[var(--font-display)] text-lg font-black uppercase tracking-[-0.04em] text-[var(--text-1)]">
+              <span className="block text-base font-semibold tracking-[-0.025em] text-[var(--text-1)]">
                 GuimFinancial
               </span>
-              <span className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-3)]">
+              <span className="block text-xs text-[var(--text-3)]">
                 {language === "pt" ? "Painel financeiro" : "Finance board"}
               </span>
             </span>
           </Link>
 
-          <nav className="flex min-w-0 items-center justify-center gap-1">
+          <nav className="site-navigation">
             {desktopNavItems.map((item) => {
               const isActive = activeTab === item.key;
               return (
@@ -241,7 +253,7 @@ export function AppShell({ activeTab, children }: Props) {
             })}
           </nav>
 
-          <div className="flex items-center justify-end gap-2">
+          <div className="site-utilities">
             <button
               type="button"
               onClick={() => setNotificationsOpen(true)}
@@ -256,17 +268,18 @@ export function AppShell({ activeTab, children }: Props) {
               type="button"
               onClick={() => setMenuOpen((value) => !value)}
               className="site-primary-button"
+              aria-expanded={menuOpen}
               data-tour="register-button"
             >
-              <AppIcon name="plus" size={17} color="#041016" />
+              <AppIcon name="plus" size={17} color="currentColor" />
               <span>{language === "pt" ? "Registrar" : "Register"}</span>
             </button>
-            <Link href="/profile" data-tour="profile-link" className="ml-2 flex h-11 items-center gap-3 border-l border-[var(--border)] pl-4 transition-opacity hover:opacity-85">
-              <div className="text-right">
-                <p className="max-w-[150px] truncate text-xs font-bold text-[var(--text-1)]">{userName}</p>
-                <p className="max-w-[150px] truncate text-[11px] text-[var(--text-3)]">{user?.email}</p>
+            <Link href="/profile" data-tour="profile-link" className="site-profile flex items-center gap-3 transition-opacity hover:opacity-85">
+              <div className="site-profile-copy min-w-0">
+                <p className="max-w-[150px] truncate text-xs font-medium text-[var(--text-1)]">{userName}</p>
+                <p className="max-w-[150px] truncate text-xs text-[var(--text-3)]">{user?.email}</p>
               </div>
-              <div className="grid h-10 w-10 place-items-center overflow-hidden border border-[var(--border-bright)] bg-[var(--surface-3)] text-xs font-black text-[var(--text-1)]">
+              <div className="site-avatar grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full border border-[var(--border)] bg-[var(--surface-3)] text-xs font-semibold text-[var(--text-1)]">
                 {avatarSrc ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={avatarSrc} alt="Profile" className="h-full w-full object-cover" />
@@ -279,31 +292,23 @@ export function AppShell({ activeTab, children }: Props) {
         </div>
       </header>
 
-      <div className="h-[100dvh] md:h-auto md:min-h-screen md:pt-[76px]">
+      <div className="site-content h-[100dvh] md:h-auto md:min-h-screen">
         <div
-          className="h-[calc(100dvh-6rem-env(safe-area-inset-bottom))] overflow-y-auto overscroll-y-none px-3 pb-4 pt-4 sm:px-4 md:h-auto md:min-h-[calc(100vh-76px)] md:overflow-visible md:px-6 md:pb-10 md:pt-6 xl:px-8"
+          className="site-content-scroll h-[calc(100dvh-6rem-env(safe-area-inset-bottom))] overflow-y-auto overscroll-y-none px-4 pb-6 pt-4 md:h-auto md:min-h-screen md:overflow-visible md:px-6 md:pb-12 xl:px-8"
           style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}
         >
-          <section className="page-command-strip mx-auto mb-6 hidden max-w-[1880px] grid-cols-[minmax(0,1fr)_360px] gap-4 md:grid">
+          <section className="page-command-strip mx-auto mb-8 hidden max-w-[1200px] gap-6 md:grid">
             <div className="page-title-panel">
               <div className="flex items-center gap-3">
                 <span className="page-kicker">{language === "pt" ? "Você está em" : "You are in"}</span>
-                <span className="page-current">{activeNavItem.label}</span>
+                <span className="page-current">{pageTitle}</span>
               </div>
-              <h1>{activeNavItem.label}</h1>
-              <p>{pageSubtitles[activeTab]}</p>
+              <h1>{pageTitle}</h1>
+              <p>{pageSubtitle}</p>
             </div>
-            <aside className="page-help-panel">
-              <p className="page-kicker">{language === "pt" ? "Como usar rápido" : "Quick use"}</p>
-              <p className="mt-2 text-sm font-semibold text-[var(--text-1)]">
-                {language === "pt"
-                  ? "Use Registrar para adicionar receitas, despesas, cartão ou atribuições sem procurar por menus."
-                  : "Use Register to add income, expenses, cards, or friend assignments without hunting menus."}
-              </p>
-            </aside>
           </section>
 
-          <main className="mx-auto w-full max-w-[1880px]">{children}</main>
+          <main className="mx-auto w-full max-w-[1200px]">{children}</main>
         </div>
       </div>
 
@@ -317,9 +322,9 @@ export function AppShell({ activeTab, children }: Props) {
                 href={item.href}
                 aria-current={isActive ? "page" : undefined}
                 data-tour={`nav-${item.key}`}
-                className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition-all ${
+                className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-1 py-2 text-xs font-semibold transition-all ${
                   isActive
-                    ? "bg-[rgba(79,142,255,0.18)] text-[var(--text-1)]"
+                    ? "bg-[var(--surface-3)] text-[var(--text-1)]"
                     : "text-[var(--text-3)]"
                 }`}
               >
@@ -335,8 +340,10 @@ export function AppShell({ activeTab, children }: Props) {
           <button
             type="button"
             onClick={() => setMenuOpen((value) => !value)}
-            className="mx-1 flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] shadow-[0_6px_20px_rgba(79,142,255,0.4)] transition-transform active:scale-95"
+            className="mx-1 flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] text-white transition-transform active:scale-95"
             data-tour="register-button"
+            aria-label={language === "pt" ? "Registrar" : "Register"}
+            aria-expanded={menuOpen}
           >
             <div className={`transition-transform duration-200 ${menuOpen ? "rotate-45" : "rotate-0"}`}>
               <AppIcon name="plus" size={22} color="#fff" />
@@ -351,9 +358,9 @@ export function AppShell({ activeTab, children }: Props) {
                 href={item.href}
                 aria-current={isActive ? "page" : undefined}
                 data-tour={`nav-${item.key}`}
-                className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition-all ${
+                className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-1 py-2 text-xs font-semibold transition-all ${
                   isActive
-                    ? "bg-[rgba(79,142,255,0.18)] text-[var(--text-1)]"
+                    ? "bg-[var(--surface-3)] text-[var(--text-1)]"
                     : "text-[var(--text-3)]"
                 }`}
               >
@@ -407,7 +414,7 @@ export function AppShell({ activeTab, children }: Props) {
               <div className="mb-5 flex items-start justify-between gap-4 border-b border-[var(--border)] pb-4">
                 <div>
                   <p className="page-kicker">{notificationsLabel}</p>
-                  <p className="mt-1 text-lg font-black text-[var(--text-1)]">
+                  <p className="mt-1 text-lg font-semibold text-[var(--text-1)]">
                   {language === "pt" ? "Caixa de entrada" : "Inbox"}
                   </p>
                 </div>
@@ -438,10 +445,10 @@ export function AppShell({ activeTab, children }: Props) {
           onClick={() => setMenuOpen(false)}
         >
           <div
-            className="absolute right-8 top-24 hidden md:block"
+            className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 md:block"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="command-menu ui-slide-up w-[520px] overflow-hidden p-0 shadow-[0_26px_90px_rgba(0,0,0,0.45)]" data-tour="register-menu">
+            <div className="command-menu ui-slide-up max-h-[calc(100dvh-48px)] w-[520px] overflow-y-auto p-0 shadow-[var(--shadow-lg)]" data-tour="register-menu">
               <div className="command-menu-header">
                 <p className="page-kicker">{language === "pt" ? "Registrar" : "Register"}</p>
                 <h2>{language === "pt" ? "Escolha o próximo passo" : "Choose the next step"}</h2>
@@ -467,8 +474,8 @@ export function AppShell({ activeTab, children }: Props) {
                       <AppIcon name={item.icon} size={18} />
                     </span>
                     <span>
-                      <span className="block text-sm font-black text-[var(--text-1)]">{item.label}</span>
-                      <span className="mt-1 block text-xs leading-relaxed text-[var(--text-3)]">{item.description}</span>
+                      <span className="block text-sm font-semibold text-[var(--text-1)]">{item.label}</span>
+                      <span className="mt-1 block text-sm leading-relaxed text-[var(--text-3)]">{item.description}</span>
                     </span>
                   </button>
                 ))}
@@ -482,15 +489,8 @@ export function AppShell({ activeTab, children }: Props) {
             ref={menuRef}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="relative h-[200px] w-[200px]" data-tour="register-menu">
+            <div className="command-menu grid w-[min(480px,calc(100vw-32px))] grid-cols-2 gap-1 p-2 shadow-[var(--shadow-lg)]" data-tour="register-menu">
               {menuItems.map((item, index) => {
-                const angles = [225, 180, 135, 45, 0, 315];
-                const angle = angles[index] ?? 0;
-                const radius = 88;
-                const rad = (angle * Math.PI) / 180;
-                const x = Math.cos(rad) * radius;
-                const y = Math.sin(rad) * radius;
-
                 return (
                   <button
                     key={item.key}
@@ -499,24 +499,22 @@ export function AppShell({ activeTab, children }: Props) {
                       event.stopPropagation();
                       openNewEntry(item.key);
                     }}
-                    className={`absolute left-1/2 top-1/2 flex flex-col items-center gap-1.5 transition-all duration-200 ${
+                    className={`flex min-h-24 flex-col items-center justify-center gap-2 rounded-full p-3 transition-all duration-200 hover:bg-[var(--surface-3)] ${
                       menuOpen ? "opacity-100" : "pointer-events-none opacity-0"
                     }`}
                     style={{
-                      transform: menuOpen
-                        ? `translate(calc(${x}px - 50%), calc(${y}px - 50%)) scale(1)`
-                        : "translate(-50%, -50%) scale(0.3)",
+                      transform: menuOpen ? "translateY(0)" : "translateY(8px)",
                       transitionDelay: menuOpen ? `${index * 30}ms` : "0ms",
                     }}
                     data-tour={`register-${item.key}`}
                   >
                     <span
-                      className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--border-bright)] bg-[var(--surface-2)] shadow-[var(--shadow-md)]"
+                      className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface-2)]"
                       style={{ color: item.color }}
                     >
                       <AppIcon name={item.icon} size={18} />
                     </span>
-                    <span className="rounded-md bg-[var(--surface-2)] px-2 py-0.5 text-[10px] font-semibold text-[var(--text-1)]">
+                    <span className="text-center text-sm font-medium text-[var(--text-1)]">
                       {item.label}
                     </span>
                   </button>

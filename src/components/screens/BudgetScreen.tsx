@@ -265,7 +265,7 @@ export function BudgetScreen() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="ui-eyebrow">{t("tabs.budget")}</p>
-          <h1 className="mt-1 text-xl font-semibold text-[var(--text-1)]">
+          <h1 className="mt-1 text-2xl font-semibold tracking-[-0.025em] text-[var(--text-1)]">
             {t("budget.title")}
           </h1>
           <p className="mt-0.5 text-sm text-[var(--text-3)]">{t("budget.subtitle")}</p>
@@ -282,7 +282,7 @@ export function BudgetScreen() {
           >
             <AppIcon name="arrow-left" size={14} />
           </button>
-          <div className="rounded-full border border-[var(--border-bright)] bg-[var(--surface)] px-4 py-2 text-xs font-semibold text-[var(--text-2)]">
+          <div className="rounded-full border border-[var(--border-bright)] bg-[var(--surface)] px-4 py-2 text-sm font-semibold text-[var(--text-2)]">
             {monthLabel}
           </div>
           <button
@@ -300,7 +300,7 @@ export function BudgetScreen() {
       </div>
 
       {schemaMissing ? (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3 text-sm text-[var(--text-2)]">
           {t("budget.schemaMissing")}
         </div>
       ) : null}
@@ -317,36 +317,36 @@ export function BudgetScreen() {
           <p className="mt-2 text-2xl font-semibold text-[var(--text-1)]">
             {loading ? "—" : formatCurrency(budgetSummary.plannedTotal)}
           </p>
-          <p className="mt-1 text-xs text-[var(--text-3)]">{t("budget.monthBudget")}</p>
+          <p className="mt-1 text-sm text-[var(--text-3)]">{t("budget.monthBudget")}</p>
         </div>
         <div className="ui-card p-4">
           <p className="ui-eyebrow">{t("budget.spent")}</p>
-          <p className="mt-2 text-2xl font-semibold text-[var(--red)]">
+          <p className="mt-2 text-2xl font-semibold text-[var(--text-2)]">
             {loading ? "—" : formatCurrency(budgetSummary.spentTotal)}
           </p>
-          <p className="mt-1 text-xs text-[var(--text-3)]">{t("budget.currentExpenses")}</p>
+          <p className="mt-1 text-sm text-[var(--text-3)]">{t("budget.currentExpenses")}</p>
         </div>
         <div className="ui-card p-4">
           <p className="ui-eyebrow">{t("budget.remaining")}</p>
           <p
             className={`mt-2 text-2xl font-semibold ${
-              budgetSummary.remainingTotal >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"
+              budgetSummary.remainingTotal >= 0 ? "text-[var(--text-1)]" : "text-[var(--text-2)]"
             }`}
           >
             {loading ? "—" : formatCurrency(budgetSummary.remainingTotal)}
           </p>
-          <p className="mt-1 text-xs text-[var(--text-3)]">{t("budget.availableToSpend")}</p>
+          <p className="mt-1 text-sm text-[var(--text-3)]">{t("budget.availableToSpend")}</p>
         </div>
         <div className="ui-card p-4">
           <p className="ui-eyebrow">{t("budget.incomeCoverage")}</p>
           <p
             className={`mt-2 text-2xl font-semibold ${
-              budgetSummary.coverage >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"
+              budgetSummary.coverage >= 0 ? "text-[var(--text-1)]" : "text-[var(--text-2)]"
             }`}
           >
             {loading ? "—" : formatCurrency(budgetSummary.coverage)}
           </p>
-          <p className="mt-1 text-xs text-[var(--text-3)]">{t("budget.basedOnIncome")}</p>
+          <p className="mt-1 text-sm text-[var(--text-3)]">{t("budget.basedOnIncome")}</p>
         </div>
       </div>
 
@@ -354,7 +354,7 @@ export function BudgetScreen() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-[var(--text-1)]">{t("budget.addTitle")}</p>
-            <p className="mt-1 text-xs text-[var(--text-3)]">{t("budget.addHint")}</p>
+            <p className="mt-1 text-sm text-[var(--text-3)]">{t("budget.addHint")}</p>
           </div>
           <button type="button" onClick={resetForm} className="ui-btn ui-btn-secondary ui-btn-sm">
             {t("budget.newCategory")}
@@ -396,7 +396,7 @@ export function BudgetScreen() {
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-[var(--text-1)]">{t("budget.categoriesTitle")}</p>
-            <p className="mt-1 text-xs text-[var(--text-3)]">{t("budget.categoriesHint")}</p>
+            <p className="mt-1 text-sm text-[var(--text-3)]">{t("budget.categoriesHint")}</p>
           </div>
           <Link href="/" className="ui-btn ui-btn-ghost ui-btn-sm">
             {t("budget.viewOnHome")}
@@ -412,11 +412,11 @@ export function BudgetScreen() {
         ) : (
           <div className="space-y-3">
             {budgetSummary.rows.map((budget) => (
-              <div key={budget.id} className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
+              <div key={budget.id} className="rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-[var(--text-1)]">{budget.category}</p>
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--text-3)]">
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[var(--text-3)]">
                       <span>
                         {t("budget.planned")}: {formatCurrency(budget.planned)}
                       </span>
@@ -453,22 +453,22 @@ export function BudgetScreen() {
                   <div
                     className={`h-2 rounded-full ${
                       budget.progress >= 100
-                        ? "bg-[var(--red)]"
+                        ? "bg-[var(--text-2)]"
                         : budget.progress >= 80
-                          ? "bg-[#F59E0B]"
+                          ? "bg-[#737373]"
                           : "bg-[var(--accent)]"
                     }`}
                     style={{ width: `${budget.progress}%` }}
                   />
                 </div>
 
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm">
                   <span className="text-[var(--text-3)]">
                     {t("budget.progressLabel")}: {Math.round(budget.progress)}%
                   </span>
                   <span
                     className={`font-semibold ${
-                      budget.remaining >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"
+                      budget.remaining >= 0 ? "text-[var(--text-1)]" : "text-[var(--text-2)]"
                     }`}
                   >
                     {t("budget.remaining")}: {formatCurrency(budget.remaining)}

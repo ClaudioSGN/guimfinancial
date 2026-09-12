@@ -178,12 +178,12 @@ export function TransactionRow({ tx }: Props) {
 
   return (
     <>
-      <div className="group flex items-start justify-between gap-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 transition-colors hover:border-[var(--border-bright)] hover:bg-[var(--surface-2)]">
+      <div className="group flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 transition-colors hover:border-[var(--border-bright)] hover:bg-[var(--surface-2)]">
         {/* Left: type indicator + info */}
         <div className="flex min-w-0 flex-1 items-start gap-3">
           {/* Color dot */}
           <div
-            className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${isIncome ? "bg-[var(--green)]" : "bg-[var(--red)]"}`}
+            className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${isIncome ? "bg-[var(--text-1)]" : "bg-[var(--text-3)]"}`}
           />
 
           <div className="min-w-0 flex-1">
@@ -219,7 +219,7 @@ export function TransactionRow({ tx }: Props) {
             {isInstallmentExpense && remainingInstallments > 0 ? (
               <p className="mt-1.5 text-xs text-[var(--text-3)]">
                 Restam{" "}
-                <span className="font-medium text-[var(--amber)]">
+                <span className="font-medium text-[var(--text-2)]">
                   {remainingInstallments}x ({formatCurrency(remainingAmount)})
                 </span>
               </p>
@@ -230,12 +230,12 @@ export function TransactionRow({ tx }: Props) {
         {/* Right: amount + actions */}
         <div className="flex shrink-0 flex-col items-end gap-2">
           <span
-            className={`ui-amount text-sm ${isIncome ? "text-[var(--green)]" : "text-[var(--red)]"}`}
+            className={`ui-amount text-sm ${isIncome ? "text-[var(--text-1)]" : "text-[var(--text-2)]"}`}
           >
             {isIncome ? "+" : "-"}{formatCurrency(tx.value)}
           </span>
 
-          <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          <div className="flex flex-wrap items-center justify-end gap-1">
             {isInstallmentExpense && remainingInstallments > 0 && (installmentIndex === null || installmentIndex === tx.installmentsPaid) ? (
               <button
                 type="button"
@@ -284,7 +284,7 @@ export function TransactionRow({ tx }: Props) {
           onClick={closeEdit}
         >
           <div
-            className="ui-card-2 ui-slide-up w-full max-w-md rounded-t-2xl p-5 sm:rounded-2xl"
+            className="ui-card-2 ui-slide-up w-full max-w-md rounded-t-[24px] p-5 sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-5 flex items-center justify-between">
@@ -343,7 +343,7 @@ export function TransactionRow({ tx }: Props) {
               </div>
 
               {!isInstallmentExpense && isExpense ? (
-                <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface-3)] px-4 py-3">
+                <div className="flex items-center justify-between rounded-full border border-[var(--border)] bg-[var(--surface-3)] px-4 py-3">
                   <span className="text-sm text-[var(--text-2)]">Já está pago?</span>
                   <button
                     type="button"
@@ -351,7 +351,7 @@ export function TransactionRow({ tx }: Props) {
                     className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${editIsPaid ? "bg-[var(--accent)]" : "bg-[var(--surface-3)] border border-[var(--border-bright)]"}`}
                   >
                     <span
-                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${editIsPaid ? "translate-x-4" : "translate-x-0.5"}`}
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full transition-transform ${editIsPaid ? "translate-x-4 bg-white" : "translate-x-0.5 bg-[var(--text-3)]"}`}
                     />
                   </button>
                 </div>

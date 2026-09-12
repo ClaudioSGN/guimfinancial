@@ -370,12 +370,12 @@ export function MoreScreen() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="ui-eyebrow">{t("tabs.more")}</p>
-            <p className="mt-2 font-[var(--font-display)] text-2xl font-black tracking-[-0.04em] text-[var(--text-1)]">
+            <p className="mt-2 font-[var(--font-display)] text-2xl font-semibold tracking-[-0.04em] text-[var(--text-1)]">
               {t("more.title")}
             </p>
             <p className="mt-1 max-w-2xl text-sm text-[var(--text-2)]">{t("more.subtitle")}</p>
           </div>
-          <div className="grid grid-cols-3 gap-2 border border-[var(--border)] bg-[rgba(255,255,255,0.035)] p-1 md:w-[28rem] md:grid-cols-2">
+          <div className="grid grid-cols-3 gap-2 border border-[var(--border)] rounded-full bg-[var(--surface-2)] p-1 md:w-[28rem] md:grid-cols-2">
             {([
               { key: "settings", label: language === "pt" ? "Configurações" : "Settings", className: "" },
               { key: "friends", label: language === "pt" ? "Amigos" : "Friends", className: "" },
@@ -385,10 +385,10 @@ export function MoreScreen() {
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveSection(tab.key)}
-                className={`${tab.className} rounded-xl px-3 py-2.5 text-xs font-bold transition-colors ${
+                className={`${tab.className} rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${
                   activeSection === tab.key
-                    ? "bg-[var(--accent)] text-white shadow-[0_10px_24px_rgba(79,142,255,0.25)]"
-                    : "text-[var(--text-3)] hover:bg-[rgba(255,255,255,0.045)] hover:text-[var(--text-1)]"
+                    ? "bg-[var(--accent)] text-white"
+                    : "text-[var(--text-3)] hover:bg-[var(--surface-3)] hover:text-[var(--text-1)]"
                 }`}
               >
                 {tab.label}
@@ -422,30 +422,30 @@ export function MoreScreen() {
         <>
       {/* Daily reminder */}
       <div className="flex flex-col gap-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-3)]">{t("more.dailyReminder")}</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.05em] text-[var(--text-3)]">{t("more.dailyReminder")}</p>
         <div className="ui-card p-5 flex flex-col gap-4">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-semibold text-[var(--text-1)]">{t("more.enableReminder")}</p>
-              <p className="text-xs text-[var(--text-3)]">{t("more.reminderHelper")}</p>
+              <p className="text-sm text-[var(--text-3)]">{t("more.reminderHelper")}</p>
             </div>
             <button type="button" onClick={() => setEnabled((v) => !v)}
               className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${enabled ? "bg-[var(--accent)]" : "bg-[var(--surface-3)] border border-[var(--border-bright)]"}`}>
-              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${enabled ? "translate-x-4" : "translate-x-0.5"}`} />
+              <span className={`inline-block h-3.5 w-3.5 transform rounded-full transition-transform ${enabled ? "translate-x-4 bg-white" : "translate-x-0.5 bg-[var(--text-3)]"}`} />
             </button>
           </div>
 
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-semibold text-[var(--text-1)]">{t("more.reminderTime")}</p>
-              <p className="text-xs text-[var(--text-3)]">{t("more.reminderTimeHelper")}</p>
+              <p className="text-sm text-[var(--text-3)]">{t("more.reminderTimeHelper")}</p>
             </div>
             <input type="time" value={timeLabel}
               onChange={(e) => { const [h, m] = e.target.value.split(":").map(Number); if (!isNaN(h)) setHour(h); if (!isNaN(m)) setMinute(m); }}
               className="ui-input w-auto" />
           </div>
 
-          <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center justify-between text-sm">
             <span className={`ui-badge ${enabled ? "ui-badge-income" : "ui-badge-neutral"}`}>
               {enabled ? t("more.active") : t("more.paused")}
             </span>
@@ -454,8 +454,8 @@ export function MoreScreen() {
             </span>
           </div>
 
-          {errorMsg ? <p className="text-xs text-[var(--red)]">{errorMsg}</p> : null}
-          {saved && !errorMsg ? <p className="text-xs text-[var(--green)]">{t("more.saved")}</p> : null}
+          {errorMsg ? <p className="text-sm text-[var(--red)]">{errorMsg}</p> : null}
+          {saved && !errorMsg ? <p className="text-sm text-[var(--green)]">{t("more.saved")}</p> : null}
           <button type="button" onClick={handleSave} disabled={saving} className="ui-btn ui-btn-primary w-full">
             {saving ? t("common.saving") : t("common.save")}
           </button>
@@ -465,14 +465,14 @@ export function MoreScreen() {
       {/* 2FA */}
       {user ? (
         <div className="flex flex-col gap-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-3)]">2FA (Google Authenticator)</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.05em] text-[var(--text-3)]">2FA (Google Authenticator)</p>
           <div className="ui-card p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-[var(--text-1)]">
                   {language === "pt" ? "Proteção da conta" : "Account protection"}
                 </p>
-                <p className="text-xs text-[var(--text-3)]">
+                <p className="text-sm text-[var(--text-3)]">
                   {language === "pt" ? "Exige código do app autenticador ao entrar." : "Requires an authenticator app code on login."}
                 </p>
               </div>
@@ -481,11 +481,11 @@ export function MoreScreen() {
               </span>
             </div>
 
-            {mfaLoading ? <p className="mt-3 text-xs text-[var(--text-3)]">{language === "pt" ? "Carregando..." : "Loading..."}</p> : null}
+            {mfaLoading ? <p className="mt-3 text-sm text-[var(--text-3)]">{language === "pt" ? "Carregando..." : "Loading..."}</p> : null}
 
             {totpSetup ? (
               <div className="mt-4 flex flex-col gap-3">
-                <p className="text-xs text-[var(--text-3)]">
+                <p className="text-sm text-[var(--text-3)]">
                   {language === "pt" ? "Escaneie o QR code no Google Authenticator e confirme com o código de 6 dígitos." : "Scan the QR code in Google Authenticator and confirm using the 6-digit code."}
                 </p>
                 <div className="flex flex-wrap gap-4">
@@ -497,8 +497,8 @@ export function MoreScreen() {
                     />
                   </div>
                   <div className="min-w-[220px] flex-1 flex flex-col gap-2">
-                    <p className="text-xs text-[var(--text-3)]">{language === "pt" ? "Chave manual:" : "Manual key:"}</p>
-                    <code className="ui-card-inner block overflow-x-auto px-3 py-2 text-[11px] text-[var(--text-2)]">{totpSetup.secret}</code>
+                    <p className="text-sm text-[var(--text-3)]">{language === "pt" ? "Chave manual:" : "Manual key:"}</p>
+                    <code className="ui-card-inner block overflow-x-auto px-3 py-2 text-sm text-[var(--text-2)]">{totpSetup.secret}</code>
                     <input value={totpCode} onChange={(e) => setTotpCode(e.target.value)} placeholder={language === "pt" ? "Código de 6 dígitos" : "6-digit code"} inputMode="numeric" className="ui-input" />
                     <div className="flex gap-2">
                       <button type="button" onClick={handleConfirm2FASetup} disabled={mfaSaving} className="ui-btn ui-btn-primary flex-1">
@@ -513,7 +513,7 @@ export function MoreScreen() {
               </div>
             ) : verifiedTotpFactorId ? (
               <div className="mt-4 flex flex-col gap-2">
-                <p className="text-xs text-[var(--text-3)]">
+                <p className="text-sm text-[var(--text-3)]">
                   {language === "pt" ? "Para desativar, confirme com um código atual do autenticador." : "To disable, confirm with a current authenticator code."}
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -531,15 +531,15 @@ export function MoreScreen() {
               </div>
             )}
 
-            {mfaError ? <p className="mt-3 text-xs text-[var(--red)]">{mfaError}</p> : null}
-            {mfaSuccess ? <p className="mt-3 text-xs text-[var(--green)]">{mfaSuccess}</p> : null}
+            {mfaError ? <p className="mt-3 text-sm text-[var(--red)]">{mfaError}</p> : null}
+            {mfaSuccess ? <p className="mt-3 text-sm text-[var(--green)]">{mfaSuccess}</p> : null}
           </div>
         </div>
       ) : null}
 
       {/* Navigation links */}
       <div className="flex flex-col gap-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-3)]">{t("more.moreOptions")}</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.05em] text-[var(--text-3)]">{t("more.moreOptions")}</p>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {([
             { href: "/reports", label: language === "pt" ? "Relatórios" : "Reports", hint: language === "pt" ? "Resumo mensal, categorias e comparações." : "Monthly summary, categories, and comparisons." },
@@ -550,7 +550,7 @@ export function MoreScreen() {
           ] as const).map((item) => (
             <Link key={item.href} href={item.href} className="ui-card group block p-5 transition-all hover:-translate-y-0.5 hover:border-[var(--border-bright)] hover:bg-[var(--surface-2)]">
               <p className="text-sm font-semibold text-[var(--text-1)]">{item.label}</p>
-              <p className="mt-1 text-xs leading-5 text-[var(--text-3)] group-hover:text-[var(--text-2)]">{item.hint}</p>
+              <p className="mt-1 text-sm leading-5 text-[var(--text-3)] group-hover:text-[var(--text-2)]">{item.hint}</p>
             </Link>
           ))}
         </div>
@@ -566,7 +566,7 @@ export function MoreScreen() {
               <p className="text-sm font-semibold text-[var(--text-1)]">
                 {language === "pt" ? "Reiniciar tutorial do app" : "Restart app tutorial"}
               </p>
-              <p className="mt-0.5 text-xs text-[var(--text-3)]">
+              <p className="mt-0.5 text-sm text-[var(--text-3)]">
                 {language === "pt"
                   ? "Veja novamente o guia interativo dos primeiros passos."
                   : "See the interactive first-steps guide again."}
@@ -574,30 +574,30 @@ export function MoreScreen() {
             </button>
 
             <button type="button" onClick={handleResetAllData} disabled={resettingData}
-              className="w-full rounded-xl border border-[var(--amber)] border-opacity-30 bg-[var(--amber-dim)] p-4 text-left transition-opacity disabled:opacity-60">
-              <p className="text-sm font-semibold text-[var(--amber)]">
-                {resettingData ? t("common.loading") : t("more.resetData")}
-              </p>
-              <p className="mt-0.5 text-xs text-[var(--amber)] opacity-70">{t("more.resetDataHint")}</p>
-            </button>
-            {resetDataError ? <p className="text-xs text-[var(--red)]">{resetDataError}</p> : null}
-            {resetDataSuccess ? <p className="text-xs text-[var(--green)]">{t("more.resetDataSuccess")}</p> : null}
-
-            <button type="button" onClick={handleSignOut} disabled={signingOut}
               className="w-full rounded-xl border border-[var(--red)] border-opacity-30 bg-[var(--red-dim)] p-4 text-left transition-opacity disabled:opacity-60">
               <p className="text-sm font-semibold text-[var(--red)]">
+                {resettingData ? t("common.loading") : t("more.resetData")}
+              </p>
+              <p className="mt-0.5 text-sm text-[var(--red)]">{t("more.resetDataHint")}</p>
+            </button>
+            {resetDataError ? <p className="text-sm text-[var(--red)]">{resetDataError}</p> : null}
+            {resetDataSuccess ? <p className="text-sm text-[var(--green)]">{t("more.resetDataSuccess")}</p> : null}
+
+            <button type="button" onClick={handleSignOut} disabled={signingOut}
+              className="w-full rounded-xl border border-[var(--border)] border-opacity-30 bg-[var(--surface-2)] p-4 text-left transition-opacity disabled:opacity-60">
+              <p className="text-sm font-semibold text-[var(--text-1)]">
                 {signingOut ? t("common.loading") : t("more.signOut")}
               </p>
-              <p className="mt-0.5 text-xs text-[var(--red)] opacity-70">{t("more.signOutHint")}</p>
+              <p className="mt-0.5 text-sm text-[var(--text-1)]">{t("more.signOutHint")}</p>
             </button>
-            {signOutError ? <p className="text-xs text-[var(--red)]">{signOutError}</p> : null}
+            {signOutError ? <p className="text-sm text-[var(--red)]">{signOutError}</p> : null}
           </div>
         ) : null}
       </div>
 
       {/* Language */}
       <div className="flex flex-col gap-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-3)]">{t("more.language")}</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.05em] text-[var(--text-3)]">{t("more.language")}</p>
         <div className="flex gap-2">
           {(["pt", "en"] as const).map((lang) => (
             <button key={lang} type="button" onClick={() => setLanguage(lang)}
@@ -610,8 +610,8 @@ export function MoreScreen() {
 
       {/* Currency */}
       <div className="flex flex-col gap-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-3)]">{t("more.currency")}</p>
-        <p className="text-xs text-[var(--text-3)]">{t("more.currencyHelper")}</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.05em] text-[var(--text-3)]">{t("more.currency")}</p>
+        <p className="text-sm text-[var(--text-3)]">{t("more.currencyHelper")}</p>
         <div className="flex gap-2">
           {(["BRL", "EUR"] as const).map((cur) => (
             <button key={cur} type="button" onClick={() => setCurrency(cur)}

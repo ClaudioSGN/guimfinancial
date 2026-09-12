@@ -304,7 +304,7 @@ export function NotificationsPanel({ userId }: Props) {
         </div>
 
         {errorMsg ? <p className="mt-4 text-xs text-[var(--red)]">{errorMsg}</p> : null}
-        {successMsg ? <p className="mt-4 text-xs text-[var(--green)]">{successMsg}</p> : null}
+        {successMsg ? <p className="mt-4 text-xs text-[var(--text-1)]">{successMsg}</p> : null}
 
         {loading ? (
           <p className="mt-4 text-sm text-[var(--text-3)]">
@@ -378,7 +378,7 @@ export function NotificationsPanel({ userId }: Props) {
                   ) : null}
 
                   {request.decline_reason ? (
-                    <p className="mt-3 rounded-xl border border-[var(--red)] border-opacity-30 bg-[var(--red-dim)] px-3 py-2 text-xs text-[var(--red)]">
+                    <p className="mt-3 rounded-full border border-[var(--border)] bg-[var(--surface-3)] px-3 py-2 text-sm text-[var(--text-2)]">
                       {language === "pt" ? "Motivo da recusa: " : "Decline reason: "}
                       {request.decline_reason}
                     </p>
@@ -429,7 +429,7 @@ export function NotificationsPanel({ userId }: Props) {
           onClick={closeAcceptModal}
         >
           <div
-          className="ui-card-2 ui-slide-up w-full max-w-md rounded-t-2xl p-5 sm:rounded-2xl"
+          className="ui-card-2 ui-slide-up w-full max-w-md rounded-t-[24px] p-5 sm:rounded-2xl"
           onClick={(event) => event.stopPropagation()}
         >
             <div className="mb-4">
@@ -488,7 +488,7 @@ export function NotificationsPanel({ userId }: Props) {
             )}
 
             {acceptTarget.transaction_type === "card_expense" && acceptTarget.is_installment ? (
-              <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface-3)] px-4 py-4">
+              <div className="mt-4 rounded-full border border-[var(--border)] bg-[var(--surface-3)] px-4 py-4">
                 <p className="text-sm font-semibold text-[var(--text-1)]">
                   {language === "pt" ? "Parcelas que ficam com você" : "Installments that stay with you"}
                 </p>
@@ -629,7 +629,7 @@ export function NotificationsPanel({ userId }: Props) {
           onClick={() => setDeclineTarget(null)}
         >
           <div
-            className="ui-card-2 ui-slide-up w-full max-w-md rounded-t-2xl p-5 sm:rounded-2xl"
+            className="ui-card-2 ui-slide-up w-full max-w-md rounded-t-[24px] p-5 sm:rounded-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4">

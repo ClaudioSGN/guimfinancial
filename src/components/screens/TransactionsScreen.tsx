@@ -1,5 +1,7 @@
 "use client";
 
+import { getMonthInstallment, getPlanningMonths, shiftCalendarMonth } from "@/lib/installmentSchedule";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getMonthShortName } from "../../../shared/i18n";
@@ -20,7 +22,6 @@ import {
   getPendingResponsibleInstallmentIndexes,
   getResponsibleInstallmentCount,
   getSettledResponsibleInstallmentAmount,
-  isResponsibleForInstallment,
 } from "@/lib/installmentResponsibility";
 
 type Transaction = {
@@ -83,16 +84,6 @@ function getMonthLabel(date: Date, language: "pt" | "en") {
   const month = date.getMonth();
   const year = date.getFullYear();
   return `${getMonthShortName(language, month)} ${year}`;
-}
-
-function getMonthOptions(language: "pt" | "en", total = 12) {
-  const options: { label: string; value: Date }[] = [];
-  const now = new Date();
-  for (let i = 0; i < total; i += 1) {
-    const value = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    options.push({ label: getMonthLabel(value, language), value });
-  }
-  return options;
 }
 
 function formatCurrency(value: number, language: "pt" | "en", currency: "BRL" | "EUR") {
@@ -451,24 +442,18 @@ export function TransactionsScreen() {
       const monthOffset = (monthStart.getFullYear() - txDate.getFullYear()) * 12 +
         (monthStart.getMonth() - txDate.getMonth());
 
-      if (isInstallment && totalInstallments > 0) {
-        const perInstallment = amount / totalInstallments;
-        const entries: DisplayTransaction[] = [];
-        for (let i = 0; i < totalInstallments; i += 1) {
-          if (!isResponsibleForInstallment(tx, i + 1)) continue;
-          const installmentDate = addMonthsClamped(txDate, i);
-          if (installmentDate < monthStart || installmentDate > monthEnd) continue;
-          entries.push({
-            ...tx,
+      if (isInstallment) {
+        const installment = getMonthInstallment(tx, month);
+        if (!installment) return [];
+        return [{
+          ...tx,
             baseId: tx.id,
-            displayId: `${tx.id}-i${i + 1}`,
-            displayDate: toDateString(installmentDate),
-            effectiveDate: toDateString(installmentDate),
-            displayAmount: perInstallment,
-            installmentIndex: i + 1,
-          });
-        }
-        return entries;
+          displayId: `${tx.id}-i${installment.index}`,
+          displayDate: installment.date,
+          effectiveDate: installment.date,
+          displayAmount: installment.amount,
+          installmentIndex: installment.index,
+        }];
       }
 
       if (isFixedExpense) {
@@ -891,8 +876,8 @@ export function TransactionsScreen() {
   );
 
   const monthOptions = useMemo(
-    () => getMonthOptions(language),
-    [language],
+    () => getPlanningMonths(selectedMonth, baseTransactions).map((value) => ({ value, label: getMonthLabel(value, language) })),
+    [language, selectedMonth, baseTransactions],
   );
 
   function getInstallmentMonthOffset(startDate: string, targetMonth: Date) {
@@ -905,7 +890,7 @@ export function TransactionsScreen() {
   return (
     <div className="flex flex-col gap-5">
       {/* Header: filter + month nav */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           type="button"
           onClick={() => setFilterOpen(true)}
@@ -920,8 +905,9 @@ export function TransactionsScreen() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => { const prev = new Date(selectedMonth); prev.setMonth(prev.getMonth() - 1); setSelectedMonth(prev); }}
-            className="ui-btn ui-btn-secondary ui-btn-sm h-8 w-8 p-0"
+            aria-label={language === "pt" ? "Mês anterior" : "Previous month"}
+            onClick={() => setSelectedMonth((month) => shiftCalendarMonth(month, -1))}
+            className="ui-btn ui-btn-secondary ui-btn-sm ui-btn-icon h-8 w-8 p-0"
           >
             <AppIcon name="arrow-left" size={14} />
           </button>
@@ -934,8 +920,9 @@ export function TransactionsScreen() {
           </button>
           <button
             type="button"
-            onClick={() => { const next = new Date(selectedMonth); next.setMonth(next.getMonth() + 1); setSelectedMonth(next); }}
-            className="ui-btn ui-btn-secondary ui-btn-sm h-8 w-8 p-0"
+            aria-label={language === "pt" ? "Próximo mês" : "Next month"}
+            onClick={() => setSelectedMonth((month) => shiftCalendarMonth(month, 1))}
+            className="ui-btn ui-btn-secondary ui-btn-sm ui-btn-icon h-8 w-8 p-0"
           >
             <AppIcon name="arrow-right" size={14} />
           </button>
@@ -946,7 +933,7 @@ export function TransactionsScreen() {
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="ui-card flex items-center gap-3 p-4">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent-dim)]">
-            <AppIcon name="wallet" size={16} color="var(--accent)" />
+            <AppIcon name="wallet" size={16} color="var(--text-2)" />
           </div>
           <div>
             <p className="ui-eyebrow">{language === "pt" ? "Saldo atual" : "Current balance"}</p>
@@ -957,11 +944,11 @@ export function TransactionsScreen() {
         </div>
         <div className="ui-card flex items-center gap-3 p-4">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent-dim)]">
-            <AppIcon name="calendar" size={16} color="var(--accent)" />
+            <AppIcon name="calendar" size={16} color="var(--text-2)" />
           </div>
           <div>
             <p className="ui-eyebrow">{language === "pt" ? "Balanço mensal" : "Month balance"}</p>
-            <p className={`ui-amount text-sm ${monthNet >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+            <p className={`ui-amount text-sm ${monthNet >= 0 ? "text-[var(--text-1)]" : "text-[var(--text-2)]"}`}>
               {loading ? "—" : formatCurrency(monthNet, language, currency)}
             </p>
           </div>
@@ -971,7 +958,7 @@ export function TransactionsScreen() {
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <div className="ui-card flex items-center gap-3 p-4">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent-dim)]">
-            <AppIcon name="credit-card" size={16} color="var(--accent)" />
+            <AppIcon name="credit-card" size={16} color="var(--text-2)" />
           </div>
           <div>
             <p className="ui-eyebrow">
@@ -1013,7 +1000,7 @@ export function TransactionsScreen() {
               ))}
             </div>
           ) : (
-            <p className="mt-3 text-xs text-[var(--text-3)]">
+            <p className="mt-3 text-sm text-[var(--text-3)]">
               {language === "pt"
                 ? "Nenhuma despesa em cartões de amigos neste mês."
                 : "No friend card expenses in this month."}
@@ -1022,12 +1009,12 @@ export function TransactionsScreen() {
         </div>
       </div>
 
-      {errorMsg ? <p className="text-xs text-[var(--red)]">{errorMsg}</p> : null}
+      {errorMsg ? <p className="text-sm text-[var(--red)]">{errorMsg}</p> : null}
 
       {/* Transactions list */}
       <div className="flex flex-col gap-2">
         {visibleTransactions.length === 0 ? (
-          <p className="py-8 text-center text-xs text-[var(--text-3)]">
+          <p className="py-8 text-center text-sm text-[var(--text-3)]">
             {loading ? t("common.loading") : t("transactions.empty")}
           </p>
         ) : (
@@ -1050,6 +1037,7 @@ export function TransactionsScreen() {
               nextInstallmentIndex !== null &&
               installmentOffset === nextInstallmentIndex - 1 &&
               paidInstallments < responsibleInstallments;
+            const viewedInstallment = isInstallment ? getMonthInstallment(item, selectedMonth) : null;
             const canUndoInstallment = isInstallment && paidInstallments > 0;
             const title = getTransactionTitle(item, t);
             const baseTx = baseTxById.get(item.baseId) ?? null;
@@ -1062,11 +1050,11 @@ export function TransactionsScreen() {
                 className="group ui-card flex min-w-0 flex-col gap-3 p-4 transition-colors hover:border-[var(--border-bright)] hover:bg-[var(--surface-2)] sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="flex min-w-0 flex-1 items-start gap-3">
-                  <div className={`mt-1 h-2 w-2 shrink-0 rounded-full ${isIncome ? "bg-[var(--green)]" : "bg-[var(--red)]"}`} />
+                  <div className={`mt-1 h-2 w-2 shrink-0 rounded-full ${isIncome ? "bg-[var(--text-1)]" : "bg-[var(--text-3)]"}`} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-[var(--text-1)]">{title}</p>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      <span className="text-xs text-[var(--text-3)]">{formatDate(item.displayDate, language)}</span>
+                      <span className="text-sm text-[var(--text-3)]">{formatDate(item.displayDate, language)}</span>
                       {item.category ? <span className="ui-badge ui-badge-neutral">{item.category}</span> : null}
                       {cardName ? <span className="ui-badge ui-badge-accent">{cardName}</span> : null}
                       {isFriendCard ? (
@@ -1077,8 +1065,13 @@ export function TransactionsScreen() {
                         </span>
                       ) : null}
                       {isInstallment ? (
-                        <span className={`ui-badge ${paidInstallments >= responsibleInstallments ? "ui-badge-income" : "ui-badge-warning"}`}>
-                          {paidInstallments}/{responsibleInstallments}x
+                        <span className="ui-badge ui-badge-neutral">
+                          {language === "pt" ? "Parcela" : "Installment"} {item.installmentIndex}/{totalInstallments}
+                        </span>
+                      ) : null}
+                      {viewedInstallment ? (
+                        <span className={`ui-badge ${viewedInstallment.isPaid ? "ui-badge-income" : "ui-badge-neutral"}`}>
+                          {viewedInstallment.isPaid ? (language === "pt" ? "Paga" : "Paid") : (language === "pt" ? "Em aberto" : "Unpaid")}
                         </span>
                       ) : null}
                       {isFixedExpense ? <span className="ui-badge ui-badge-neutral">{t("newEntry.fixedExpense")}</span> : null}
@@ -1087,22 +1080,22 @@ export function TransactionsScreen() {
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-2">
-                  <p className={`ui-amount text-sm ${isIncome ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                  <p className={`ui-amount text-sm ${isIncome ? "text-[var(--text-1)]" : "text-[var(--text-2)]"}`}>
                     {isIncome ? "+" : "-"}{formatCurrency(amount, language, currency)}
                   </p>
-                  <div className="flex flex-wrap items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="flex flex-wrap items-center gap-1">
                     {canPayInstallment ? (
                       <button type="button" onClick={() => baseTx && handleMarkInstallmentPaid(baseTx)} disabled={installmentSavingId === item.baseId} className="ui-btn ui-btn-secondary ui-btn-sm">
-                        {installmentSavingId === item.baseId ? "..." : "Parcela"}
+                        {installmentSavingId === item.baseId ? "..." : language === "pt" ? "Pagar parcela" : "Pay installment"}
                       </button>
                     ) : null}
                     {isInstallment ? (
                       <button type="button" onClick={() => baseTx && handleUndoInstallmentPaid(baseTx)} disabled={!canUndoInstallment || undoSavingId === item.baseId} className="ui-btn ui-btn-secondary ui-btn-sm">
-                        {undoSavingId === item.baseId ? "..." : "Desfazer"}
+                        {undoSavingId === item.baseId ? "..." : language === "pt" ? "Desfazer último pagamento" : "Undo last payment"}
                       </button>
                     ) : null}
                     <button type="button" onClick={() => baseTx && openEdit(baseTx)} className="ui-btn ui-btn-ghost ui-btn-sm text-[var(--text-2)]">
-                      Editar
+                      {t("common.edit")}
                     </button>
                     <button type="button" onClick={() => baseTx && handleRemove(baseTx)} disabled={deletingId === item.baseId} className="ui-btn ui-btn-ghost ui-btn-sm text-[var(--red)]">
                       {deletingId === item.baseId ? "..." : "×"}
@@ -1118,7 +1111,7 @@ export function TransactionsScreen() {
       {/* Edit modal */}
       {editingTx ? (
         <div className="ui-modal-backdrop fixed inset-0 z-40 flex items-end justify-center sm:items-center" onClick={closeEdit}>
-          <div className="ui-card-2 ui-slide-up w-full max-w-md rounded-t-2xl p-5 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="ui-card-2 ui-slide-up max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-3xl p-5 sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-[var(--text-1)]">Editar transação</h2>
               <button type="button" onClick={closeEdit} className="ui-btn ui-btn-ghost ui-btn-sm">Fechar</button>
@@ -1147,7 +1140,7 @@ export function TransactionsScreen() {
                   <label className="ui-label">Cartão</label>
                   <div className="flex flex-wrap gap-2">
                     {cards.length === 0 ? (
-                      <span className="text-xs text-[var(--text-3)]">Nenhum cartão cadastrado.</span>
+                      <span className="text-sm text-[var(--text-3)]">Nenhum cartão cadastrado.</span>
                     ) : cards.map((card) => (
                       <button key={card.id} type="button" onClick={() => setEditCardId(card.id)}
                         title={getCardDisplayName(card, language)}
@@ -1163,7 +1156,7 @@ export function TransactionsScreen() {
                   </div>
                 </div>
               ) : null}
-              {editError ? <p className="text-xs text-[var(--red)]">{editError}</p> : null}
+              {editError ? <p className="text-sm text-[var(--red)]">{editError}</p> : null}
               <button type="submit" disabled={editSaving} className="ui-btn ui-btn-primary ui-btn-lg w-full">
                 {editSaving ? "A guardar..." : "Guardar alterações"}
               </button>
@@ -1175,7 +1168,7 @@ export function TransactionsScreen() {
       {/* Month picker dropdown */}
       {monthOpen ? (
         <div className="ui-modal-backdrop fixed inset-0 z-40" onClick={() => setMonthOpen(false)}>
-          <div className="absolute left-1/2 top-20 w-52 -translate-x-1/2 ui-card-2 ui-slide-up overflow-hidden p-1.5" onClick={(e) => e.stopPropagation()}>
+          <div className="absolute left-1/2 top-12 max-h-[calc(100dvh-6rem)] w-64 -translate-x-1/2 ui-card-2 ui-slide-up overflow-y-auto p-2" onClick={(e) => e.stopPropagation()}>
             {monthOptions.map((option) => (
               <button key={option.label} type="button"
                 className="w-full rounded-lg px-3 py-2 text-left text-sm text-[var(--text-1)] hover:bg-[var(--surface-3)]"
@@ -1193,7 +1186,7 @@ export function TransactionsScreen() {
       {/* Filter sheet */}
       {filterOpen ? (
         <div className="ui-modal-backdrop fixed inset-0 z-40" onClick={() => setFilterOpen(false)}>
-          <div className="absolute bottom-0 left-0 right-0 ui-card-2 ui-slide-up rounded-t-2xl p-4" onClick={(e) => e.stopPropagation()}>
+          <div className="absolute bottom-0 left-0 right-0 mx-auto max-h-[90dvh] max-w-xl overflow-y-auto ui-card-2 ui-slide-up rounded-t-3xl p-4" onClick={(e) => e.stopPropagation()}>
             <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-[var(--border-bright)]" />
             <div className="flex flex-col gap-2">
               <div className="flex flex-col gap-2">

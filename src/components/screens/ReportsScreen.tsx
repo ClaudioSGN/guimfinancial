@@ -1,5 +1,7 @@
 "use client";
 
+import { getMonthInstallment, getPlanningMonths } from "@/lib/installmentSchedule";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Bar,
@@ -22,7 +24,6 @@ import { getMonthShortName } from "../../../shared/i18n";
 import { formatCurrencyValue } from "../../../shared/currency";
 import { hasMissingColumnError } from "@/lib/errorUtils";
 import { AppIcon } from "@/components/AppIcon";
-import { isResponsibleForInstallment } from "@/lib/installmentResponsibility";
 
 type Transaction = {
   id: string;
@@ -49,19 +50,20 @@ type DisplayTransaction = Transaction & {
   displayAmount: number;
   effectiveDate: string;
   isBudgetCarryover?: boolean;
+  installmentIndex?: number;
 };
 
 const SALARY_CARRYOVER_DAY_LIMIT = 10;
 const SALARY_HINT_KEYWORDS = ["salario", "salary", "wage", "payroll", "pagamento"];
 const CATEGORY_COLORS = [
-  "#5DD6C7",
-  "#5DA7FF",
-  "#F59E8B",
-  "#F4C27A",
-  "#A78BFA",
-  "#10B981",
-  "#F97316",
-  "#EC4899",
+  "#ffa16c",
+  "#cccccc",
+  "#a3a3a3",
+  "#737373",
+  "#d4d4d4",
+  "#b5b5b5",
+  "#8a8a8a",
+  "#adb3b8",
 ];
 
 function toDateString(date: Date) {
@@ -73,14 +75,6 @@ function toDateString(date: Date) {
 
 function getMonthLabel(date: Date, language: "pt" | "en") {
   return `${getMonthShortName(language, date.getMonth())} ${date.getFullYear()}`;
-}
-
-function getMonthOptions(language: "pt" | "en", total = 12) {
-  const now = new Date();
-  return Array.from({ length: total }, (_, index) => {
-    const value = new Date(now.getFullYear(), now.getMonth() - index, 1);
-    return { value, label: getMonthLabel(value, language) };
-  });
 }
 
 function parseLocalDate(value: string) {
@@ -148,20 +142,15 @@ function buildMonthTransactions(transactions: Transaction[], month: Date): Displ
       (monthStart.getMonth() - txDate.getMonth());
 
     if (isInstallment) {
-      const perInstallment = amount / totalInstallments;
-      const entries: DisplayTransaction[] = [];
-      for (let index = 0; index < totalInstallments; index += 1) {
-        if (!isResponsibleForInstallment(tx, index + 1)) continue;
-        const installmentDate = addMonthsClamped(txDate, index);
-        if (installmentDate < monthStart || installmentDate > monthEnd) continue;
-        entries.push({
-          ...tx,
-          displayId: `${tx.id}-i${index + 1}`,
-          displayAmount: perInstallment,
-          effectiveDate: toDateString(installmentDate),
-        });
-      }
-      return entries;
+      const installment = getMonthInstallment(tx, month);
+      if (!installment) return [];
+      return [{
+        ...tx,
+        displayId: `${tx.id}-i${installment.index}`,
+        effectiveDate: installment.date,
+        displayAmount: installment.amount,
+        installmentIndex: installment.index,
+      }];
     }
 
     if (isFixedExpense) {
@@ -328,7 +317,7 @@ export function ReportsScreen() {
     loadReports();
   }, [loadReports]);
 
-  const monthOptions = useMemo(() => getMonthOptions(language), [language]);
+  const monthOptions = useMemo(() => getPlanningMonths(selectedMonth, transactions).map((value) => ({ value, label: getMonthLabel(value, language) })), [language, selectedMonth, transactions]);
   const monthLabel = useMemo(() => getMonthLabel(selectedMonth, language), [language, selectedMonth]);
   const monthTransactions = useMemo(() => buildMonthTransactions(transactions, selectedMonth), [transactions, selectedMonth]);
 
@@ -370,14 +359,14 @@ export function ReportsScreen() {
       current: expenses,
       previous: previousExpenses,
       change: getMonthChange(expenses, previousExpenses),
-      tone: "text-[var(--red)]",
+      tone: "text-[var(--text-2)]",
     },
     {
       label: copy.net,
       current: net,
       previous: previousIncome - previousExpenses,
       change: getMonthChange(net, previousIncome - previousExpenses),
-      tone: net >= 0 ? "text-[var(--green)]" : "text-[var(--red)]",
+      tone: net >= 0 ? "text-[var(--text-1)]" : "text-[var(--text-2)]",
     },
   ];
 
@@ -412,8 +401,8 @@ export function ReportsScreen() {
       }
     });
     return [
-      { name: copy.accountExpenses, value: accountTotal, color: "#5DA7FF" },
-      { name: copy.cardExpenses, value: cardTotal, color: "#F59E8B" },
+      { name: copy.accountExpenses, value: accountTotal, color: "#868f97" },
+      { name: copy.cardExpenses, value: cardTotal, color: "#a3a3a3" },
     ];
   }, [copy.accountExpenses, copy.cardExpenses, monthTransactions]);
 
@@ -426,8 +415,8 @@ export function ReportsScreen() {
       else variableTotal += tx.displayAmount;
     });
     return [
-      { name: copy.fixed, value: fixedTotal, color: "#F4C27A" },
-      { name: copy.variable, value: variableTotal, color: "#5DD6C7" },
+      { name: copy.fixed, value: fixedTotal, color: "#868f97" },
+      { name: copy.variable, value: variableTotal, color: "#cccccc" },
     ];
   }, [copy.fixed, copy.variable, monthTransactions]);
 
@@ -440,8 +429,8 @@ export function ReportsScreen() {
 
   const comparisonRowTone = (row: typeof comparisonRows[0]) => {
     if (row.label === copy.income) return "text-[var(--green)]";
-    if (row.label === copy.expenses) return "text-[var(--red)]";
-    return row.current >= 0 ? "text-[var(--green)]" : "text-[var(--red)]";
+    if (row.label === copy.expenses) return "text-[var(--text-2)]";
+    return row.current >= 0 ? "text-[var(--text-1)]" : "text-[var(--text-2)]";
   };
 
   const categoryTooltip = ({ active, payload }: TooltipContentProps<number, string>) => {
@@ -461,7 +450,7 @@ export function ReportsScreen() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="ui-eyebrow">{copy.eyebrow}</p>
-          <p className="mt-1 text-xl font-semibold text-[var(--text-1)]">{copy.title}</p>
+          <p className="mt-1 text-2xl font-semibold tracking-[-0.025em] text-[var(--text-1)]">{copy.title}</p>
           <p className="mt-0.5 text-sm text-[var(--text-3)]">{copy.subtitle}</p>
         </div>
         <button type="button" onClick={() => setMonthOpen((v) => !v)} className="ui-btn ui-btn-secondary gap-1.5">
@@ -471,7 +460,7 @@ export function ReportsScreen() {
       </div>
 
       {monthOpen ? (
-        <div className="ui-card p-2">
+        <div className="ui-card max-h-80 overflow-y-auto p-2">
           <div className="grid gap-1 sm:grid-cols-3">
             {monthOptions.map((option) => (
               <button key={option.label} type="button"
@@ -489,8 +478,8 @@ export function ReportsScreen() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { label: copy.income, value: income, color: "text-[var(--green)]" },
-          { label: copy.expenses, value: expenses, color: "text-[var(--red)]" },
-          { label: copy.net, value: net, color: net >= 0 ? "text-[var(--green)]" : "text-[var(--red)]" },
+          { label: copy.expenses, value: expenses, color: "text-[var(--text-2)]" },
+          { label: copy.net, value: net, color: net >= 0 ? "text-[var(--text-1)]" : "text-[var(--text-2)]" },
           { label: copy.savingsRate, value: null, color: "text-[var(--text-1)]", special: savingsRate == null ? "--" : `${formatPercent(savingsRate, language)}%` },
         ].map((stat) => (
           <div key={stat.label} className="ui-card p-5">
@@ -507,7 +496,7 @@ export function ReportsScreen() {
         <div className="ui-card p-5">
           <div className="mb-4">
             <p className="text-sm font-semibold text-[var(--text-1)]">{copy.categoryBreakdown}</p>
-            <p className="text-xs text-[var(--text-3)]">{copy.categorySubtitle}</p>
+            <p className="text-sm text-[var(--text-3)]">{copy.categorySubtitle}</p>
           </div>
           {categoryData.length === 0 ? (
             <p className="text-sm text-[var(--text-3)]">{copy.categoryEmpty}</p>
@@ -531,7 +520,7 @@ export function ReportsScreen() {
                         <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: category.color }} />
                         <span className="text-sm font-semibold text-[var(--text-1)]">{category.name}</span>
                       </div>
-                      <span className="text-xs text-[var(--text-3)]">{formatPercent(category.share, language)}%</span>
+                      <span className="text-sm text-[var(--text-3)]">{formatPercent(category.share, language)}%</span>
                     </div>
                     <p className="mt-1.5 text-sm text-[var(--text-2)]">{formatCurrency(category.value, language, currency)}</p>
                   </div>
@@ -545,7 +534,7 @@ export function ReportsScreen() {
         <div className="ui-card p-5">
           <div className="mb-4">
             <p className="text-sm font-semibold text-[var(--text-1)]">{copy.comparison}</p>
-            <p className="text-xs text-[var(--text-3)]">{copy.comparisonSubtitle}</p>
+            <p className="text-sm text-[var(--text-3)]">{copy.comparisonSubtitle}</p>
           </div>
           <div className="flex flex-col gap-3">
             {comparisonRows.map((row) => (
@@ -554,7 +543,7 @@ export function ReportsScreen() {
                   <span className="text-sm font-semibold text-[var(--text-1)]">{row.label}</span>
                   <span className={`text-sm font-semibold ${comparisonRowTone(row)}`}>{formatCurrency(row.current, language, currency)}</span>
                 </div>
-                <div className="mt-2 flex items-center justify-between gap-4 text-xs text-[var(--text-3)]">
+                <div className="mt-2 flex items-center justify-between gap-4 text-sm text-[var(--text-3)]">
                   <span>{copy.previousMonth}</span>
                   <span>{row.change == null ? "--" : `${row.change >= 0 ? "+" : ""}${formatPercent(row.change, language)}%`}</span>
                 </div>
@@ -573,15 +562,15 @@ export function ReportsScreen() {
           <div key={section.title} className="ui-card p-5">
             <div className="mb-4">
               <p className="text-sm font-semibold text-[var(--text-1)]">{section.title}</p>
-              <p className="text-xs text-[var(--text-3)]">{section.subtitle}</p>
+              <p className="text-sm text-[var(--text-3)]">{section.subtitle}</p>
             </div>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={section.data} margin={{ left: -20, right: 10, top: 10, bottom: 0 }}>
-                  <CartesianGrid stroke="rgba(255,255,255,0.055)" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fill: "#4a6278", fontSize: 12 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "#4a6278", fontSize: 12 }} axisLine={false} tickLine={false} width={80} tickFormatter={(v) => formatCurrency(Number(v), language, currency)} />
-                  <Tooltip formatter={(v) => formatCurrency(Number(v ?? 0), language, currency)} contentStyle={{ backgroundColor: "#131e30", borderColor: "rgba(255,255,255,0.10)", borderRadius: 10, color: "#edf3fc" }} />
+                <BarChart data={section.data} margin={{ left: 0, right: 10, top: 10, bottom: 0 }}>
+                  <CartesianGrid stroke="#ffffff10" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fill: "#868f97", fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#868f97", fontSize: 12 }} axisLine={false} tickLine={false} width={92} tickFormatter={(v) => formatCurrency(Number(v), language, currency)} />
+                  <Tooltip formatter={(v) => formatCurrency(Number(v ?? 0), language, currency)} contentStyle={{ backgroundColor: "#191919", borderColor: "#ffffff30", borderRadius: 10, color: "#ffffff" }} />
                   <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                     {section.data.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
                   </Bar>
@@ -596,7 +585,7 @@ export function ReportsScreen() {
       <div className="ui-card p-5">
         <div className="mb-4">
           <p className="text-sm font-semibold text-[var(--text-1)]">{copy.topExpenses}</p>
-          <p className="text-xs text-[var(--text-3)]">{copy.topExpensesSubtitle}</p>
+          <p className="text-sm text-[var(--text-3)]">{copy.topExpensesSubtitle}</p>
         </div>
         {topExpenses.length === 0 ? (
           <p className="text-sm text-[var(--text-3)]">{copy.noData}</p>
@@ -608,11 +597,11 @@ export function ReportsScreen() {
                   <p className="text-sm font-semibold text-[var(--text-1)]">
                     {index + 1}. {tx.description || tx.category || "--"}
                   </p>
-                  <p className="text-xs text-[var(--text-3)]">
+                  <p className="text-sm text-[var(--text-3)]">
                     {tx.category || (language === "pt" ? "Sem categoria" : "No category")}
                   </p>
                 </div>
-                <span className="ui-amount shrink-0 text-sm text-[var(--red)]">
+                <span className="ui-amount shrink-0 text-sm text-[var(--text-2)]">
                   {formatCurrency(tx.displayAmount, language, currency)}
                 </span>
               </div>

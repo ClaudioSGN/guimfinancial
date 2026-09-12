@@ -1,0 +1,525 @@
+.page {
+  min-height: 100vh;
+  background: #0b0b0b;
+  color: #ffffff;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 456px);
+  align-items: center;
+  gap: 80px;
+  width: 100%;
+  max-width: 1200px;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 48px;
+}
+
+.introduction {
+  display: flex;
+  min-height: 688px;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 48px;
+  padding: 12px 0;
+}
+
+.brandRow,
+.brand,
+.mobileBrand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brandRow {
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.monogram {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 99px;
+  background: #171717;
+  color: #fafafa;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.053em;
+}
+
+.brandName {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.053em;
+}
+
+.brandCaption {
+  margin-top: 2px;
+  color: #868f97;
+  font-size: 14px;
+}
+
+.badge {
+  padding: 4px 10px;
+  border: 1px solid #ffffff20;
+  border-radius: 99px;
+  color: #868f97;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.introContent {
+  display: grid;
+  gap: 32px;
+}
+
+.eyebrow {
+  color: #868f97;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.headline {
+  max-width: 510px;
+  margin: 16px 0 20px;
+  font-size: 54px;
+  font-weight: 700;
+  letter-spacing: -0.08em;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+.description {
+  max-width: 480px;
+  color: #868f97;
+  font-size: 16px;
+  line-height: 1.63;
+}
+
+.steps {
+  display: grid;
+  gap: 16px;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #cccccc;
+}
+
+.stepNumber {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  place-items: center;
+  border: 1px solid #ffffff20;
+  border-radius: 99px;
+  background: #0b0b0b;
+  color: #868f97;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.shortcut {
+  max-width: 500px;
+  padding: 20px;
+  border: 1px solid #ffffff20;
+  border-radius: 16px;
+  background: #0b0b0b;
+}
+
+.shortcutText {
+  margin-top: 8px;
+  color: #868f97;
+  line-height: 1.63;
+}
+
+.inlineLabel {
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: #131313;
+  color: #cccccc;
+  font-weight: 500;
+}
+
+.formSection {
+  width: 100%;
+  max-width: 456px;
+  margin: 0 auto;
+}
+
+.mobileBrand {
+  display: none;
+}
+
+.formCard {
+  padding: 32px;
+  border: 1px solid #ffffff20;
+  border-radius: 16px;
+  background: #191919;
+  box-shadow: 0 0 44px rgba(0, 0, 0, 0.8);
+}
+
+.formHeader {
+  display: grid;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.formTitle {
+  margin-top: 12px;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.053em;
+  line-height: 1.2;
+}
+
+.formDescription {
+  margin-top: 8px;
+  color: #868f97;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.modeTabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 99px;
+  background: #131313;
+}
+
+.modeTab {
+  min-height: 36px;
+  flex: 1;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 99px;
+  background: transparent;
+  color: #868f97;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.modeTab:hover {
+  color: #ffffff;
+}
+
+.modeTabActive,
+.modeTabActive:hover {
+  background: #171717;
+  color: #fafafa;
+}
+
+.fields {
+  display: grid;
+  gap: 16px;
+}
+
+.field {
+  display: block;
+}
+
+.label {
+  display: block;
+  margin-bottom: 8px;
+  color: #cccccc;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.input {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-radius: 99px;
+  outline: none;
+  background: #131313;
+  color: #ffffff;
+  font-size: 14px;
+  line-height: 1.5;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.input::placeholder {
+  color: #868f97;
+  opacity: 1;
+}
+
+.input:focus {
+  border-color: #ffffff20;
+  background: #191919;
+  box-shadow: 0 0 0 1px #ffffff20;
+}
+
+.codeInput {
+  height: 48px;
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-align: center;
+}
+
+.primaryButton,
+.secondaryButton,
+.outlineButton {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-radius: 99px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.43;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.primaryButton {
+  border-color: #ffffff40;
+  box-shadow: var(--shadow-action);
+  background: #131313;
+  color: #fafafa;
+}
+
+.primaryButton:hover {
+  background: #262626;
+}
+
+.secondaryButton {
+  background: #131313;
+  color: #ffffff;
+}
+
+.secondaryButton:hover {
+  background: #ffffff20;
+}
+
+.outlineButton {
+  border-color: #ffffff20;
+  background: #191919;
+  color: #ffffff;
+}
+
+.outlineButton:hover {
+  background: #131313;
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.outlineButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.primaryButton:focus-visible,
+.secondaryButton:focus-visible,
+.outlineButton:focus-visible,
+.modeTab:focus-visible,
+.textButton:focus-visible {
+  outline: 2px solid #737373;
+  outline-offset: 3px;
+}
+
+.loginOptions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #868f97;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #cccccc;
+  cursor: pointer;
+}
+
+.textButton {
+  padding: 0;
+  border: 0;
+  border-radius: 99px;
+  background: transparent;
+  color: #cccccc;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.textButton:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.recoveryCard {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid #ffffff20;
+  border-radius: 16px;
+  background: #0b0b0b;
+}
+
+.recoveryTitle {
+  font-weight: 500;
+}
+
+.helperText {
+  color: #868f97;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.notice {
+  padding: 12px 16px;
+  border: 1px solid #ffffff20;
+  border-radius: 99px;
+  background: #0b0b0b;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.infoNotice {
+  color: #cccccc;
+}
+
+.errorNotice {
+  color: #e09292;
+}
+
+.mobileSwitch {
+  display: none;
+}
+
+.securityNote {
+  max-width: 380px;
+  margin: 20px auto 0;
+  padding: 0 12px;
+  color: #868f97;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.resetPage {
+  display: grid;
+  align-items: center;
+  justify-items: center;
+  padding: 32px 20px;
+}
+
+.resetCard {
+  width: 100%;
+  max-width: 440px;
+}
+
+.resetCard > .formTitle {
+  margin-top: 24px;
+}
+
+.resetCard > .fields,
+.resetCard > .helperText {
+  margin-top: 24px;
+}
+
+.resetIcon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid #ffffff20;
+  border-radius: 99px;
+  background: #0b0b0b;
+}
+
+@media (max-width: 1100px) {
+  .layout {
+    gap: 48px;
+    padding: 32px;
+  }
+
+  .brandRow {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 1023px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 40px 20px;
+  }
+
+  .introduction {
+    display: none;
+  }
+
+  .mobileBrand {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 32px;
+  }
+}
+
+@media (max-width: 639px) {
+  .layout {
+    padding: 32px 16px;
+  }
+
+  .formCard {
+    padding: 24px 20px;
+  }
+
+  .formTitle {
+    font-size: 30px;
+  }
+
+  .modeTabs {
+    display: none;
+  }
+
+  .mobileSwitch {
+    display: flex;
+  }
+
+  .loginOptions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .securityNote {
+    padding: 0 8px;
+  }
+}

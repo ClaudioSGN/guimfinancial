@@ -75,9 +75,9 @@ export function TopBar<T extends string>({
               <button
                 key={tab}
                 onClick={() => onTabChange(tab)}
-                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                className={`rounded-full px-3 py-2 text-sm font-medium transition-colors ${
                   isActive
-                    ? "bg-[var(--surface-3)] text-[var(--text-1)]"
+                    ? "bg-[var(--accent)] text-white"
                     : "text-[var(--text-3)] hover:text-[var(--text-2)]"
                 }`}
               >

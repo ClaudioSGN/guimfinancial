@@ -138,7 +138,7 @@ export function FriendsPanel({ userId }: Props) {
             </p>
           </div>
           <div className="ui-card-inner min-w-[180px] px-4 py-3 text-right">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-3)]">
+            <p className="text-xs uppercase tracking-[0.05em] text-[var(--text-3)]">
               {language === "pt" ? "Codigo" : "Code"}
             </p>
             <p className="mt-1 text-lg font-semibold text-[var(--text-1)]">
@@ -180,7 +180,7 @@ export function FriendsPanel({ userId }: Props) {
           </button>
         </div>
         {errorMsg ? <p className="mt-3 text-xs text-[var(--red)]">{errorMsg}</p> : null}
-        {successMsg ? <p className="mt-3 text-xs text-[var(--green)]">{successMsg}</p> : null}
+        {successMsg ? <p className="mt-3 text-xs text-[var(--text-1)]">{successMsg}</p> : null}
       </div>
 
       <div className="ui-card p-5">
@@ -299,7 +299,7 @@ export function FriendsPanel({ userId }: Props) {
                     <p className="truncate">{request.description || request.category || "—"}</p>
                   </div>
                   {request.decline_reason ? (
-                    <p className="mt-3 rounded-xl border border-[var(--red)] border-opacity-30 bg-[var(--red-dim)] px-3 py-2 text-xs text-[var(--red)]">
+                    <p className="mt-3 rounded-full border border-[var(--border)] bg-[var(--surface-3)] px-3 py-2 text-sm text-[var(--text-2)]">
                       {language === "pt" ? "Motivo da recusa: " : "Decline reason: "}
                       {request.decline_reason}
                     </p>

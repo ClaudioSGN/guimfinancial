@@ -547,15 +547,15 @@ export default function CardsPage() {
   }
 
   return (
-    <div className="app-shell min-h-screen px-6 py-6 text-slate-50 lg:px-10">
-      <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6">
+    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-1)] sm:px-6 lg:px-10">
+      <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6">
         <Link href="/more" className="ui-btn ui-btn-secondary ui-btn-sm w-fit">
           ← {t("tabs.more")}
         </Link>
 
-        <div className="ui-card-2 p-6">
+        <div className="py-2">
           <p className="ui-eyebrow">{t("cards.title")}</p>
-          <p className="mt-2 font-[var(--font-display)] text-3xl font-black tracking-[-0.05em] text-[#E5E8EF]">
+          <p className="mt-2 font-[var(--font-display)] text-3xl font-semibold tracking-[-0.025em] sm:text-4xl text-[var(--text-1)]">
             {language === "pt" ? "Gerenciar cartões e faturas" : "Manage cards and statements"}
           </p>
           <p className="mt-2 max-w-2xl text-sm text-[var(--text-2)]">
@@ -566,52 +566,52 @@ export default function CardsPage() {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <div className="ui-card p-4">
-            <p className="text-xs text-[#8A93A3]">{language === "pt" ? "Cartoes" : "Cards"}</p>
-            <p className="mt-2 text-2xl font-semibold text-[#E5E8EF]">{cards.length}</p>
+          <div className="ui-card p-5">
+            <p className="text-xs text-[var(--text-3)]">{language === "pt" ? "Cartoes" : "Cards"}</p>
+            <p className="mt-2 text-2xl font-semibold text-[var(--text-1)]">{cards.length}</p>
           </div>
-          <div className="ui-card p-4">
-            <p className="text-xs text-[#8A93A3]">{language === "pt" ? "Faturas abertas" : "Open statements"}</p>
-            <p className="mt-2 text-2xl font-semibold text-[#5DD6C7]">{openStatementsCount}</p>
+          <div className="ui-card p-5">
+            <p className="text-xs text-[var(--text-3)]">{language === "pt" ? "Faturas abertas" : "Open statements"}</p>
+            <p className="mt-2 text-2xl font-semibold text-[var(--text-1)]">{openStatementsCount}</p>
           </div>
-          <div className="ui-card p-4">
-            <p className="text-xs text-[#8A93A3]">{language === "pt" ? "Faturas para pagar" : "Statements due"}</p>
-            <p className="mt-2 text-2xl font-semibold text-[#F4C27A]">{closedStatementsCount}</p>
+          <div className="ui-card p-5">
+            <p className="text-xs text-[var(--text-3)]">{language === "pt" ? "Faturas para pagar" : "Statements due"}</p>
+            <p className="mt-2 text-2xl font-semibold text-[var(--text-1)]">{closedStatementsCount}</p>
           </div>
         </div>
 
-        <div className="ui-card p-4 sm:p-5">
+        <div className="ui-card p-5">
           <div className="space-y-3">
-            <p className="text-sm font-bold text-[var(--text-1)]">
+            <p className="text-sm font-semibold text-[var(--text-1)]">
               {language === "pt" ? "Novo cartão" : "New card"}
             </p>
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8B94A6]">{t("cards.ownerLabel")}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.05em] text-[var(--text-3)]">{t("cards.ownerLabel")}</p>
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => setOwnerType("self")} className={`border px-3 py-1 text-xs ${ownerType === "self" ? "border-[#5DD6C7] bg-[#173038] text-[#D7FBF6]" : "border-[#2A3140] bg-[#0F141E] text-[#A8B2C3]"}`}>{t("cards.ownerSelf")}</button>
-                <button type="button" onClick={() => setOwnerType("friend")} className={`border px-3 py-1 text-xs ${ownerType === "friend" ? "border-[#5DD6C7] bg-[#173038] text-[#D7FBF6]" : "border-[#2A3140] bg-[#0F141E] text-[#A8B2C3]"}`}>{t("cards.ownerFriend")}</button>
+                <button type="button" onClick={() => setOwnerType("self")} className={`rounded-full border px-3 py-2 text-sm ${ownerType === "self" ? "border-[var(--text-1)] bg-[#171717] text-[#fafafa]" : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-3)]"}`}>{t("cards.ownerSelf")}</button>
+                <button type="button" onClick={() => setOwnerType("friend")} className={`rounded-full border px-3 py-2 text-sm ${ownerType === "friend" ? "border-[var(--text-1)] bg-[#171717] text-[#fafafa]" : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-3)]"}`}>{t("cards.ownerFriend")}</button>
               </div>
             </div>
             <BankBrandPicker selected={bankCode} onSelect={setBankCode} />
             <div className="grid gap-3 sm:grid-cols-2">
-              <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t("cards.namePlaceholder")} className="w-full rounded-xl border border-[#1E232E] bg-[#0F141E] px-4 py-3 text-sm text-[#E4E7EC]" />
-              {ownerType === "friend" ? <input value={friendName} onChange={(event) => setFriendName(event.target.value)} placeholder={t("cards.friendNamePlaceholder")} className="w-full rounded-xl border border-[#1E232E] bg-[#0F141E] px-4 py-3 text-sm text-[#E4E7EC]" /> : null}
-              <input value={limitAmount} onChange={(event) => setLimitAmount(formatCentsInput(event.target.value, currency))} placeholder={t("cards.limitPlaceholder")} inputMode="decimal" pattern="[0-9.,]*" className="w-full rounded-xl border border-[#1E232E] bg-[#0F141E] px-4 py-3 text-sm text-[#E4E7EC]" />
-              <input value={closingDay} onChange={(event) => setClosingDay(event.target.value)} placeholder={t("cards.closingDayPlaceholder")} className="w-full rounded-xl border border-[#1E232E] bg-[#0F141E] px-4 py-3 text-sm text-[#E4E7EC]" />
-              <input value={dueDay} onChange={(event) => setDueDay(event.target.value)} placeholder={t("cards.dueDayPlaceholder")} className="w-full rounded-xl border border-[#1E232E] bg-[#0F141E] px-4 py-3 text-sm text-[#E4E7EC]" />
+              <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t("cards.namePlaceholder")} className="ui-input w-full px-4 py-3 text-sm" />
+              {ownerType === "friend" ? <input value={friendName} onChange={(event) => setFriendName(event.target.value)} placeholder={t("cards.friendNamePlaceholder")} className="ui-input w-full px-4 py-3 text-sm" /> : null}
+              <input value={limitAmount} onChange={(event) => setLimitAmount(formatCentsInput(event.target.value, currency))} placeholder={t("cards.limitPlaceholder")} inputMode="decimal" pattern="[0-9.,]*" className="ui-input w-full px-4 py-3 text-sm" />
+              <input value={closingDay} onChange={(event) => setClosingDay(event.target.value)} placeholder={t("cards.closingDayPlaceholder")} className="ui-input w-full px-4 py-3 text-sm" />
+              <input value={dueDay} onChange={(event) => setDueDay(event.target.value)} placeholder={t("cards.dueDayPlaceholder")} className="ui-input w-full px-4 py-3 text-sm" />
             </div>
-            {errorMsg ? <p className="text-xs text-red-400">{errorMsg}</p> : null}
+            {errorMsg ? <p className="text-xs text-[var(--red)]">{errorMsg}</p> : null}
             <button type="button" onClick={handleAdd} disabled={saving} className="ui-btn ui-btn-primary ui-btn-lg w-full disabled:opacity-60">{saving ? t("common.saving") : t("cards.add")}</button>
           </div>
         </div>
 
         <div className="grid gap-4">
           {loading ? (
-            <div className="border border-[#1E232E] bg-[#121621] p-6 text-sm text-[#8A93A3]">
+            <div className="ui-card p-6 text-sm text-[var(--text-3)]">
               {language === "pt" ? "Carregando cartões..." : "Loading cards..."}
             </div>
           ) : cards.length === 0 ? (
-            <div className="border border-dashed border-[#263043] bg-[#121621] p-6 text-sm text-[#8A93A3]">
+            <div className="ui-card border-dashed p-6 text-sm text-[var(--text-3)]">
               {language === "pt" ? "Nenhum cartão cadastrado ainda." : "No cards registered yet."}
             </div>
           ) : (
@@ -637,34 +637,34 @@ export default function CardsPage() {
                         ? `Vence em ${insight?.daysUntilDue ?? 0} dia(s)`
                         : `Due in ${insight?.daysUntilDue ?? 0} day(s)`;
               return (
-                <div key={item.id} className={`min-w-0 border p-4 sm:p-5 ${item.owner_type === "friend" ? "border-[#25404B] bg-[#10212A]" : "border-[#1E232E] bg-[#121621]"}`}>
+                <div key={item.id} className={`min-w-0 rounded-2xl border p-5 shadow-sm ${item.owner_type === "friend" ? "border-[var(--border)] bg-[var(--surface-2)]" : "border-[var(--border)] bg-[var(--surface)]"}`}>
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 flex-1 space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <BankBrandBadge bankCode={item.bank_code} />
-                        <p className="min-w-0 break-words text-lg font-semibold text-[#E4E7EC]">{item.name}</p>
-                        <span className="border border-[#2A3140] bg-[#0F141E] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[#9AA3B2]">
+                        <p className="min-w-0 break-words text-lg font-semibold text-[var(--text-1)]">{item.name}</p>
+                        <span className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-2 py-0.5 text-xs uppercase tracking-[0.05em] text-[var(--text-3)]">
                           {item.owner_type === "friend" ? t("cards.ownerBadgeFriend") : t("cards.ownerBadgeSelf")}
                         </span>
-                        <span className={`border px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] ${statementClosed ? "border-amber-500/45 bg-amber-500/10 text-amber-200" : "border-[#2A8C73] bg-[#163137] text-[#91E6DA]"}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-xs uppercase tracking-[0.05em] ${statementClosed ? "border-[var(--text-1)] bg-[var(--accent)] text-white" : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-1)]"}`}>
                           {statementClosed ? (language === "pt" ? "Fatura fechada" : "Statement due") : (language === "pt" ? "Fatura aberta" : "Statement open")}
                         </span>
                       </div>
                       {item.owner_type === "friend" && item.friend_name ? (
-                        <p className="text-sm text-[#A8D7D1]">{t("home.friendCardOwner")}: {item.friend_name}</p>
+                        <p className="text-sm text-[var(--text-1)]">{t("home.friendCardOwner")}: {item.friend_name}</p>
                       ) : null}
-                      <p className="text-xs text-[#8A93A3]">{t("cards.closes")} {item.closing_day} · {t("cards.due")} {item.due_day}</p>
-                      <div className="h-2 bg-[#1A2230]">
-                        <div className="h-2 bg-[#5DD6C7]" style={{ width: `${Math.min(100, Math.max(0, insight?.utilizationPercent ?? 0))}%` }} />
+                      <p className="text-xs text-[var(--text-3)]">{t("cards.closes")} {item.closing_day} · {t("cards.due")} {item.due_day}</p>
+                      <div className="h-2 overflow-hidden rounded-full bg-[var(--surface-3)]">
+                        <div className="h-2 rounded-full bg-[var(--text-1)]" style={{ width: `${Math.min(100, Math.max(0, insight?.utilizationPercent ?? 0))}%` }} />
                       </div>
                     </div>
 
                     <div className="flex flex-wrap gap-2 lg:justify-end">
-                      <button type="button" onClick={() => handleMarkStatementPaid(item)} disabled={!canMarkPaid || payingCardId === item.id} className="border border-[#2A3140] bg-[#0F141E] px-3 py-1.5 text-xs text-[#D6DEE8] hover:border-[#5DD6C7]/60 hover:text-[#5DD6C7] disabled:opacity-50">
+                      <button type="button" onClick={() => handleMarkStatementPaid(item)} disabled={!canMarkPaid || payingCardId === item.id} className="ui-btn ui-btn-primary ui-btn-sm disabled:opacity-50">
                         {payingCardId === item.id ? (language === "pt" ? "A pagar..." : "Paying...") : (language === "pt" ? "Marcar fatura paga" : "Mark statement paid")}
                       </button>
-                      <button type="button" onClick={() => openEdit(item)} className="border border-[#2A3140] bg-[#0F141E] px-3 py-1.5 text-xs text-[#8B94A6] hover:border-[#5DD6C7]/60 hover:text-[#5DD6C7]">{t("common.edit")}</button>
-                      <button type="button" onClick={() => handleRemove(item)} disabled={deletingId === item.id} className="border border-[#2A3140] bg-[#0F141E] px-3 py-1.5 text-xs text-[#8B94A6] hover:border-red-500/60 hover:text-red-400 disabled:opacity-60">
+                      <button type="button" onClick={() => openEdit(item)} className="ui-btn ui-btn-secondary ui-btn-sm">{t("common.edit")}</button>
+                      <button type="button" onClick={() => handleRemove(item)} disabled={deletingId === item.id} className="ui-btn ui-btn-danger ui-btn-sm disabled:opacity-60">
                         {deletingId === item.id
                           ? t("common.saving")
                           : language === "pt"
@@ -675,25 +675,25 @@ export default function CardsPage() {
                   </div>
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <div className="min-w-0 rounded-xl border border-[#1B2230] bg-[#0F141E] p-3">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">{language === "pt" ? "Fatura atual" : "Current statement"}</p>
-                      <p className="mt-2 break-words text-lg font-semibold leading-tight text-[#E4E7EC] sm:text-xl">{formatMoney(currentStatementTotal, language, currency)}</p>
-                      <p className="mt-1 text-xs text-[#8B94A6]">{dueLabel}</p>
+                    <div className="min-w-0 rounded-full border border-[var(--border)] bg-[var(--surface-2)] p-3">
+                      <p className="text-xs uppercase tracking-[0.05em] text-[var(--text-3)]">{language === "pt" ? "Fatura atual" : "Current statement"}</p>
+                      <p className="mt-2 break-words text-lg font-semibold leading-tight text-[var(--text-1)] sm:text-xl">{formatMoney(currentStatementTotal, language, currency)}</p>
+                      <p className="mt-1 text-xs text-[var(--text-3)]">{dueLabel}</p>
                     </div>
-                    <div className="min-w-0 rounded-xl border border-[#1B2230] bg-[#0F141E] p-3">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">{language === "pt" ? "Proxima fatura" : "Next statement"}</p>
-                      <p className="mt-2 break-words text-lg font-semibold leading-tight text-[#E4E7EC] sm:text-xl">{formatMoney(insight?.nextStatement ?? 0, language, currency)}</p>
-                      <p className="mt-1 text-xs text-[#8B94A6]">{language === "pt" ? `Fecha em ${insight?.daysUntilClosing ?? 0} dia(s)` : `Closes in ${insight?.daysUntilClosing ?? 0} day(s)`}</p>
+                    <div className="min-w-0 rounded-full border border-[var(--border)] bg-[var(--surface-2)] p-3">
+                      <p className="text-xs uppercase tracking-[0.05em] text-[var(--text-3)]">{language === "pt" ? "Proxima fatura" : "Next statement"}</p>
+                      <p className="mt-2 break-words text-lg font-semibold leading-tight text-[var(--text-1)] sm:text-xl">{formatMoney(insight?.nextStatement ?? 0, language, currency)}</p>
+                      <p className="mt-1 text-xs text-[var(--text-3)]">{language === "pt" ? `Fecha em ${insight?.daysUntilClosing ?? 0} dia(s)` : `Closes in ${insight?.daysUntilClosing ?? 0} day(s)`}</p>
                     </div>
-                    <div className="min-w-0 rounded-xl border border-[#1B2230] bg-[#0F141E] p-3">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">{language === "pt" ? "Limite usado" : "Used limit"}</p>
-                      <p className="mt-2 break-words text-lg font-semibold leading-tight text-[#E4E7EC] sm:text-xl">{formatMoney(insight?.usedTotal ?? 0, language, currency)}</p>
-                      <p className="mt-1 text-xs text-[#8B94A6]">{`${(insight?.utilizationPercent ?? 0).toFixed(1)}%`}</p>
+                    <div className="min-w-0 rounded-full border border-[var(--border)] bg-[var(--surface-2)] p-3">
+                      <p className="text-xs uppercase tracking-[0.05em] text-[var(--text-3)]">{language === "pt" ? "Limite usado" : "Used limit"}</p>
+                      <p className="mt-2 break-words text-lg font-semibold leading-tight text-[var(--text-1)] sm:text-xl">{formatMoney(insight?.usedTotal ?? 0, language, currency)}</p>
+                      <p className="mt-1 text-xs text-[var(--text-3)]">{`${(insight?.utilizationPercent ?? 0).toFixed(1)}%`}</p>
                     </div>
-                    <div className="min-w-0 rounded-xl border border-[#1B2230] bg-[#0F141E] p-3">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-[#7F8AA0]">{language === "pt" ? "Limite disponivel" : "Available limit"}</p>
-                      <p className="mt-2 break-words text-lg font-semibold leading-tight text-[#5DD6C7] sm:text-xl">{formatMoney(insight?.availableLimit ?? 0, language, currency)}</p>
-                      <p className="mt-1 text-xs text-[#8B94A6]">{formatMoney(Number(item.limit_amount) || 0, language, currency)}</p>
+                    <div className="min-w-0 rounded-full border border-[var(--border)] bg-[var(--surface-2)] p-3">
+                      <p className="text-xs uppercase tracking-[0.05em] text-[var(--text-3)]">{language === "pt" ? "Limite disponivel" : "Available limit"}</p>
+                      <p className="mt-2 break-words text-lg font-semibold leading-tight text-[var(--text-1)] sm:text-xl">{formatMoney(insight?.availableLimit ?? 0, language, currency)}</p>
+                      <p className="mt-1 text-xs text-[var(--text-3)]">{formatMoney(Number(item.limit_amount) || 0, language, currency)}</p>
                     </div>
                   </div>
                 </div>
@@ -704,28 +704,28 @@ export default function CardsPage() {
       </div>
 
       {editing ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4">
-          <div className="w-full max-w-md border border-[#1E232E] bg-[#121621] p-5" onClick={(event) => event.stopPropagation()}>
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/25 px-4">
+          <div className="ui-card w-full max-w-md p-5" onClick={(event) => event.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm font-semibold text-[#E5E8EF]">{t("cards.title")}</p>
-              <button type="button" onClick={() => !editSaving && setEditing(null)} className="text-xs text-[#8B94A6]">{t("common.cancel")}</button>
+              <p className="text-sm font-semibold text-[var(--text-1)]">{t("cards.title")}</p>
+              <button type="button" onClick={() => !editSaving && setEditing(null)} className="text-xs text-[var(--text-3)]">{t("common.cancel")}</button>
             </div>
             <div className="space-y-3">
               <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8B94A6]">{t("cards.ownerLabel")}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.05em] text-[var(--text-3)]">{t("cards.ownerLabel")}</p>
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => setEditOwnerType("self")} className={`border px-3 py-1 text-xs ${editOwnerType === "self" ? "border-[#5DD6C7] bg-[#173038] text-[#D7FBF6]" : "border-[#2A3140] bg-[#0F141E] text-[#A8B2C3]"}`}>{t("cards.ownerSelf")}</button>
-                  <button type="button" onClick={() => setEditOwnerType("friend")} className={`border px-3 py-1 text-xs ${editOwnerType === "friend" ? "border-[#5DD6C7] bg-[#173038] text-[#D7FBF6]" : "border-[#2A3140] bg-[#0F141E] text-[#A8B2C3]"}`}>{t("cards.ownerFriend")}</button>
+                  <button type="button" onClick={() => setEditOwnerType("self")} className={`rounded-full border px-3 py-2 text-sm ${editOwnerType === "self" ? "border-[var(--text-1)] bg-[#171717] text-[#fafafa]" : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-3)]"}`}>{t("cards.ownerSelf")}</button>
+                  <button type="button" onClick={() => setEditOwnerType("friend")} className={`rounded-full border px-3 py-2 text-sm ${editOwnerType === "friend" ? "border-[var(--text-1)] bg-[#171717] text-[#fafafa]" : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-3)]"}`}>{t("cards.ownerFriend")}</button>
                 </div>
               </div>
               <BankBrandPicker selected={editBankCode} onSelect={setEditBankCode} />
-              <input value={editName} onChange={(event) => setEditName(event.target.value)} placeholder={t("cards.namePlaceholder")} className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]" />
-              {editOwnerType === "friend" ? <input value={editFriendName} onChange={(event) => setEditFriendName(event.target.value)} placeholder={t("cards.friendNamePlaceholder")} className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]" /> : null}
-              <input value={editLimitAmount} onChange={(event) => setEditLimitAmount(formatCentsInput(event.target.value, currency))} placeholder={t("cards.limitPlaceholder")} inputMode="numeric" pattern="[0-9]*" className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]" />
-              <input value={editClosingDay} onChange={(event) => setEditClosingDay(event.target.value)} placeholder={t("cards.closingDayPlaceholder")} inputMode="numeric" pattern="[0-9]*" className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]" />
-              <input value={editDueDay} onChange={(event) => setEditDueDay(event.target.value)} placeholder={t("cards.dueDayPlaceholder")} inputMode="numeric" pattern="[0-9]*" className="w-full rounded-xl border border-[#1E232E] bg-[#121621] px-4 py-3 text-sm text-[#E4E7EC]" />
-              {errorMsg ? <p className="text-xs text-red-400">{errorMsg}</p> : null}
-              <button type="button" onClick={handleEditSave} disabled={editSaving} className="w-full rounded-xl bg-[#E6EDF3] py-3 text-sm font-semibold text-[#0C1018] disabled:opacity-60">{editSaving ? t("common.saving") : t("common.save")}</button>
+              <input value={editName} onChange={(event) => setEditName(event.target.value)} placeholder={t("cards.namePlaceholder")} className="ui-input w-full px-4 py-3 text-sm" />
+              {editOwnerType === "friend" ? <input value={editFriendName} onChange={(event) => setEditFriendName(event.target.value)} placeholder={t("cards.friendNamePlaceholder")} className="ui-input w-full px-4 py-3 text-sm" /> : null}
+              <input value={editLimitAmount} onChange={(event) => setEditLimitAmount(formatCentsInput(event.target.value, currency))} placeholder={t("cards.limitPlaceholder")} inputMode="numeric" pattern="[0-9]*" className="ui-input w-full px-4 py-3 text-sm" />
+              <input value={editClosingDay} onChange={(event) => setEditClosingDay(event.target.value)} placeholder={t("cards.closingDayPlaceholder")} inputMode="numeric" pattern="[0-9]*" className="ui-input w-full px-4 py-3 text-sm" />
+              <input value={editDueDay} onChange={(event) => setEditDueDay(event.target.value)} placeholder={t("cards.dueDayPlaceholder")} inputMode="numeric" pattern="[0-9]*" className="ui-input w-full px-4 py-3 text-sm" />
+              {errorMsg ? <p className="text-xs text-[var(--red)]">{errorMsg}</p> : null}
+              <button type="button" onClick={handleEditSave} disabled={editSaving} className="ui-btn ui-btn-primary w-full py-3 text-sm font-medium disabled:opacity-60">{editSaving ? t("common.saving") : t("common.save")}</button>
             </div>
           </div>
         </div>

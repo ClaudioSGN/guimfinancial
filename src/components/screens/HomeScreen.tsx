@@ -1,5 +1,7 @@
 "use client";
 
+import { getMonthInstallment, getPlanningMonths } from "@/lib/installmentSchedule";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { BudgetRow, summarizeMonthlyBudget } from "@/lib/budget";
@@ -28,11 +30,9 @@ import {
   getCardExpenseSettlementUpdate,
 } from "@/lib/cardStatements";
 import {
-  getPaidResponsibleInstallmentCount,
   getPendingResponsibleInstallmentIndexes,
   getResponsibleInstallmentCount,
   getSettledResponsibleInstallmentAmount,
-  isResponsibleForInstallment,
 } from "@/lib/installmentResponsibility";
 import {
   ResponsiveContainer,
@@ -220,6 +220,7 @@ type DisplayTransaction = Transaction & {
   effectiveDate: string;
   displayAmount: number;
   isBudgetCarryover?: boolean;
+  installmentIndex?: number;
 };
 
 function isCardLinkedExpense(tx: Transaction) {
@@ -249,34 +250,6 @@ function getMonthKey(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   return `${year}-${month}`;
-}
-
-function getMonthDateFromKey(monthKey: string) {
-  const [yearText, monthText] = monthKey.split("-");
-  const year = Number(yearText);
-  const month = Number(monthText);
-
-  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
-    return null;
-  }
-
-  return new Date(year, month - 1, 1);
-}
-
-function collectActivityMonthKeys(transactions: Transaction[]) {
-  const monthKeys = new Set<string>();
-
-  transactions.forEach((tx) => {
-    if (tx.type !== "income" && tx.type !== "expense" && tx.type !== "card_expense") {
-      return;
-    }
-
-    const date = parseLocalDate(tx.date);
-    if (!date) return;
-    monthKeys.add(getMonthKey(date));
-  });
-
-  return Array.from(monthKeys).sort((left, right) => right.localeCompare(left));
 }
 
 function formatCurrency(
@@ -566,24 +539,24 @@ function computePeriodAccountBalance(
 }
 
 const CATEGORY_CHART_COLORS = [
-  "#F59E0B",
-  "#3B82F6",
-  "#22C55E",
-  "#14B8A6",
-  "#A78BFA",
-  "#EAB308",
-  "#F97316",
-  "#06B6D4",
-  "#10B981",
-  "#EF4444",
-  "#84CC16",
-  "#EC4899",
-  "#6366F1",
-  "#2DD4BF",
-  "#F43F5E",
-  "#8B5CF6",
-  "#0EA5E9",
-  "#FB7185",
+  "#737373",
+  "#ffa16c",
+  "#a3a3a3",
+  "#cccccc",
+  "#d4d4d4",
+  "#404040",
+  "#8a8a8a",
+  "#262626",
+  "#b5b5b5",
+  "#626262",
+  "#969696",
+  "#adb3b8",
+  "#c4c4c4",
+  "#454545",
+  "#7d7d7d",
+  "#ababab",
+  "#202020",
+  "#909090",
 ];
 
 function getCategoryColor(index: number) {
@@ -650,21 +623,16 @@ function buildMonthTransactions(
       (monthStart.getMonth() - txDate.getMonth());
 
     if (isInstallment) {
-      const perInstallment = amount / totalInstallments;
-      const entries: DisplayTransaction[] = [];
-      for (let i = 0; i < totalInstallments; i += 1) {
-        if (!isResponsibleForInstallment(tx, i + 1)) continue;
-        const installmentDate = addMonthsClamped(txDate, i);
-        if (installmentDate < monthStart || installmentDate > monthEnd) continue;
-        entries.push({
-          ...tx,
-          displayId: `${tx.id}-i${i + 1}`,
-          displayDate: toDateString(installmentDate),
-          effectiveDate: toDateString(installmentDate),
-          displayAmount: perInstallment,
-        });
-      }
-      return entries;
+      const installment = getMonthInstallment(tx, month);
+      if (!installment) return [];
+      return [{
+        ...tx,
+        displayId: `${tx.id}-i${installment.index}`,
+        displayDate: installment.date,
+        effectiveDate: installment.date,
+        displayAmount: installment.amount,
+        installmentIndex: installment.index,
+      }];
     }
 
     if (isFixedExpense) {
@@ -738,7 +706,6 @@ export function HomeScreen() {
   const [budgetSchemaMissing, setBudgetSchemaMissing] = useState(false);
   const [showBalance, setShowBalance] = useState(true);
   const [monthOpen, setMonthOpen] = useState(false);
-  const [availableMonthKeys, setAvailableMonthKeys] = useState<string[]>([]);
   const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
   const [payingReminderCardId, setPayingReminderCardId] = useState<string | null>(null);
@@ -1127,15 +1094,6 @@ export function HomeScreen() {
       setCards(nextCards);
       setTransactions(transactions);
       setCardTransactions(nextCardTransactions);
-      setAvailableMonthKeys((current) => {
-        const nextKeys = collectActivityMonthKeys(transactions);
-        if (nextKeys.length === 0) {
-          return current.length > 0 ? current : [getMonthKey(new Date())];
-        }
-
-        const mergedKeys = new Set([...current, ...nextKeys]);
-        return Array.from(mergedKeys).sort((left, right) => right.localeCompare(left));
-      });
       setLoading(false);
     } catch (error) {
       if (isTransientNetworkError(error)) {
@@ -1210,32 +1168,10 @@ export function HomeScreen() {
     return () => window.removeEventListener("data-refresh", handleRefresh);
   }, [loadBudgets]);
 
-  useEffect(() => {
-    if (availableMonthKeys.length === 0) return;
-    const selectedMonthKey = getMonthKey(selectedMonth);
-    if (availableMonthKeys.includes(selectedMonthKey)) return;
-
-    const fallbackMonth = getMonthDateFromKey(availableMonthKeys[0]);
-    if (fallbackMonth) {
-      setSelectedMonth(fallbackMonth);
-    }
-  }, [availableMonthKeys, selectedMonth]);
-
-  const monthOptions = useMemo(() => {
-    const monthKeys =
-      availableMonthKeys.length > 0 ? availableMonthKeys : [getMonthKey(new Date())];
-
-    return monthKeys
-      .map((monthKey) => {
-        const value = getMonthDateFromKey(monthKey);
-        if (!value) return null;
-        return {
-          label: getMonthTitle(value, language),
-          value,
-        };
-      })
-      .filter((option): option is { label: string; value: Date } => option !== null);
-  }, [availableMonthKeys, language]);
+  const monthOptions = useMemo(
+    () => getPlanningMonths(selectedMonth, transactions).map((value) => ({ value, label: getMonthTitle(value, language) })),
+    [selectedMonth, transactions, language],
+  );
 
   const monthTransactions = useMemo(
     () => buildMonthTransactions(transactions, selectedMonth),
@@ -1357,7 +1293,7 @@ export function HomeScreen() {
         ? "bg-[var(--green)]"
         : expensePressure <= 100
           ? "bg-[var(--amber)]"
-          : "bg-[var(--red)]";
+          : "bg-[var(--text-2)]";
 
   const categoryChartData = useMemo(() => {
     const totals: Record<string, number> = {};
@@ -2153,12 +2089,12 @@ export function HomeScreen() {
         </div>
 
         {isFriendCard && card.friend_name ? (
-          <p className="mt-2 text-xs text-[var(--text-3)]">
+          <p className="mt-2 text-sm text-[var(--text-3)]">
             {t("home.friendCardOwner")}: {card.friend_name}
           </p>
         ) : null}
 
-        <p className="mt-1 text-xs text-[var(--text-3)]">
+        <p className="mt-1 text-sm text-[var(--text-3)]">
           {t("cards.closes")} {card.closing_day} · {t("cards.due")} {card.due_day}
         </p>
 
@@ -2172,7 +2108,7 @@ export function HomeScreen() {
                 currency,
               )}
             </p>
-            <p className="mt-0.5 text-[10px] text-[var(--text-3)]">
+            <p className="mt-0.5 text-sm text-[var(--text-3)]">
               {insight && insight.currentStatement + insight.overdueAmount > 0
                 ? language === "pt"
                   ? `Vence em ${insight.daysUntilDue} ${getDayWord(
@@ -2193,7 +2129,7 @@ export function HomeScreen() {
             <p className="mt-1 ui-amount text-sm text-[var(--text-1)]">
               {formatCurrency(insight?.nextStatement ?? 0, language, currency)}
             </p>
-            <p className="mt-0.5 text-[10px] text-[var(--text-3)]">
+            <p className="mt-0.5 text-sm text-[var(--text-3)]">
               {language === "pt"
                 ? `Fecha em ${insight?.daysUntilClosing ?? 0} ${getDayWord(
                     insight?.daysUntilClosing ?? 0,
@@ -2214,7 +2150,7 @@ export function HomeScreen() {
           />
         </div>
 
-        <div className="mt-3 grid grid-cols-3 gap-2 text-[10px]">
+        <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
           <div className="ui-card-inner p-2.5">
             <p className="text-[var(--text-3)]">{t("home.cardLimitAvailable")}</p>
             <p className="mt-1 font-semibold text-[var(--green)]">
@@ -2242,10 +2178,10 @@ export function HomeScreen() {
   return (
     <div className="flex flex-col gap-4">
       {/* ── Header ─────────────────────────────────────────── */}
-      <div className="ui-card-inner flex flex-col gap-3 p-3 md:flex-row md:items-center md:justify-between">
+      <div className="home-controls flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="page-kicker">{language === "pt" ? "Controle do painel" : "Dashboard controls"}</p>
-          <p className="mt-1 text-xs text-[var(--text-3)]">
+          <p className="mt-1 text-sm text-[var(--text-3)]">
             {language === "pt" ? "Escolha o mês ou registre uma entrada por voz." : "Choose the month or add an entry by voice."}
           </p>
         </div>
@@ -2262,12 +2198,12 @@ export function HomeScreen() {
               <AppIcon name="chevron-down" size={14} color="currentColor" />
             </button>
             {monthOpen ? (
-              <div className="absolute right-0 top-12 z-30 w-48 overflow-hidden border border-[var(--border-bright)] bg-[var(--surface-2)] py-1 shadow-[var(--shadow-lg)]">
+              <div className="absolute right-0 top-12 z-30 max-h-80 w-48 overflow-y-auto rounded-3xl border border-[var(--border-bright)] bg-[var(--surface-2)] py-1 shadow-[var(--shadow-lg)]">
                 {monthOptions.map((option) => (
                   <button
                     key={option.label}
                     type="button"
-                    className="w-full px-4 py-2 text-left text-xs text-[var(--text-2)] transition hover:bg-[var(--surface-3)] hover:text-[var(--text-1)]"
+                    className="w-full px-4 py-2 text-left text-sm text-[var(--text-2)] transition hover:bg-[var(--surface-3)] hover:text-[var(--text-1)]"
                     onClick={() => { setSelectedMonth(option.value); setMonthOpen(false); }}
                   >
                     {option.label}
@@ -2296,7 +2232,7 @@ export function HomeScreen() {
       </div>
 
       {errorMsg ? (
-        <div className="rounded-xl border border-[var(--red-dim)] bg-[var(--red-dim)] px-4 py-3 text-xs text-[var(--red)]">
+        <div className="rounded-xl border border-[var(--red-dim)] bg-[var(--red-dim)] px-4 py-3 text-sm text-[var(--red)]">
           {errorMsg}
         </div>
       ) : null}
@@ -2307,7 +2243,7 @@ export function HomeScreen() {
           onClick={closeQuickAddModal}
         >
           <div
-            className="ui-card-2 ui-slide-up max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-t-2xl sm:rounded-2xl"
+            className="ui-card-2 ui-slide-up max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-t-3xl sm:rounded-3xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-[var(--border)] bg-[var(--surface-2)] px-5 py-4">
@@ -2315,7 +2251,7 @@ export function HomeScreen() {
                 <p className="text-sm font-semibold text-[var(--text-1)]">
                   {language === "pt" ? "Entrada rápida com voz" : "Voice quick add"}
                 </p>
-                <p className="mt-0.5 text-xs text-[var(--text-3)]">
+                <p className="mt-0.5 text-sm text-[var(--text-3)]">
                   {language === "pt" ? "Fale ou digite, revise e salve." : "Speak or type, review, and save."}
                 </p>
               </div>
@@ -2436,7 +2372,7 @@ export function HomeScreen() {
                       <div className="ui-card-inner p-3">
                         <p className="ui-eyebrow">{language === "pt" ? "Campos para revisar" : "Fields to review"}</p>
                         {quickAddResult.missingFields.length === 0 ? (
-                          <p className="mt-1.5 text-xs text-[var(--green)]">
+                          <p className="mt-1.5 text-sm text-[var(--green)]">
                             {language === "pt" ? "Tudo essencial foi entendido." : "Everything essential was understood."}
                           </p>
                         ) : (
@@ -2449,7 +2385,7 @@ export function HomeScreen() {
                       </div>
                     </div>
                   ) : (
-                    <div className="rounded-xl border border-dashed border-[var(--border-bright)] px-4 py-8 text-center text-xs text-[var(--text-3)]">
+                    <div className="rounded-xl border border-dashed border-[var(--border-bright)] px-4 py-8 text-center text-sm text-[var(--text-3)]">
                       {language === "pt" ? "Os campos aparecem aqui após interpretar o comando." : "Fields appear here after interpreting the command."}
                     </div>
                   )}
@@ -2473,7 +2409,9 @@ export function HomeScreen() {
         {/* Balance hero */}
         <div className="ui-card p-5 lg:col-span-4" data-tour="home-balance-card">
           <div className="flex items-center justify-between">
-            <p className="ui-eyebrow">{t("home.balanceLabel")}</p>
+            <p className="ui-eyebrow">{income > 0 || expenses > 0
+              ? language === "pt" ? "Resultado do mês" : "Monthly result"
+              : t("home.balanceLabel")}</p>
             <button
               type="button"
               onClick={() => setShowBalance((v) => !v)}
@@ -2485,8 +2423,8 @@ export function HomeScreen() {
           <p className="ui-balance mt-3">
             {loading ? "—" : showBalance ? formatCurrency(totalBalance, language, currency) : "••••••"}
           </p>
-          <p className="mt-1 text-xs text-[var(--text-3)]">
-            {t("home.total")} {loading ? "—" : formatCurrency(accountBalanceTotal, language, currency)}
+          <p className="mt-1 text-sm text-[var(--text-3)]">
+            {language === "pt" ? "Saldo nas contas:" : "Account balance:"} {loading ? "—" : formatCurrency(accountBalanceTotal, language, currency)}
           </p>
           <div className="mt-4 grid grid-cols-2 gap-2">
             <div className="ui-card-inner p-3">
@@ -2506,9 +2444,9 @@ export function HomeScreen() {
         <div className="ui-card p-5 lg:col-span-8" data-tour="home-income-expenses-card">
           <div className="mb-4 flex items-center justify-between">
             <p className="text-sm font-semibold text-[var(--text-1)]">{t("home.inflowVsOutflow")}</p>
-            <span className="text-xs text-[var(--text-3)]">{t("home.vsLastMonth")}</span>
+            <span className="text-sm text-[var(--text-3)]">{t("home.vsLastMonth")}</span>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             <div className="ui-card-inner p-3" data-tour="home-income-card">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
@@ -2516,7 +2454,7 @@ export function HomeScreen() {
                     <AppIcon name="plus" size={14} color="var(--green)" />
                   </div>
                   <div>
-                    <p className="text-xs text-[var(--text-3)]">{t("home.income")}</p>
+                    <p className="text-sm text-[var(--text-3)]">{t("home.income")}</p>
                     <p className="ui-amount text-base text-[var(--green)]">
                       {loading ? "—" : formatCurrency(income, language, currency)}
                     </p>
@@ -2543,12 +2481,12 @@ export function HomeScreen() {
             <div className="ui-card-inner p-3" data-tour="home-expenses-card">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--red-dim)]">
-                    <AppIcon name="arrow-down" size={14} color="var(--red)" />
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--surface-2)]">
+                    <AppIcon name="arrow-down" size={14} color="var(--text-2)" />
                   </div>
                   <div>
-                    <p className="text-xs text-[var(--text-3)]">{t("home.expenses")}</p>
-                    <p className="ui-amount text-base text-[var(--red)]">
+                    <p className="text-sm text-[var(--text-3)]">{t("home.expenses")}</p>
+                    <p className="ui-amount text-base text-[var(--text-2)]">
                       {loading ? "—" : formatCurrency(expenses, language, currency)}
                     </p>
                   </div>
@@ -2572,9 +2510,9 @@ export function HomeScreen() {
             </div>
           </div>
 
-          <p className="mt-3 text-xs text-[var(--text-3)]">
+          <p className="mt-3 text-sm text-[var(--text-3)]">
             {t("home.balanceAfterExpenses")}:{" "}
-            <span className={`font-semibold ${monthNet >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+            <span className={`font-semibold ${monthNet >= 0 ? "text-[var(--text-1)]" : "text-[var(--text-2)]"}`}>
               {loading ? "—" : formatCurrency(monthNet, language, currency)}
             </span>
           </p>
@@ -2582,7 +2520,7 @@ export function HomeScreen() {
           <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
             <div className="ui-card-inner p-2.5">
               <p className="ui-eyebrow">{language === "pt" ? "Resultado" : "Result"}</p>
-              <p className={`mt-1 text-sm font-semibold ${monthNet >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+              <p className={`mt-1 text-sm font-semibold ${monthNet >= 0 ? "text-[var(--text-1)]" : "text-[var(--text-2)]"}`}>
                 {loading ? "—" : formatSignedCurrency(monthNet, language, currency)}
               </p>
             </div>
@@ -2600,14 +2538,14 @@ export function HomeScreen() {
             </div>
             <div className="ui-card-inner p-2.5">
               <p className="ui-eyebrow">{language === "pt" ? "Projeção" : "Projection"}</p>
-              <p className={`mt-1 text-sm font-semibold ${(monthProjection?.net ?? 0) >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+              <p className={`mt-1 text-sm font-semibold ${(monthProjection?.net ?? 0) >= 0 ? "text-[var(--text-1)]" : "text-[var(--text-2)]"}`}>
                 {loading ? "—" : monthProjection ? formatSignedCurrency(monthProjection.net, language, currency) : "--"}
               </p>
             </div>
           </div>
 
           <div className="mt-3 ui-card-inner p-3">
-            <div className="flex items-center justify-between gap-3 text-xs text-[var(--text-3)]">
+            <div className="flex items-center justify-between gap-3 text-sm text-[var(--text-3)]">
               <span>{language === "pt" ? "Pressão de despesas" : "Expense pressure"}</span>
               <span className="font-semibold text-[var(--text-2)]">
                 {loading ? "—" : expensePressure == null ? "--" : formatPercent(expensePressure, language)}
@@ -2626,7 +2564,7 @@ export function HomeScreen() {
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-[var(--text-1)]">{t("tabs.budget")}</p>
-              <p className="mt-1 text-xs text-[var(--text-3)]">{t("budget.monthBudget")}</p>
+              <p className="mt-1 text-sm text-[var(--text-3)]">{t("budget.monthBudget")}</p>
             </div>
             <Link href="/budget" className="ui-btn ui-btn-secondary ui-btn-sm">
               {t("common.edit")}
@@ -2634,9 +2572,9 @@ export function HomeScreen() {
           </div>
 
           {budgetSchemaMissing ? (
-            <p className="text-xs text-[var(--text-3)]">{t("budget.schemaMissing")}</p>
+            <p className="text-sm text-[var(--text-3)]">{t("budget.schemaMissing")}</p>
           ) : budgetLoading ? (
-            <p className="text-xs text-[var(--text-3)]">{t("common.loading")}</p>
+            <p className="text-sm text-[var(--text-3)]">{t("common.loading")}</p>
           ) : budgetOverview.rows.length === 0 ? (
             <div className="rounded-xl border border-dashed border-[var(--border-bright)] px-4 py-6 text-sm text-[var(--text-3)]">
               {t("budget.empty")}
@@ -2652,13 +2590,13 @@ export function HomeScreen() {
                 </div>
                 <div className="ui-card-inner p-3">
                   <p className="ui-eyebrow">{t("budget.spent")}</p>
-                  <p className="mt-1 text-sm font-semibold text-[var(--red)]">
+                  <p className="mt-1 text-sm font-semibold text-[var(--text-2)]">
                     {formatCurrency(budgetOverview.spentTotal, language, currency)}
                   </p>
                 </div>
                 <div className="ui-card-inner p-3">
                   <p className="ui-eyebrow">{t("budget.remaining")}</p>
-                  <p className={`mt-1 text-sm font-semibold ${budgetOverview.remainingTotal >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                  <p className={`mt-1 text-sm font-semibold ${budgetOverview.remainingTotal >= 0 ? "text-[var(--text-1)]" : "text-[var(--text-2)]"}`}>
                     {formatCurrency(budgetOverview.remainingTotal, language, currency)}
                   </p>
                 </div>
@@ -2668,19 +2606,19 @@ export function HomeScreen() {
                 <div
                   className={`h-2 rounded-full ${
                     budgetOverview.progressTotal >= 100
-                      ? "bg-[var(--red)]"
+                      ? "bg-[var(--text-2)]"
                       : budgetOverview.progressTotal >= 80
-                        ? "bg-[#F59E0B]"
+                        ? "bg-[#737373]"
                         : "bg-[var(--accent)]"
                   }`}
                   style={{ width: `${budgetOverview.progressTotal}%` }}
                 />
               </div>
 
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm">
                 <span className="text-[var(--text-3)]">
                   {t("budget.incomeCoverage")}:{" "}
-                  <span className={`font-semibold ${budgetOverview.coverage >= 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                  <span className={`font-semibold ${budgetOverview.coverage >= 0 ? "text-[var(--text-1)]" : "text-[var(--text-2)]"}`}>
                     {formatCurrency(budgetOverview.coverage, language, currency)}
                   </span>
                 </span>
@@ -2697,20 +2635,20 @@ export function HomeScreen() {
           <div className="mb-3 flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-[var(--text-1)]">{t("home.categories")}</p>
-              <p className="mt-1 text-xs text-[var(--text-3)]">
+              <p className="mt-1 text-sm text-[var(--text-3)]">
                 {language === "pt" ? "Volume de gastos por categoria" : "Expense volume by category"}
               </p>
             </div>
             <span className="ui-badge ui-badge-neutral">{t("transactions.monthSummary")}</span>
           </div>
           {categoryChartData.length === 0 ? (
-            <p className="text-xs text-[var(--text-3)]">{t("transactions.empty")}</p>
+            <p className="text-sm text-[var(--text-3)]">{t("transactions.empty")}</p>
           ) : (
             <div className="ui-card-inner p-3">
-              <p className="text-xs font-semibold text-[var(--text-1)]">
+              <p className="text-sm font-semibold text-[var(--text-1)]">
                 {language === "pt" ? "Gastos por categoria" : "Spending by category"}
               </p>
-              <p className="mt-0.5 text-[11px] text-[var(--text-3)]">
+              <p className="mt-0.5 text-sm text-[var(--text-3)]">
                 {formatCurrency(totalCategoryAmount, language, currency)}
               </p>
               <div className="relative mt-4 grid gap-4 xl:grid-cols-[19rem_minmax(0,1fr)]">
@@ -2724,12 +2662,12 @@ export function HomeScreen() {
                       onMouseEnter={() => setActiveCategoryIndex(index)}
                       onMouseLeave={() => setActiveCategoryIndex(null)}
                     >
-                      <span className="text-xs font-black text-[var(--text-3)]">{String(index + 1).padStart(2, "0")}</span>
+                      <span className="text-sm font-semibold text-[var(--text-3)]">{String(index + 1).padStart(2, "0")}</span>
                       <div className="min-w-0">
-                        <p className="truncate text-xs font-semibold text-[var(--text-1)]">
+                        <p className="truncate text-sm font-semibold text-[var(--text-1)]">
                           {category.name}
                         </p>
-                        <div className="flex items-center gap-1.5 text-[10px] text-[var(--text-3)]">
+                        <div className="flex items-center gap-1.5 text-sm text-[var(--text-3)]">
                           <span>{formatPercent(category.percent, language)}</span>
                           <span>·</span>
                           <span>{formatCurrency(category.value, language, currency)}</span>
@@ -2745,12 +2683,12 @@ export function HomeScreen() {
                       layout="vertical"
                       margin={{ top: 6, right: 24, bottom: 4, left: 12 }}
                     >
-                      <CartesianGrid stroke="rgba(255,255,255,0.055)" strokeDasharray="4 6" horizontal={false} />
+                      <CartesianGrid stroke="#ffffff10" strokeDasharray="4 6" horizontal={false} />
                       <XAxis
                         type="number"
                         axisLine={false}
                         tickLine={false}
-                        tick={{ fill: "#4a6278", fontSize: 10 }}
+                        tick={{ fill: "#868f97", fontSize: 12 }}
                         tickFormatter={(value) => formatCurrency(Number(value), language, currency)}
                       />
                       <YAxis
@@ -2759,9 +2697,9 @@ export function HomeScreen() {
                         axisLine={false}
                         tickLine={false}
                         width={118}
-                        tick={{ fill: "#8ba3be", fontSize: 11 }}
+                        tick={{ fill: "#868f97", fontSize: 12 }}
                       />
-                      <Tooltip content={CategoryTooltip} cursor={{ fill: "rgba(255,255,255,0.025)" }} />
+                      <Tooltip content={CategoryTooltip} cursor={{ fill: "#ffffff06" }} />
                       <Bar
                         dataKey="value"
                         barSize={16}
@@ -2792,42 +2730,36 @@ export function HomeScreen() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-[var(--text-1)]">{t("home.monthlyFlow")}</p>
-              <p className="text-xs text-[var(--text-3)]">{t("home.inflowVsOutflow")}</p>
+              <p className="text-sm text-[var(--text-3)]">{t("home.inflowVsOutflow")}</p>
             </div>
             <span className="ui-badge ui-badge-neutral">{t("home.last30Days")}</span>
           </div>
           <div className="mt-5 h-64 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={180}>
               <ComposedChart data={flowSeries}>
-                <defs>
-                  <linearGradient id="homeNetFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#4f8eff" stopOpacity={0.2} />
-                    <stop offset="100%" stopColor="#4f8eff" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="rgba(255,255,255,0.055)" strokeDasharray="4 6" vertical={false} />
+                <CartesianGrid stroke="#ffffff10" strokeDasharray="4 6" vertical={false} />
                 <XAxis
                   dataKey="day"
-                  tick={{ fill: "#4a6278", fontSize: 10 }}
+                  tick={{ fill: "#868f97", fontSize: 12 }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fill: "#4a6278", fontSize: 10 }}
+                  tick={{ fill: "#868f97", fontSize: 12 }}
                   axisLine={false}
                   tickFormatter={(value) => formatCurrency(value, language, currency)}
                   tickLine={false}
                   width={80}
                 />
                 <Tooltip content={FlowTooltip} />
-                <Legend wrapperStyle={{ color: "#8ba3be", fontSize: 11 }} />
-                <ReferenceLine y={0} stroke="rgba(255,255,255,0.055)" strokeDasharray="4 6" />
-                <ReferenceLine y={flowMetrics.avgIncome} stroke="#34d399" strokeDasharray="4 6" strokeOpacity={0.35} />
-                <ReferenceLine y={flowMetrics.avgExpense} stroke="#f87171" strokeDasharray="4 6" strokeOpacity={0.35} />
-                <Bar dataKey="income" name={t("home.income")} fill="#34d399" radius={[4, 4, 0, 0]} maxBarSize={18} />
-                <Bar dataKey="expense" name={t("home.expenses")} fill="#f87171" radius={[4, 4, 0, 0]} maxBarSize={18} />
-                <Line type="monotone" dataKey="netDay" name="Saldo diário" stroke="#fbbf24" strokeDasharray="4 6" strokeWidth={2} dot={false} />
-                <Area type="monotone" dataKey="net" name="Saldo acumulado" stroke="#4f8eff" fill="url(#homeNetFill)" strokeWidth={2} dot={false} />
+                <Legend wrapperStyle={{ color: "#868f97", fontSize: 12 }} />
+                <ReferenceLine y={0} stroke="#ffffff10" strokeDasharray="4 6" />
+                <ReferenceLine y={flowMetrics.avgIncome} stroke="#4ebe96" strokeDasharray="4 6" strokeOpacity={0.35} />
+                <ReferenceLine y={flowMetrics.avgExpense} stroke="#a3a3a3" strokeDasharray="4 6" strokeOpacity={0.35} />
+                <Bar dataKey="income" name={t("home.income")} fill="#4ebe96" radius={[4, 4, 0, 0]} maxBarSize={18} />
+                <Bar dataKey="expense" name={t("home.expenses")} fill="#868f97" radius={[4, 4, 0, 0]} maxBarSize={18} />
+                <Line type="monotone" dataKey="netDay" name="Saldo diário" stroke="#737373" strokeDasharray="4 6" strokeWidth={2} dot={false} />
+                <Area type="monotone" dataKey="net" name="Saldo acumulado" stroke="#cccccc" fill="#ffffff10" fillOpacity={0.3} strokeWidth={2} dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -2837,12 +2769,12 @@ export function HomeScreen() {
         <div className="ui-card p-5 sm:col-span-2 lg:col-span-3" data-tour="home-accounts-card">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-sm font-semibold text-[var(--text-1)]">{t("home.accounts")}</p>
-            <span className="text-xs text-[var(--text-3)]">
+            <span className="text-sm text-[var(--text-3)]">
               {positiveAccountsCount}/{accounts.length} {language === "pt" ? "positivas" : "positive"}
             </span>
           </div>
           {accounts.length === 0 ? (
-            <p className="text-xs text-[var(--text-3)]">{t("home.noAccounts")}</p>
+            <p className="text-sm text-[var(--text-3)]">{t("home.noAccounts")}</p>
           ) : (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-2">
@@ -2927,9 +2859,9 @@ export function HomeScreen() {
             <span className="ui-badge ui-badge-neutral">{t("home.closedStatements")} {closedStatementsCount}</span>
           </div>
           {cards.length === 0 ? (
-            <p className="text-xs text-[var(--text-3)]">{t("home.noCards")}</p>
+            <p className="text-sm text-[var(--text-3)]">{t("home.noCards")}</p>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="home-card-grid grid gap-4">
               {[...selfCards, ...friendCards].map((card) => {
                 const isFriendCard = (card.owner_type ?? "self") === "friend";
                 const insight = cardInsightsById[card.id];
@@ -2950,11 +2882,11 @@ export function HomeScreen() {
                       </span>
                     </div>
                     {isFriendCard && card.friend_name ? (
-                      <p className="mt-1.5 text-xs text-[var(--text-3)]">
+                      <p className="mt-1.5 text-sm text-[var(--text-3)]">
                         {t("home.friendCardOwner")}: {card.friend_name}
                       </p>
                     ) : null}
-                    <p className="mt-0.5 text-xs text-[var(--text-3)]">
+                    <p className="mt-0.5 text-sm text-[var(--text-3)]">
                       {t("cards.closes")} {card.closing_day} · {t("cards.due")} {card.due_day}
                     </p>
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -2963,7 +2895,7 @@ export function HomeScreen() {
                         <p className="mt-1 ui-amount text-sm text-[var(--text-1)]">
                           {formatCurrency((insight?.currentStatement ?? 0) + (insight?.overdueAmount ?? 0), language, currency)}
                         </p>
-                        <p className="mt-0.5 text-[10px] text-[var(--text-3)]">
+                        <p className="mt-0.5 text-sm text-[var(--text-3)]">
                           {insight && insight.currentStatement + insight.overdueAmount > 0
                             ? language === "pt"
                               ? `Vence em ${insight.daysUntilDue} ${getDayWord(insight.daysUntilDue, language)}`
@@ -2976,7 +2908,7 @@ export function HomeScreen() {
                         <p className="mt-1 ui-amount text-sm text-[var(--text-1)]">
                           {formatCurrency(insight?.nextStatement ?? 0, language, currency)}
                         </p>
-                        <p className="mt-0.5 text-[10px] text-[var(--text-3)]">
+                        <p className="mt-0.5 text-sm text-[var(--text-3)]">
                           {language === "pt"
                             ? `Fecha em ${insight?.daysUntilClosing ?? 0} ${getDayWord(insight?.daysUntilClosing ?? 0, language)}`
                             : `Closes in ${insight?.daysUntilClosing ?? 0} ${getDayWord(insight?.daysUntilClosing ?? 0, language)}`}
@@ -2990,7 +2922,7 @@ export function HomeScreen() {
                       />
                     </div>
                     <div className="mt-3 flex items-end justify-between gap-3">
-                      <div className="grid flex-1 grid-cols-3 gap-2 text-[10px]">
+                      <div className="home-card-limits grid min-w-0 flex-1 gap-2 text-sm">
                         <div>
                           <p className="text-[var(--text-3)]">{t("home.cardLimitAvailable")}</p>
                           <p className="font-semibold text-[var(--green)]">
@@ -3032,36 +2964,35 @@ export function HomeScreen() {
             <p className="text-sm font-semibold text-[var(--text-1)]">{t("transactions.title")}</p>
             <span className="ui-badge ui-badge-neutral">{t("transactions.monthSummary")}</span>
           </div>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-3)]">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm text-[var(--text-3)]">
             <span>{language === "pt" ? "Transações do mês" : "Month transactions"}</span>
             <span className="font-semibold text-[var(--text-2)]">{monthTransactions.length}</span>
           </div>
           {monthTransactions.length === 0 ? (
             <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-[var(--border-bright)] px-4 py-8">
-              <p className="text-xs text-[var(--text-3)]">{t("transactions.empty")}</p>
+              <p className="text-sm text-[var(--text-3)]">{t("transactions.empty")}</p>
             </div>
           ) : (
             <div className="min-h-0 flex-1 overflow-y-auto">
-              <div className="grid gap-1 lg:grid-cols-2 xl:grid-cols-3">
+              <div className="grid min-w-0 grid-cols-1 gap-1 lg:grid-cols-2 xl:grid-cols-3">
                 {monthTransactions.map((tx) => {
                   const isIncome = tx.type === "income";
                   const totalInstallments = Math.max(0, Number(tx.installment_total) || 0);
                   const isInstallment = totalInstallments > 0;
-                  const paidInstallments = getPaidResponsibleInstallmentCount(tx);
-                  const responsibleInstallments = getResponsibleInstallmentCount(tx);
+                  const viewedInstallment = isInstallment ? getMonthInstallment(tx, selectedMonth) : null;
                   return (
                     <div
                       key={tx.displayId}
-                      className="flex items-center justify-between gap-3 rounded-xl px-3 py-2 hover:bg-[var(--surface-3)] transition-colors"
+                      className="flex min-w-0 items-center justify-between gap-3 rounded-xl px-3 py-2 hover:bg-[var(--surface-3)] transition-colors"
                     >
                       <div className="flex min-w-0 flex-1 items-center gap-3">
-                        <div className={`h-2 w-2 shrink-0 rounded-full ${isIncome ? "bg-[var(--green)]" : "bg-[var(--red)]"}`} />
+                        <div className={`h-2 w-2 shrink-0 rounded-full ${isIncome ? "bg-[var(--text-1)]" : "bg-[var(--text-3)]"}`} />
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium text-[var(--text-1)]">
                             {tx.description || tx.category || "--"}
                           </p>
                           <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                            <span className="text-[10px] text-[var(--text-3)]">
+                            <span className="text-sm text-[var(--text-3)]">
                               {(() => {
                                 if (/^\d{4}-\d{2}-\d{2}$/.test(tx.displayDate)) {
                                   const [y, m, d] = tx.displayDate.split("-").map(Number);
@@ -3071,8 +3002,9 @@ export function HomeScreen() {
                               })()}
                             </span>
                             {isInstallment ? (
-                              <span className={`ui-badge ${paidInstallments >= responsibleInstallments ? "ui-badge-income" : "ui-badge-warning"}`}>
-                                {paidInstallments >= responsibleInstallments ? "Pago" : "Em aberto"}
+                              <span className="ui-badge ui-badge-neutral">
+                                {language === "pt" ? "Parcela" : "Installment"} {tx.installmentIndex}/{totalInstallments}
+                                {" · "}{viewedInstallment?.isPaid ? (language === "pt" ? "Paga" : "Paid") : (language === "pt" ? "Em aberto" : "Unpaid")}
                               </span>
                             ) : null}
                             {tx.isBudgetCarryover ? (
@@ -3081,7 +3013,7 @@ export function HomeScreen() {
                           </div>
                         </div>
                       </div>
-                      <span className={`ui-amount shrink-0 text-sm ${isIncome ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                      <span className={`ui-amount shrink-0 text-sm ${isIncome ? "text-[var(--text-1)]" : "text-[var(--text-2)]"}`}>
                         {isIncome ? "+" : "-"}{formatCurrency(tx.displayAmount, language, currency)}
                       </span>
                     </div>
@@ -3097,14 +3029,14 @@ export function HomeScreen() {
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-[var(--text-1)]">{t("home.cardReminderTitle")}</p>
-              <p className="text-xs text-[var(--text-3)]">{t("home.cardReminderSubtitle")}</p>
+              <p className="text-sm text-[var(--text-3)]">{t("home.cardReminderSubtitle")}</p>
             </div>
             <span className="ui-badge ui-badge-neutral">{cardReminders.length}</span>
           </div>
           {cards.length === 0 ? (
-            <p className="text-xs text-[var(--text-3)]">{t("home.noCards")}</p>
+            <p className="text-sm text-[var(--text-3)]">{t("home.noCards")}</p>
           ) : cardReminders.length === 0 ? (
-            <p className="text-xs text-[var(--text-3)]">{t("home.cardReminderEmpty")}</p>
+            <p className="text-sm text-[var(--text-3)]">{t("home.cardReminderEmpty")}</p>
           ) : (
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
               {cardReminders.map((card) => {
@@ -3114,7 +3046,7 @@ export function HomeScreen() {
                     key={card.id}
                     className={`rounded-xl border px-4 py-3 ${
                       isExpired
-                        ? "border-[var(--red)] border-opacity-30 bg-[var(--red-dim)]"
+                        ? "border-[var(--border-bright)] bg-[var(--surface-2)]"
                         : "border-[var(--amber)] border-opacity-30 bg-[var(--amber-dim)]"
                     }`}
                   >
@@ -3122,11 +3054,11 @@ export function HomeScreen() {
                       <div>
                         <p className="text-sm font-semibold text-[var(--text-1)]">{card.name}</p>
                         {card.owner_type === "friend" && card.friend_name ? (
-                          <p className="mt-0.5 text-[11px] text-[var(--text-3)]">
+                          <p className="mt-0.5 text-sm text-[var(--text-3)]">
                             {t("home.friendCardOwner")}: {card.friend_name}
                           </p>
                         ) : null}
-                        <p className="mt-0.5 text-[11px] text-[var(--text-3)]">
+                        <p className="mt-0.5 text-sm text-[var(--text-3)]">
                           {t("cards.closes")} {card.closingDay} · {t("cards.due")} {card.dueDay}
                         </p>
                       </div>
@@ -3135,7 +3067,7 @@ export function HomeScreen() {
                       </span>
                     </div>
                     <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
-                      <p className={`text-xs ${isExpired ? "text-[var(--red)]" : "text-[var(--amber)]"}`}>
+                      <p className={`text-sm ${isExpired ? "text-[var(--text-1)]" : "text-[var(--amber)]"}`}>
                         {isExpired ? t("home.cardReminderExpiredSince") : t("home.cardReminderClosedSince")}{" "}
                         {card.days} {getDayWord(card.days, language)}
                       </p>
@@ -3160,5 +3092,4 @@ export function HomeScreen() {
     </div>
   );
 }
-
 

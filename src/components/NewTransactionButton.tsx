@@ -193,39 +193,39 @@ export function NewTransactionButton({ accounts }: Props) {
     <>
       <button
         onClick={openModal}
-        className="rounded-full bg-zinc-100 px-3 py-1.5 text-[11px] font-medium text-black hover:bg-zinc-200"
+        className="ui-btn ui-btn-primary px-4 py-2 text-sm font-medium"
       >
         Nova transação
       </button>
 
       {open && (
         <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4"
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/25 px-4"
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 p-5 shadow-xl"
+            className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-medium text-zinc-100">Nova transação</h2>
+              <h2 className="text-sm font-medium text-[var(--text-1)]">Nova transação</h2>
               <button
                 type="button"
                 onClick={closeModal}
-                className="text-xs text-zinc-500 hover:text-zinc-300"
+                className="text-sm text-[var(--text-3)] hover:text-[var(--text-2)]"
               >
                 Fechar
               </button>
             </div>
 
             <form className="space-y-4" onSubmit={handleSubmit}>
-              <div className="flex gap-2 text-[11px]">
+              <div className="flex gap-2 text-sm">
                 <button
                   type="button"
                   onClick={() => setType("expense")}
                   className={`flex-1 rounded-full border px-3 py-1.5 ${
                     type === "expense"
-                      ? "border-red-500/60 bg-red-500/10 text-red-300"
-                      : "border-zinc-700 bg-zinc-950 text-zinc-300"
+                      ? "border-[var(--text-1)] bg-[var(--accent)] text-white"
+                      : "border-[var(--border)] bg-[var(--surface-3)] text-[var(--text-2)]"
                   }`}
                 >
                   Despesa
@@ -236,8 +236,8 @@ export function NewTransactionButton({ accounts }: Props) {
                   onClick={() => setType("income")}
                   className={`flex-1 rounded-full border px-3 py-1.5 ${
                     type === "income"
-                      ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-200"
-                      : "border-zinc-700 bg-zinc-950 text-zinc-300"
+                      ? "border-[var(--text-1)] bg-[var(--accent)] text-white"
+                      : "border-[var(--border)] bg-[var(--surface-3)] text-[var(--text-2)]"
                   }`}
                 >
                   Receita
@@ -245,48 +245,48 @@ export function NewTransactionButton({ accounts }: Props) {
               </div>
 
               <div className="space-y-1 text-sm">
-                <label className="text-xs text-zinc-400">Descricao</label>
+                <label className="text-sm text-[var(--text-3)]">Descricao</label>
                 <input
                   type="text"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                  className="ui-input w-full px-3 py-2 text-sm"
                   placeholder="Ex.: Mercado, salário, Netflix..."
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="space-y-1">
-                  <label className="text-xs text-zinc-400">Valor ({currency})</label>
+                  <label className="text-sm text-[var(--text-3)]">Valor ({currency})</label>
                   <input
                     type="text"
                     inputMode="numeric"
                     value={value}
                     onChange={(e) => setValue(formatCentsInput(e.target.value, currency))}
-                    className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                    className="ui-input w-full px-3 py-2 text-sm"
                     pattern="[0-9]*"
                     placeholder={emptyMoneyValue}
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs text-zinc-400">Data</label>
+                  <label className="text-sm text-[var(--text-3)]">Data</label>
                   <input
                     type="date"
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                    className="ui-input w-full px-3 py-2 text-sm"
                   />
                 </div>
               </div>
 
               {type === "income" ? (
                 <div className="space-y-1 text-sm">
-                  <label className="text-xs text-zinc-400">Conta bancária (onde vai cair)</label>
+                  <label className="text-sm text-[var(--text-3)]">Conta bancária (onde vai cair)</label>
                   <select
                     value={bankAccountId}
                     onChange={(e) => setBankAccountId(e.target.value)}
-                    className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                    className="ui-input w-full px-3 py-2 text-sm"
                   >
                     <option value="">
                       {loadingAccounts ? "Carregando contas..." : "Selecione uma conta"}
@@ -304,11 +304,11 @@ export function NewTransactionButton({ accounts }: Props) {
               ) : (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-1 text-sm">
-                    <label className="text-xs text-zinc-400">Conta bancária (opcional)</label>
+                    <label className="text-sm text-[var(--text-3)]">Conta bancária (opcional)</label>
                     <select
                       value={bankAccountId}
                       onChange={(e) => setBankAccountId(e.target.value)}
-                      className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                      className="ui-input w-full px-3 py-2 text-sm"
                     >
                       <option value="">
                         {loadingAccounts ? "Carregando contas..." : "Selecione uma conta"}
@@ -325,11 +325,11 @@ export function NewTransactionButton({ accounts }: Props) {
                   </div>
 
                   <div className="space-y-1 text-sm">
-                    <label className="text-xs text-zinc-400">Cartao de credito (opcional)</label>
+                    <label className="text-sm text-[var(--text-3)]">Cartao de credito (opcional)</label>
                     <select
                       value={creditCardId}
                       onChange={(e) => setCreditCardId(e.target.value)}
-                      className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                      className="ui-input w-full px-3 py-2 text-sm"
                     >
                       <option value="">
                         {loadingAccounts ? "Carregando cartões..." : "Selecione um cartão"}
@@ -348,11 +348,11 @@ export function NewTransactionButton({ accounts }: Props) {
               )}
 
               <div className="space-y-1 text-sm">
-                <label className="text-xs text-zinc-400">Categoria (opcional)</label>
+                <label className="text-sm text-[var(--text-3)]">Categoria (opcional)</label>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                  className="ui-input w-full px-3 py-2 text-sm"
                 >
                   <option value="">Sem categoria</option>
                   {CATEGORIES.map((c) => (
@@ -365,12 +365,12 @@ export function NewTransactionButton({ accounts }: Props) {
 
               {type === "expense" && (
                 <div className="space-y-2 text-sm">
-                  <label className="flex items-center gap-2 text-xs text-zinc-400">
+                  <label className="flex items-center gap-2 text-sm text-[var(--text-3)]">
                     <input
                       type="checkbox"
                       checked={isInstallment}
                       onChange={(e) => setIsInstallment(e.target.checked)}
-                      className="h-3 w-3 rounded border-zinc-600 bg-zinc-950 text-zinc-100"
+                      className="h-4 w-4 rounded border-[var(--border)] bg-[var(--surface-3)] accent-[var(--text-1)]"
                     />
                     <span>Compra parcelada no cartão</span>
                   </label>
@@ -378,14 +378,14 @@ export function NewTransactionButton({ accounts }: Props) {
                   {isInstallment && (
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
-                        <label className="text-xs text-zinc-400">Num de parcelas</label>
+                        <label className="text-sm text-[var(--text-3)]">Num de parcelas</label>
                         <input
                           type="number"
                           min={1}
                           max={120}
                           value={installmentTotal}
                           onChange={(e) => setInstallmentTotal(e.target.value)}
-                          className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                          className="ui-input w-full px-3 py-2 text-sm"
                           placeholder="Ex: 6"
                         />
                       </div>
@@ -396,19 +396,19 @@ export function NewTransactionButton({ accounts }: Props) {
 
               {(!isInstallment || type === "income") && (
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-zinc-400">
+                  <span className="text-[var(--text-3)]">
                     {type === "income" ? "Ja esta recebido?" : "Ja esta pago?"}
                   </span>
                   <button
                     type="button"
                     onClick={() => setIsPaid((v) => !v)}
                     className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                      isPaid ? "bg-emerald-500" : "bg-zinc-700"
+                      isPaid ? "bg-[var(--accent)]" : "bg-[var(--border)]"
                     }`}
                   >
                     <span
-                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-                        isPaid ? "translate-x-4" : "translate-x-1"
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full transition-transform ${
+                        isPaid ? "translate-x-4 bg-white" : "translate-x-1 bg-[var(--text-3)]"
                       }`}
                     />
                   </button>
@@ -416,30 +416,30 @@ export function NewTransactionButton({ accounts }: Props) {
               )}
 
               {type === "income" && (
-                <div className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 text-sm">
-                  <label className="flex items-center gap-2 text-xs text-zinc-300">
+                <div className="space-y-2 rounded-full border border-[var(--border)] bg-[var(--surface-2)] p-3 text-sm">
+                  <label className="flex items-center gap-2 text-xs text-[var(--text-2)]">
                     <input
                       type="checkbox"
                       checked={isFixedIncome}
                       onChange={(e) => setIsFixedIncome(e.target.checked)}
-                      className="h-3 w-3 rounded border-zinc-600 bg-zinc-950 text-zinc-100"
+                      className="h-4 w-4 rounded border-[var(--border)] bg-[var(--surface-3)] accent-[var(--text-1)]"
                     />
                     <span>Receita fixa todo mês (ex.: salário)</span>
                   </label>
                   {isFixedIncome && (
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
-                        <label className="text-xs text-zinc-400">Por quantos meses?</label>
+                        <label className="text-sm text-[var(--text-3)]">Por quantos meses?</label>
                         <input
                           type="number"
                           min={1}
                           max={60}
                           value={fixedMonths}
                           onChange={(e) => setFixedMonths(e.target.value)}
-                          className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-400"
+                          className="ui-input w-full px-3 py-2 text-sm"
                           placeholder="Ex: 12"
                         />
-                        <p className="text-[10px] text-zinc-500">
+                        <p className="text-sm text-[var(--text-3)]">
                           Cria a mesma receita neste dia pelos próximos meses.
                         </p>
                       </div>
@@ -448,12 +448,12 @@ export function NewTransactionButton({ accounts }: Props) {
                 </div>
               )}
 
-              {errorMsg && <p className="text-xs text-red-400">{errorMsg}</p>}
+              {errorMsg && <p className="text-xs text-[var(--red)]">{errorMsg}</p>}
 
               <button
                 type="submit"
                 disabled={saving}
-                className="mt-2 w-full rounded-full bg-zinc-100 px-3 py-1.5 text-[11px] font-medium text-black hover:bg-zinc-200 disabled:opacity-60"
+                className="mt-2 w-full ui-btn ui-btn-primary px-4 py-2 text-sm font-medium disabled:opacity-60"
               >
                 {saving ? "Salvando..." : "Salvar transação"}
               </button>

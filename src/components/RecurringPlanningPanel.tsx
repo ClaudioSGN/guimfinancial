@@ -368,13 +368,13 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
 
   return (
     <section className="mt-6 space-y-5">
-      <div className="rounded-2xl border border-[#1E232E] bg-[#121621] p-5">
+      <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm font-semibold text-[#E4E7EC]">
+            <p className="text-sm font-semibold text-[var(--text-1)]">
               {language === "pt" ? "Planejamento recorrente" : "Recurring planning"}
             </p>
-            <p className="mt-1 text-xs text-[#8A93A3]">
+            <p className="mt-1 text-sm text-[var(--text-3)]">
               {language === "pt"
                 ? "Orçamentos por categoria, contas fixas do mês e vencimentos."
                 : "Category budgets, monthly fixed bills, and due dates."}
@@ -388,11 +388,11 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
                   (current) => new Date(current.getFullYear(), current.getMonth() - 1, 1),
                 )
               }
-              className="rounded-full border border-[#2A3140] bg-[#151A27] px-3 py-1 text-xs text-[#C7CEDA]"
+              className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1 text-sm text-[var(--text-2)]"
             >
               {"<"}
             </button>
-            <div className="min-w-0 flex-1 rounded-full border border-[#2A3140] bg-[#151A27] px-4 py-1.5 text-center text-xs text-[#C7CEDA] md:flex-none">
+            <div className="min-w-0 flex-1 rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-4 py-1.5 text-center text-sm text-[var(--text-2)] md:flex-none">
               {formatMonthLabel(selectedMonth, language)}
             </div>
             <button
@@ -402,7 +402,7 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
                   (current) => new Date(current.getFullYear(), current.getMonth() + 1, 1),
                 )
               }
-              className="rounded-full border border-[#2A3140] bg-[#151A27] px-3 py-1 text-xs text-[#C7CEDA]"
+              className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1 text-sm text-[var(--text-2)]"
             >
               {">"}
             </button>
@@ -410,24 +410,24 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
         </div>
 
         {schemaMissing ? (
-          <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3 text-sm text-[var(--text-2)]">
             {language === "pt"
               ? "Atualize o banco com supabase/schema.sql para usar orçamentos por categoria."
               : "Update your database with supabase/schema.sql to use category budgets."}
           </div>
         ) : null}
-        {errorMsg ? <p className="mt-4 text-xs text-red-400">{errorMsg}</p> : null}
+        {errorMsg ? <p className="mt-4 text-sm text-[var(--red)]">{errorMsg}</p> : null}
 
         <div className="mt-5 grid gap-5 xl:grid-cols-2">
-          <div className="rounded-2xl border border-[#1E232E] bg-[#101620] p-4">
+          <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm font-semibold text-[#E4E7EC]">
+              <p className="text-sm font-semibold text-[var(--text-1)]">
                 {language === "pt" ? "Orçamentos do mês" : "Monthly budgets"}
               </p>
               <button
                 type="button"
                 onClick={resetBudgetForm}
-                className="rounded-full border border-[#2A3140] bg-[#151A27] px-3 py-1 text-xs text-[#C7CEDA]"
+                className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1 text-sm text-[var(--text-2)]"
               >
                 {language === "pt" ? "Novo" : "New"}
               </button>
@@ -439,7 +439,7 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
                 value={formCategory}
                 onChange={(event) => setFormCategory(event.target.value)}
                 placeholder={language === "pt" ? "Categoria" : "Category"}
-                className="min-w-0 rounded-xl border border-[#1C2332] bg-[#0F141E] px-3 py-2 text-sm text-[#E4E7EC] outline-none"
+                className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface-3)] px-3 py-2 text-sm text-[var(--text-1)] outline-none"
               />
               <input
                 type="text"
@@ -447,13 +447,13 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
                 value={formAmount}
                 onChange={(event) => setFormAmount(formatCentsInput(event.target.value, currency))}
                 placeholder={emptyMoneyValue}
-                className="min-w-0 rounded-xl border border-[#1C2332] bg-[#0F141E] px-3 py-2 text-sm text-[#E4E7EC] outline-none"
+                className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface-3)] px-3 py-2 text-sm text-[var(--text-1)] outline-none"
               />
               <button
                 type="button"
                 onClick={handleSaveBudget}
                 disabled={saving || schemaMissing}
-                className="rounded-xl bg-[#E4E7EC] px-4 py-2 text-sm font-semibold text-[#0B0E13] disabled:opacity-60"
+                className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
               >
                 {saving
                   ? language === "pt"
@@ -471,22 +471,22 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
 
             <div className="mt-4 space-y-3">
               {loading ? (
-                <p className="text-xs text-[#8A93A3]">
+                <p className="text-sm text-[var(--text-3)]">
                   {language === "pt" ? "Carregando..." : "Loading..."}
                 </p>
               ) : budgetSummary.length === 0 ? (
-                <p className="text-xs text-[#8A93A3]">
+                <p className="text-sm text-[var(--text-3)]">
                   {language === "pt"
                     ? "Ainda não há orçamentos definidos para este mês."
                     : "No budgets defined for this month yet."}
                 </p>
               ) : (
                 budgetSummary.map((budget) => (
-                  <div key={budget.id} className="rounded-xl border border-[#1C2332] bg-[#0F141E] p-3">
+                  <div key={budget.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface-3)] p-3">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-[#E4E7EC]">{budget.category}</p>
-                        <p className="mt-1 text-xs text-[#8A93A3]">
+                        <p className="text-sm font-semibold text-[var(--text-1)]">{budget.category}</p>
+                        <p className="mt-1 text-sm text-[var(--text-3)]">
                           {language === "pt" ? "Planejado" : "Planned"}: {formatCurrency(budget.planned)} ·{" "}
                           {language === "pt" ? "Gasto" : "Spent"}: {formatCurrency(budget.spent)}
                         </p>
@@ -501,34 +501,34 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
                               formatCentsFromNumber(Number(budget.amount) || 0, currency),
                             );
                           }}
-                          className="rounded-full border border-[#2A3140] bg-[#151A27] px-3 py-1 text-[11px] text-[#C7CEDA]"
+                          className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1 text-sm text-[var(--text-2)]"
                         >
                           {language === "pt" ? "Editar" : "Edit"}
                         </button>
                         <button
                           type="button"
                           onClick={() => void handleDeleteBudget(budget)}
-                          className="rounded-full border border-[#2A3140] bg-[#151A27] px-3 py-1 text-[11px] text-[#C7CEDA]"
+                          className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1 text-sm text-[var(--red)]"
                         >
                           {language === "pt" ? "Apagar" : "Delete"}
                         </button>
                       </div>
                     </div>
-                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#1A2230]">
+                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--border)]">
                       <div
                         className={`h-2 rounded-full ${
                           budget.progress >= 100
-                            ? "bg-rose-400"
+                            ? "bg-[var(--text-1)]"
                             : budget.progress >= 80
-                              ? "bg-amber-400"
-                              : "bg-[#5DD6C7]"
+                              ? "bg-[var(--text-2)]"
+                              : "bg-[#171717]"
                         }`}
                         style={{ width: `${budget.progress}%` }}
                       />
                     </div>
                     <p
-                      className={`mt-2 text-xs ${
-                        budget.remaining >= 0 ? "text-[#8A93A3]" : "text-rose-300"
+                      className={`mt-2 text-sm ${
+                        budget.remaining >= 0 ? "text-[var(--text-3)]" : "text-[var(--text-1)]"
                       }`}
                     >
                       {language === "pt" ? "Saldo do orçamento" : "Budget remaining"}:{" "}
@@ -540,52 +540,52 @@ export function RecurringPlanningPanel({ language }: { language: "pt" | "en" }) 
             </div>
           </div>
 
-          <div className="rounded-2xl border border-[#1E232E] bg-[#101620] p-4">
+          <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm font-semibold text-[#E4E7EC]">
+              <p className="text-sm font-semibold text-[var(--text-1)]">
                 {language === "pt" ? "Calendario de contas fixas" : "Fixed bills calendar"}
               </p>
-              <span className="rounded-full border border-[#2A3140] bg-[#151A27] px-3 py-1 text-[11px] text-[#C7CEDA]">
+              <span className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1 text-sm text-[var(--text-2)]">
                 {fixedBills.length}
               </span>
             </div>
             <div className="space-y-3">
               {loading ? (
-                <p className="text-xs text-[#8A93A3]">
+                <p className="text-sm text-[var(--text-3)]">
                   {language === "pt" ? "Carregando..." : "Loading..."}
                 </p>
               ) : fixedBills.length === 0 ? (
-                <p className="text-xs text-[#8A93A3]">
+                <p className="text-sm text-[var(--text-3)]">
                   {language === "pt"
                     ? "Nenhuma conta fixa registrada para este mês."
                     : "No fixed bills registered for this month."}
                 </p>
               ) : (
                 fixedBills.map((bill) => (
-                  <div key={bill.id} className="rounded-xl border border-[#1C2332] bg-[#0F141E] p-3">
+                  <div key={bill.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface-3)] p-3">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-[#E4E7EC]">{bill.title}</p>
-                        <p className="mt-1 text-xs text-[#8A93A3]">
+                        <p className="text-sm font-semibold text-[var(--text-1)]">{bill.title}</p>
+                        <p className="mt-1 text-sm text-[var(--text-3)]">
                           {bill.category} ·{" "}
                           {new Date(bill.dueDate).toLocaleDateString(
                             language === "pt" ? "pt-BR" : "en-US",
                           )}
                         </p>
                       </div>
-                      <span className="text-sm font-semibold text-[#E4E7EC] sm:text-right">
+                      <span className="text-sm font-semibold text-[var(--text-1)] sm:text-right">
                         {formatCurrency(bill.amount)}
                       </span>
                     </div>
                     <p
-                      className={`mt-2 text-xs ${
+                      className={`mt-2 text-sm ${
                         bill.status === "overdue"
-                          ? "text-rose-300"
+                          ? "text-[var(--text-1)]"
                           : bill.status === "today"
-                            ? "text-amber-300"
+                            ? "text-[var(--text-2)]"
                             : bill.status === "upcoming"
-                              ? "text-[#8A93A3]"
-                              : "text-[#6E7788]"
+                              ? "text-[var(--text-3)]"
+                              : "text-[var(--text-3)]"
                       }`}
                     >
                       {bill.status === "overdue"
