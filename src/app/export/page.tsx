@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { useLanguage } from "@/lib/language";
 import { AppIcon } from "@/components/AppIcon";
 import { getMonthShortName } from "../../../shared/i18n";
+import { getPlanningMonths, shiftCalendarMonth } from "@/lib/installmentSchedule";
 
 type RawTransaction = {
   id: string;
@@ -88,13 +89,6 @@ function parseLocalDate(value: string) {
 
 function getMonthLabel(date: Date, language: "pt" | "en") {
   return `${getMonthShortName(language, date.getMonth())} ${date.getFullYear()}`;
-}
-
-function getMonthOptions(language: "pt" | "en", total = 12) {
-  return Array.from({ length: total }, (_, index) => {
-    const value = new Date(new Date().getFullYear(), new Date().getMonth() - index, 1);
-    return { value, label: getMonthLabel(value, language) };
-  });
 }
 
 function normalizeSearchText(value: string | null | undefined) {
@@ -265,8 +259,18 @@ export default function ExportPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const monthOptions = useMemo(() => getMonthOptions(language), [language]);
+  const monthOptions = useMemo(
+    () => getPlanningMonths(selectedMonth).map((value) => ({ value, label: getMonthLabel(value, language) })),
+    [language, selectedMonth],
+  );
   const monthLabel = useMemo(() => getMonthLabel(selectedMonth, language), [language, selectedMonth]);
+
+  function selectMonth(month: Date) {
+    setSelectedMonth(month);
+    setMonthOpen(false);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+  }
 
   const copy = language === "pt"
     ? {
@@ -400,24 +404,45 @@ export default function ExportPage() {
           <div className="flex flex-col gap-4">
             <div className="space-y-2">
               <p className="text-xs uppercase tracking-[0.05em] text-[var(--text-3)]">{copy.month}</p>
-              <button
-                type="button"
-                onClick={() => setMonthOpen((value) => !value)}
-                className="ui-input flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium"
-              >
-                <span>{monthLabel}</span>
-                <AppIcon name="chevron-down" size={16} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  aria-label={language === "pt" ? "Mês anterior" : "Previous month"}
+                  disabled={loading}
+                  onClick={() => selectMonth(shiftCalendarMonth(selectedMonth, -1))}
+                  className="ui-btn ui-btn-secondary ui-btn-icon h-10 w-10 shrink-0"
+                >
+                  <AppIcon name="arrow-left" size={16} />
+                </button>
+                <button
+                  type="button"
+                  aria-expanded={monthOpen}
+                  aria-controls="export-month-options"
+                  disabled={loading}
+                  onClick={() => setMonthOpen((value) => !value)}
+                  className="ui-input flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium"
+                >
+                  <span>{monthLabel}</span>
+                  <AppIcon name="chevron-down" size={16} />
+                </button>
+                <button
+                  type="button"
+                  aria-label={language === "pt" ? "Próximo mês" : "Next month"}
+                  disabled={loading}
+                  onClick={() => selectMonth(shiftCalendarMonth(selectedMonth, 1))}
+                  className="ui-btn ui-btn-secondary ui-btn-icon h-10 w-10 shrink-0"
+                >
+                  <AppIcon name="arrow-right" size={16} />
+                </button>
+              </div>
               {monthOpen ? (
-                <div className="grid gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-2 sm:grid-cols-3">
+                <div id="export-month-options" className="grid max-h-72 gap-2 overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-2 sm:grid-cols-3">
                   {monthOptions.map((option) => (
                     <button
                       key={option.label}
                       type="button"
-                      onClick={() => {
-                        setSelectedMonth(option.value);
-                        setMonthOpen(false);
-                      }}
+                      disabled={loading}
+                      onClick={() => selectMonth(option.value)}
                       className="rounded-full px-3 py-2 text-left text-sm text-[var(--text-1)] hover:bg-[var(--surface-2)]"
                     >
                       {option.label}
