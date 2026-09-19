@@ -24,6 +24,7 @@ import { useCurrency } from "@/lib/currency";
 import { useAuth } from "@/lib/auth";
 import { AppIcon } from "@/components/AppIcon";
 import { BankBrandBadge } from "@/components/BankBrandBadge";
+import { DollarHoldingsCard } from "@/components/DollarHoldingsCard";
 import {
   getCardChargeTiming,
   getCardExpenseDueState,
@@ -2548,6 +2549,8 @@ export function HomeScreen() {
             </div>
           </div>
         </div>
+
+        <DollarHoldingsCard showAmounts={showBalance} />
 
         <div className="ui-card p-5 sm:col-span-2 lg:col-span-4" data-tour="home-budget-card">
           <div className="mb-4 flex items-center justify-between gap-3">

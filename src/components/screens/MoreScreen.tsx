@@ -176,6 +176,7 @@ export function MoreScreen() {
     setResettingData(true);
 
     const tables = [
+      "dollar_purchases",
       "investment_purchases",
       "investments",
       "transactions",
@@ -194,7 +195,7 @@ export function MoreScreen() {
         .delete()
         .eq("user_id", user.id);
       if (!error) continue;
-      if (error.code === "42P01") continue;
+      if (error.code === "42P01" || (table === "dollar_purchases" && error.code === "PGRST205")) continue;
       errors.push(`${table}: ${error.message}`);
     }
 
