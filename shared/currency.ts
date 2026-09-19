@@ -5,6 +5,24 @@ export type AppCurrency = "BRL" | "EUR";
 export const DEFAULT_APP_CURRENCY: AppCurrency = "BRL";
 export const APP_CURRENCIES = ["BRL", "EUR"] as const;
 
+// Reuse expensive Intl instances across financial rows and keystrokes. The bound
+// also protects long-lived sessions that request many custom formatting options.
+const numberFormatters = new Map<string, Intl.NumberFormat>();
+const MAX_NUMBER_FORMATTERS = 32;
+
+function getNumberFormatter(locale: string, options: Intl.NumberFormatOptions) {
+  const key = JSON.stringify([locale, options]);
+  const cached = numberFormatters.get(key);
+  if (cached) return cached;
+  const formatter = new Intl.NumberFormat(locale, options);
+  if (numberFormatters.size >= MAX_NUMBER_FORMATTERS) {
+    const oldestKey = numberFormatters.keys().next().value;
+    if (oldestKey !== undefined) numberFormatters.delete(oldestKey);
+  }
+  numberFormatters.set(key, formatter);
+  return formatter;
+}
+
 export function normalizeAppCurrency(currency: string | null | undefined): AppCurrency {
   const normalized = typeof currency === "string" ? currency.trim().toUpperCase() : "";
   return normalized === "EUR" ? "EUR" : DEFAULT_APP_CURRENCY;
@@ -20,7 +38,7 @@ export function formatCurrencyValue(
   currency: AppCurrency = DEFAULT_APP_CURRENCY,
   options: Intl.NumberFormatOptions = {},
 ) {
-  return new Intl.NumberFormat(getCurrencyLocale(language), {
+  return getNumberFormatter(getCurrencyLocale(language), {
     style: "currency",
     currency,
     minimumFractionDigits: 2,
@@ -35,7 +53,7 @@ export function formatCentsInputValue(
 ) {
   const cleaned = raw.replace(/\D/g, "");
   if (!cleaned) {
-    return new Intl.NumberFormat(locale, {
+    return getNumberFormatter(locale, {
       style: "currency",
       currency,
       minimumFractionDigits: 0,
@@ -43,7 +61,7 @@ export function formatCentsInputValue(
     }).format(0);
   }
   const value = Number(cleaned) / 100;
-  return new Intl.NumberFormat(locale, {
+  return getNumberFormatter(locale, {
     style: "currency",
     currency,
     minimumFractionDigits: 2,

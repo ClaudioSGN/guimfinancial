@@ -3,14 +3,27 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { AppIcon } from "@/components/AppIcon";
 import { GuidedTutorial } from "@/components/GuidedTutorial";
-import { NotificationsPanel } from "@/components/social/NotificationsPanel";
-import { NewEntryScreen } from "@/components/screens/NewEntryScreen";
 import { useAuth } from "@/lib/auth";
 import { useLanguage } from "@/lib/language";
 import { loadProfileSettings, type ProfileSettings } from "@/lib/profile";
+
+function PanelLoading() {
+  const { t } = useLanguage();
+  return <p className="p-4 text-sm text-[var(--text-3)]" role="status">{t("common.loading")}</p>;
+}
+
+const NotificationsPanel = dynamic(
+  () => import("@/components/social/NotificationsPanel").then((module) => module.NotificationsPanel),
+  { loading: PanelLoading },
+);
+const NewEntryScreen = dynamic(
+  () => import("@/components/screens/NewEntryScreen").then((module) => module.NewEntryScreen),
+  { loading: PanelLoading },
+);
 
 type TabKey = "home" | "transactions" | "budget" | "investments" | "more";
 

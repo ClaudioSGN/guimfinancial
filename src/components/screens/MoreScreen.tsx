@@ -7,8 +7,10 @@ import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { supabase } from "@/lib/supabaseClient";
 import { getErrorMessage } from "@/lib/errorUtils";
-import { FriendsPanel } from "@/components/social/FriendsPanel";
-import { NotificationsPanel } from "@/components/social/NotificationsPanel";
+import dynamic from "next/dynamic";
+
+const FriendsPanel = dynamic(() => import("@/components/social/FriendsPanel").then((module) => module.FriendsPanel));
+const NotificationsPanel = dynamic(() => import("@/components/social/NotificationsPanel").then((module) => module.NotificationsPanel));
 
 const STORAGE_KEYS = {
   enabled: "dailyReminderEnabled",

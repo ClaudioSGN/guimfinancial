@@ -9,7 +9,8 @@ import { useLanguage } from "@/lib/language";
 import { useCurrency } from "@/lib/currency";
 import { useAuth } from "@/lib/auth";
 import { AppIcon } from "@/components/AppIcon";
-import { BankBrandBadge, BankBrandPicker } from "@/components/BankBrandBadge";
+import { BankBrandBadge } from "@/components/BankBrandBadge";
+import dynamic from "next/dynamic";
 import { DEFAULT_BANK_BRAND_CODE, type BankBrandCode } from "@/lib/bankBrands";
 import {
   getMissingColumn,
@@ -29,6 +30,8 @@ import {
   loadAcceptedFriends,
   type FriendProfile,
 } from "@/lib/social";
+
+const BankBrandPicker = dynamic(() => import("@/components/BankBrandPicker").then((module) => module.BankBrandPicker));
 
 type CardOwnerType = "self" | "friend";
 

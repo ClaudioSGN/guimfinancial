@@ -8,8 +8,11 @@ import { useCurrency } from "@/lib/currency";
 import { formatCentsFromNumber, formatCentsInput, parseCentsInput } from "@/lib/moneyInput";
 import { useAuth } from "@/lib/auth";
 import { hasMissingColumnError } from "@/lib/errorUtils";
-import { BankBrandBadge, BankBrandPicker } from "@/components/BankBrandBadge";
+import { BankBrandBadge } from "@/components/BankBrandBadge";
+import dynamic from "next/dynamic";
 import { DEFAULT_BANK_BRAND_CODE, type BankBrandCode } from "@/lib/bankBrands";
+
+const BankBrandPicker = dynamic(() => import("@/components/BankBrandPicker").then((module) => module.BankBrandPicker));
 
 type Account = {
   id: string;

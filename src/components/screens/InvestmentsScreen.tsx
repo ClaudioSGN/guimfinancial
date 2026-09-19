@@ -19,6 +19,7 @@ import { useCurrency } from "@/lib/currency";
 import { useAuth } from "@/lib/auth";
 import { AppIcon } from "@/components/AppIcon";
 import { parseCentsInput } from "@/lib/moneyInput";
+import { mapWithConcurrency } from "@/lib/async";
 import {
   computeNewAveragePrice,
   computeQuantityFromValue,
@@ -1588,11 +1589,10 @@ export function InvestmentsScreen() {
       }
       const requestId = Date.now();
       historyFetchRef.current = requestId;
-      const entries: Array<readonly [string, PricePoint[]]> = [];
-      for (const asset of assets) {
-        const history = await fetchHistoryForAsset(asset);
-        entries.push([asset.id, history]);
-      }
+      const entries = await mapWithConcurrency(assets, 3, async (asset) => {
+        const history = cancelled ? [] : await fetchHistoryForAsset(asset);
+        return [asset.id, history] as const;
+      });
       if (cancelled) return;
       if (historyFetchRef.current !== requestId) return;
       const next: Record<string, PricePoint[]> = {};

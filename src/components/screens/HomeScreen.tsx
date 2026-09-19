@@ -693,7 +693,6 @@ export function HomeScreen() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [totalBalance, setTotalBalance] = useState(0);
   const [accountBalanceTotal, setAccountBalanceTotal] = useState(0);
-  const [usesHistoricalAccountBalances, setUsesHistoricalAccountBalances] = useState(false);
   const [income, setIncome] = useState(0);
   const [expenses, setExpenses] = useState(0);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
@@ -1049,9 +1048,6 @@ export function HomeScreen() {
       const hasHistoricalAccountBalances =
         accountsResult.data.length > 0 &&
         accountsResult.data.every((account) => account.initial_balance != null);
-      const hasStoredAccountBalances =
-        accountsResult.data.length > 0 &&
-        accountsResult.data.every((account) => account.balance != null);
       const nextAccounts = accountsResult.data.map((account) => {
         const storedBalance =
           account.balance != null && Number.isFinite(Number(account.balance))
@@ -1087,7 +1083,6 @@ export function HomeScreen() {
 
       setTotalBalance(hasMonthActivity ? monthNet : total);
       setAccountBalanceTotal(total);
-      setUsesHistoricalAccountBalances(!hasStoredAccountBalances && hasHistoricalAccountBalances);
       setIncome(monthIncome);
       setExpenses(monthExpenses);
       setAccounts(nextAccounts);
@@ -1317,12 +1312,6 @@ export function HomeScreen() {
     () => categoryChartData.reduce((sum, category) => sum + category.value, 0),
     [categoryChartData],
   );
-
-  const highlightedCategory = useMemo(() => {
-    if (categoryChartData.length === 0) return null;
-    if (activeCategoryIndex == null) return categoryChartData[0];
-    return categoryChartData[activeCategoryIndex] ?? categoryChartData[0];
-  }, [activeCategoryIndex, categoryChartData]);
 
   useEffect(() => {
     if (activeCategoryIndex == null) return;
@@ -3092,4 +3081,3 @@ export function HomeScreen() {
     </div>
   );
 }
-
