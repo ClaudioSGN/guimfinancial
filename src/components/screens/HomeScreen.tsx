@@ -24,7 +24,7 @@ import { useCurrency } from "@/lib/currency";
 import { useAuth } from "@/lib/auth";
 import { AppIcon } from "@/components/AppIcon";
 import { BankBrandBadge } from "@/components/BankBrandBadge";
-import { DollarHoldingsCard } from "@/components/DollarHoldingsCard";
+import { DollarBalanceCard } from "@/features/dollars/DollarBalanceCard";
 import {
   getCardChargeTiming,
   getCardExpenseDueState,
@@ -2397,37 +2397,41 @@ export function HomeScreen() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-12">
 
         {/* Balance hero */}
-        <div className="ui-card p-5 lg:col-span-4" data-tour="home-balance-card">
-          <div className="flex items-center justify-between">
-            <p className="ui-eyebrow">{income > 0 || expenses > 0
-              ? language === "pt" ? "Resultado do mês" : "Monthly result"
-              : t("home.balanceLabel")}</p>
-            <button
-              type="button"
-              onClick={() => setShowBalance((v) => !v)}
-              className="flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--border)] text-[var(--text-3)] hover:bg-[var(--surface-3)]"
-            >
-              <AppIcon name={showBalance ? "eye-off" : "eye"} size={14} color="currentColor" />
-            </button>
-          </div>
-          <p className="ui-balance mt-3">
-            {loading ? "—" : showBalance ? formatCurrency(totalBalance, language, currency) : "••••••"}
-          </p>
-          <p className="mt-1 text-sm text-[var(--text-3)]">
-            {language === "pt" ? "Saldo nas contas:" : "Account balance:"} {loading ? "—" : formatCurrency(accountBalanceTotal, language, currency)}
-          </p>
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <div className="ui-card-inner p-3">
-              <p className="ui-eyebrow">{language === "pt" ? "Contas ativas" : "Active accounts"}</p>
-              <p className="mt-1 text-base font-semibold text-[var(--text-1)]">{accounts.length}</p>
+        <div className="grid min-w-0 content-start gap-4 lg:col-span-4">
+          <div className="ui-card p-5" data-tour="home-balance-card">
+            <div className="flex items-center justify-between">
+              <p className="ui-eyebrow">{income > 0 || expenses > 0
+                ? language === "pt" ? "Resultado do mês" : "Monthly result"
+                : t("home.balanceLabel")}</p>
+              <button
+                type="button"
+                onClick={() => setShowBalance((v) => !v)}
+                className="flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--border)] text-[var(--text-3)] hover:bg-[var(--surface-3)]"
+              >
+                <AppIcon name={showBalance ? "eye-off" : "eye"} size={14} color="currentColor" />
+              </button>
             </div>
-            <div className="ui-card-inner p-3">
-              <p className="ui-eyebrow">{language === "pt" ? "Em cartões" : "Card usage"}</p>
-              <p className="mt-1 text-base font-semibold text-[var(--text-1)]">
-                {loading ? "—" : formatCurrency(cardUsedTotal, language, currency)}
-              </p>
+            <p className="ui-balance mt-3">
+              {loading ? "—" : showBalance ? formatCurrency(totalBalance, language, currency) : "••••••"}
+            </p>
+            <p className="mt-1 text-sm text-[var(--text-3)]">
+              {language === "pt" ? "Saldo nas contas:" : "Account balance:"} {loading ? "—" : formatCurrency(accountBalanceTotal, language, currency)}
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="ui-card-inner p-3">
+                <p className="ui-eyebrow">{language === "pt" ? "Contas ativas" : "Active accounts"}</p>
+                <p className="mt-1 text-base font-semibold text-[var(--text-1)]">{accounts.length}</p>
+              </div>
+              <div className="ui-card-inner p-3">
+                <p className="ui-eyebrow">{language === "pt" ? "Em cartões" : "Card usage"}</p>
+                <p className="mt-1 text-base font-semibold text-[var(--text-1)]">
+                  {loading ? "—" : formatCurrency(cardUsedTotal, language, currency)}
+                </p>
+              </div>
             </div>
           </div>
+
+          <DollarBalanceCard showAmounts={showBalance} />
         </div>
 
         {/* Income vs Expenses stats */}
@@ -2549,8 +2553,6 @@ export function HomeScreen() {
             </div>
           </div>
         </div>
-
-        <DollarHoldingsCard showAmounts={showBalance} />
 
         <div className="ui-card p-5 sm:col-span-2 lg:col-span-4" data-tour="home-budget-card">
           <div className="mb-4 flex items-center justify-between gap-3">

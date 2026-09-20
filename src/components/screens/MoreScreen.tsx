@@ -176,7 +176,6 @@ export function MoreScreen() {
     setResettingData(true);
 
     const tables = [
-      "dollar_purchases",
       "investment_purchases",
       "investments",
       "transactions",
@@ -195,7 +194,7 @@ export function MoreScreen() {
         .delete()
         .eq("user_id", user.id);
       if (!error) continue;
-      if (error.code === "42P01" || (table === "dollar_purchases" && error.code === "PGRST205")) continue;
+      if (error.code === "42P01") continue;
       errors.push(`${table}: ${error.message}`);
     }
 
@@ -213,6 +212,13 @@ export function MoreScreen() {
       if (!result.error) continue;
       if (result.error.code === "42P01") continue;
       errors.push(`shared_transaction_requests: ${result.error.message}`);
+    }
+
+    try {
+      const { clearEntries } = await import("@/features/dollars/storage");
+      await clearEntries(user.id);
+    } catch {
+      errors.push("Could not clear local dollar entries.");
     }
 
     setResettingData(false);
